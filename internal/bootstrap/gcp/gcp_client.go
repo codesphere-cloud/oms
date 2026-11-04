@@ -56,6 +56,7 @@ type GCPClientManager interface {
 	RemoveIAMRoleBinding(projectID, saName string, saProjectID string, roles []string) error
 	CreateVPC(projectID, region, networkName, subnetName, routerName, natName string) error
 	CreateFirewallRule(projectID string, rule *computepb.Firewall) error
+	DeleteFirewallRule(projectID, ruleName string) error
 	CreateInstance(projectID, zone string, instance *computepb.Instance) error
 	GetInstance(projectID, zone, instanceName string) (*computepb.Instance, error)
 	StartInstance(projectID, zone, instanceName string) error
@@ -228,6 +229,10 @@ func getProjectResourceName(projectID string) string {
 	return fmt.Sprintf("projects/%s", projectID)
 }
 
+func getBillingAccountResourceName(billingAccount string) string {
+	return fmt.Sprintf("billingAccounts/%s", billingAccount)
+}
+
 // GetBillingInfo retrieves the billing information for the given project.
 func (c *GCPClient) GetBillingInfo(projectID string) (*cloudbilling.ProjectBillingInfo, error) {
 	billingService, err := cloudbilling.NewService(context.Background())
@@ -254,7 +259,7 @@ func (c *GCPClient) EnableBilling(projectID, billingAccount string) error {
 
 	projectName := getProjectResourceName(projectID)
 	billingInfo := &cloudbilling.ProjectBillingInfo{
-		BillingAccountName: fmt.Sprintf("billingAccounts/%s", billingAccount),
+		BillingAccountName: getBillingAccountResourceName(billingAccount),
 	}
 	_, err = billingService.Projects.UpdateBillingInfo(projectName, billingInfo).Context(c.ctx).Do()
 
@@ -698,8 +703,36 @@ func (c *GCPClient) CreateFirewallRule(projectID string, rule *computepb.Firewal
 		Project:          projectID,
 		FirewallResource: rule,
 	})
-	if err != nil && !strings.Contains(err.Error(), "already exists") {
+	if err != nil && !IsAlreadyExistsError(err) {
 		return err
+	}
+
+	return nil
+}
+
+// DeleteFirewallRule deletes the named firewall rule from the specified project. A rule that does
+// not exist counts as deleted.
+func (c *GCPClient) DeleteFirewallRule(projectID, ruleName string) error {
+	firewallsClient, err := compute.NewFirewallsRESTClient(c.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create firewalls client: %w", err)
+	}
+	defer util.IgnoreError(firewallsClient.Close)
+
+	op, err := firewallsClient.Delete(c.ctx, &computepb.DeleteFirewallRequest{
+		Project:  projectID,
+		Firewall: ruleName,
+	})
+	if IsNotFoundError(err) {
+		return nil
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to send delete request: %w", err)
+	}
+
+	if err := op.Wait(c.ctx); err != nil {
+		return fmt.Errorf("failed to wait for deletion: %w", err)
 	}
 
 	return nil
@@ -944,14 +977,17 @@ func (c *GCPClient) EnsureStorageBucket(projectID, bucketName, location string) 
 		Name:     bucketName,
 		Location: location,
 	}
+
 	_, err = svc.Buckets.Insert(projectID, bucket).Context(c.ctx).Do()
 	if err != nil {
 		if apiErr, ok := err.(*googleapi.Error); ok && apiErr.Code == 409 {
 			// Bucket already exists (owned by this project on re-runs).
 			return nil
 		}
+
 		return fmt.Errorf("failed to create storage bucket %s: %w", bucketName, err)
 	}
+
 	return nil
 }
 
@@ -969,9 +1005,11 @@ func (c *GCPClient) CreateHMACKey(projectID, serviceAccountEmail string) (string
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create HMAC key: %w", err)
 	}
+
 	if key.Metadata == nil {
 		return "", "", fmt.Errorf("HMAC key response missing metadata")
 	}
+
 	return key.Metadata.AccessId, key.Secret, nil
 }
 

@@ -28,13 +28,14 @@ import (
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	rookcephv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
 	"github.com/spf13/cobra"
-	"golang.org/x/mod/semver"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gwalpha "sigs.k8s.io/gateway-api/apis/v1alpha2"
 )
 
 type BootstrapLocalCmd struct {
@@ -42,6 +43,7 @@ type BootstrapLocalCmd struct {
 	Opts          *util.GlobalOptions
 	CodesphereEnv *local.CodesphereEnvironment
 	Yes           bool
+	StepTimer     bool
 	// Experiments backs the deprecated --experiments flag; its values
 	// are folded into the internal bucket for backwards compatibility.
 	experiments []string
@@ -64,15 +66,26 @@ func AddBootstrapLocalCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 			Use:   "bootstrap-local",
 			Short: "Bootstrap a local Codesphere environment",
 			Long: csio.Long(`Bootstraps a local Codesphere environment using a single Linux x86_64 Kubernetes cluster.
-				Rook is used to install Ceph, and CNPG is used for the PostgreSQL database.
+				Rook/Ceph or a local CSI provisioner provides storage, and CNPG is used for the PostgreSQL database.
 				For local setups, use Minikube with a virtual machine on Linux.
-				Not for production use.`),
+				Not for production use.
+
+				Environment variables:
+				  OMS_REGISTRY_PASSWORD  Registry password/token; prompts when unset.
+				  OMS_GIT_PASSWORD       Optional Git password/token for ArgoCD repository access.
+				  OMS_PORTAL_API_KEY     OMS portal API key for installer downloads with --install-version.
+				  OMS_PORTAL_API         Portal API URL (default: https://oms-portal.codesphere.com/api).
+				  OMS_WORKDIR            Installer working directory (default: ./oms-workdir).
+				  KUBECONFIG             Kubeconfig file(s); uses the current context (default: ~/.kube/config).
+				  HELM_DRIVER            Helm release storage driver (default: secret).
+				  XDG_CONFIG_HOME       Overrides the config directory searched for sops/age/keys.txt.`),
 		},
 		Opts:          opts,
 		CodesphereEnv: &local.CodesphereEnvironment{},
 	}
 
 	flags := bootstrapLocalCmd.cmd.Flags()
+	flags.BoolVar(&bootstrapLocalCmd.StepTimer, util.TimerFlag, false, util.ShowStepDurationHelp)
 	// Installer
 	flags.BoolVarP(&bootstrapLocalCmd.Yes, "yes", "y", false, "Auto-approve the local bootstrapping warning prompt")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallVersion, "install-version", "", "Codesphere version to install (downloaded from the OMS portal)")
@@ -89,7 +102,9 @@ func AddBootstrapLocalCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.PreviewFlags, "preview-flags", gcp.DefaultPreviewFlags, "Preview flags to enable in Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.FeatureFlags, "feature-flags", gcp.DefaultFeatureFlags, "Feature flags to enable in Codesphere installation (optional)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.Profile, "profile", installer.PROFILE_DEV, "Profile to apply to the install config like resources (supported: dev, minimal, prod)")
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.StorageEngine, "storage-engine", local.StorageEngineRookCeph, "Storage engine (supported: rook-ceph, local)")
 	flags.BoolVar(&bootstrapLocalCmd.CodesphereEnv.K0s, "k0s", false, "Use k0s-specific configuration (required to deploy to k0s clusters)")
+	flags.BoolVar(&bootstrapLocalCmd.CodesphereEnv.ExposeShared, "expose-shared", false, "Expose both Envoy Gateways and the SSH workspace proxy through one edge Gateway (single-node k0s)")
 
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.ServiceCIDR, "service-cidr", "", "Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.PodCIDR, "pod-cidr", "", "Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.")
@@ -101,8 +116,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.AgeKey, "age-key", "", "Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.CephDeviceFilter, "ceph-device-filter", "", "Regular expression selecting Ceph block devices by name")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.CephDevicePathFilter, "ceph-device-path-filter", "", "Regular expression selecting Ceph block devices by path")
-	// ArgoCD integration
-	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.ArgoCDRegistryURL, "registry-url", "oci://ghcr.io/codesphere-cloud/charts", "OCI registry URL used for the ArgoCD helm pull secret")
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.RegistryURL, "registry-url", local.DefaultRegistryURL, "Registry host with optional port and repository path, without a scheme; Helm charts are pulled from <registry-url>/codesphere-cloud/charts")
 	bootstrapLocalCmd.cmd.RunE = bootstrapLocalCmd.RunE
 
 	util.MarkFlagRequired(bootstrapLocalCmd.cmd, "registry-user")
@@ -111,6 +125,9 @@ func AddBootstrapLocalCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 }
 
 func (c *BootstrapLocalCmd) BootstrapLocal() error {
+	if err := validateLocalStorageEngine(c.CodesphereEnv.StorageEngine); err != nil {
+		return err
+	}
 	ctx := c.cmd.Context()
 	if err := c.ConfirmLocalBootstrapWarning(); err != nil {
 		return err
@@ -145,7 +162,8 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 		}
 	}
 
-	stlog := bootstrap.NewStepLogger(false)
+	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.StepTimer))
+	defer stlog.PrintSummary()
 
 	fw := intutil.NewFilesystemWriter()
 
@@ -166,8 +184,22 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 		return fmt.Errorf("failed to initialize Kubernetes client: %w", err)
 	}
 
-	bs := local.NewLocalBootstrapper(ctx, stlog, kubeClient, restConfig, fw, icg, c.CodesphereEnv, c.Opts.Verbose)
+	helmClient, err := installer.NewHelmClientWithRESTConfig("codesphere", restConfig)
+	if err != nil {
+		return fmt.Errorf("failed to initialize Helm client: %w", err)
+	}
+
+	bs := local.NewLocalBootstrapper(ctx, stlog, kubeClient, restConfig, fw, icg, helmClient, c.CodesphereEnv, c.Opts.Verbose)
 	return bs.Bootstrap()
+}
+
+func validateLocalStorageEngine(engine string) error {
+	switch engine {
+	case local.StorageEngineRookCeph, local.StorageEngineLocal:
+		return nil
+	default:
+		return fmt.Errorf("unsupported storage engine %q (supported: %s, %s)", engine, local.StorageEngineRookCeph, local.StorageEngineLocal)
+	}
 }
 
 func (c *BootstrapLocalCmd) resolveRegistryPassword() error {
@@ -189,7 +221,8 @@ func (c *BootstrapLocalCmd) resolveRegistryPassword() error {
 }
 
 func (c *BootstrapLocalCmd) ConfirmLocalBootstrapWarning() error {
-	fmt.Println(csio.Long(`
+	if c.CodesphereEnv.StorageEngine != local.StorageEngineLocal {
+		fmt.Println(csio.Long(`
 		############################################################
 		# Local Bootstrap Warning                                  #
 		############################################################
@@ -210,6 +243,9 @@ func (c *BootstrapLocalCmd) ConfirmLocalBootstrapWarning() error {
 		#   minikube start --disk-size=40g --extra-disks=1 --driver kvm2
 		############################################################
 	`))
+	} else {
+		fmt.Println("Codesphere local bootstrap is for testing only. The local CSI provisioner stores workspace data on cluster nodes.")
+	}
 
 	if c.Yes {
 		return nil
@@ -252,6 +288,14 @@ func (c *BootstrapLocalCmd) GetKubeClient(ctx context.Context) (ctrlclient.Clien
 		return nil, nil, fmt.Errorf("failed to add ArgoCD scheme: %w", err)
 	}
 
+	if err := gwv1.Install(scheme); err != nil {
+		return nil, nil, fmt.Errorf("failed to add Gateway API scheme: %w", err)
+	}
+
+	if err := gwalpha.Install(scheme); err != nil {
+		return nil, nil, fmt.Errorf("failed to add experimental Gateway API scheme: %w", err)
+	}
+
 	kubeClient, err := ctrlclient.New(kubeConfig, ctrlclient.Options{Scheme: scheme})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to initialize Kubernetes client: %w", err)
@@ -261,10 +305,6 @@ func (c *BootstrapLocalCmd) GetKubeClient(ctx context.Context) (ctrlclient.Clien
 
 func (c *BootstrapLocalCmd) ValidatePrerequisites(ctx context.Context) error {
 	if err := c.ValidateKubernetesCluster(ctx); err != nil {
-		return err
-	}
-
-	if err := c.ValidateHelmVersion(ctx); err != nil {
 		return err
 	}
 
@@ -288,29 +328,6 @@ func (c *BootstrapLocalCmd) ValidateKubernetesCluster(ctx context.Context) error
 
 	if len(nodeList.Items) == 0 {
 		return fmt.Errorf("connected to Kubernetes cluster but no nodes are available")
-	}
-
-	return nil
-}
-
-func (c *BootstrapLocalCmd) ValidateHelmVersion(ctx context.Context) error {
-	helmPath, err := exec.LookPath("helm")
-	if err != nil {
-		return fmt.Errorf("helm binary not found in PATH, Helm 3 or newer is required")
-	}
-
-	out, err := exec.CommandContext(ctx, helmPath, "version", "--template={{.Version}}").CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to get helm version: %w (%s)", err, strings.TrimSpace(string(out)))
-	}
-
-	version := strings.TrimSpace(string(out))
-	if !semver.IsValid(version) {
-		return fmt.Errorf("failed to parse helm version %q: not a valid semantic version", version)
-	}
-
-	if semver.Compare(version, "v3.0.0") < 0 {
-		return fmt.Errorf("helm version %s is not supported, Helm 3 or newer is required", version)
 	}
 
 	return nil

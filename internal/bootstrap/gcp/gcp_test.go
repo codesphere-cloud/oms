@@ -7,7 +7,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/artifactregistry/apiv1/artifactregistrypb"
 	"cloud.google.com/go/compute/apiv1/computepb"
@@ -24,6 +26,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
+	"golang.org/x/crypto/ssh"
 	"google.golang.org/api/cloudbilling/v1"
 	"google.golang.org/api/dns/v1"
 )
@@ -132,6 +135,52 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("ValidateInput Codesphere-only install", func() {
+		BeforeEach(func() {
+			csEnv.InstallCodesphereOnly = true
+			csEnv.RegistryType = gcp.RegistryTypeArtifactRegistry
+		})
+
+		It("rejects a Codesphere-only install without a version or local package", func() {
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("install-codesphere-only requires install-version or install-local")))
+		})
+
+		Context("when the config is recovered from the jumpbox", func() {
+			BeforeEach(func() {
+				csEnv.RecoverConfig = true
+			})
+
+			It("accepts a Codesphere-only install of a local package", func() {
+				csEnv.InstallLocal = "installer-lite.tar.gz"
+
+				fw.EXPECT().Exists("installer-lite.tar.gz").Return(true)
+
+				Expect(bs.ValidateInput()).To(Succeed())
+			})
+
+			It("accepts a Codesphere-only install of a released version", func() {
+				csEnv.InstallVersion = "v1.2.3"
+
+				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, "codesphere-v1.2.3", "").Return(portal.Build{
+					Hash:      "abc1234567890",
+					Artifacts: []portal.Artifact{{Filename: "installer-lite.tar.gz"}},
+				}, nil)
+
+				Expect(bs.ValidateInput()).To(Succeed())
+			})
+		})
+
+		// A vault kept locally from the first bootstrap lacks the kubeconfig that "oms install k0s"
+		// added to the jumpbox's copy, so uploading it would break the install.
+		It("rejects a Codesphere-only install without recover-config, even when local config files exist", func() {
+			csEnv.InstallLocal = "installer-lite.tar.gz"
+
+			fw.EXPECT().Exists(mock.Anything).Return(true).Maybe()
+
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("install-codesphere-only requires recover-config")))
+		})
+	})
+
 	Describe("ValidateInput remote OMS binary", func() {
 		BeforeEach(func() {
 			csEnv.RemoteOmsBinaryPath = "./bin/oms-linux-amd64"
@@ -150,6 +199,16 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("ValidateInput pc-apps values", func() {
+		It("rejects a missing values file", func() {
+			csEnv.PCAppsValues = []string{"base.yaml"}
+
+			fw.EXPECT().Exists("base.yaml").Return(false)
+
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("pc-apps values file not found at path: base.yaml")))
+		})
+	})
+
 	Describe("ValidateInput registry params", func() {
 		It("rejects an unknown registry type", func() {
 			csEnv.RegistryType = "guthub"
@@ -165,6 +224,77 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		It("accepts the local container registry without GitHub credentials", func() {
 			Expect(bs.ValidateInput()).To(Succeed())
+		})
+
+		Context("when the installation is airgapped", func() {
+			BeforeEach(func() {
+				csEnv.Airgapped = true
+			})
+
+			It("accepts the local container registry", func() {
+				Expect(bs.ValidateInput()).To(Succeed())
+			})
+
+			It("rejects the GitHub registry", func() {
+				csEnv.RegistryType = gcp.RegistryTypeGitHub
+				csEnv.GitHubPAT = "fake-pat"
+				csEnv.RegistryUser = "fake-registry-user"
+
+				Expect(bs.ValidateInput()).To(MatchError(ContainSubstring(`airgapped installations require the local-container registry type, got "github"`)))
+			})
+
+			It("rejects the Artifact Registry", func() {
+				csEnv.RegistryType = gcp.RegistryTypeArtifactRegistry
+
+				Expect(bs.ValidateInput()).To(MatchError(ContainSubstring(`airgapped installations require the local-container registry type, got "artifact-registry"`)))
+			})
+		})
+
+		// The PAT also grants GitHub team access, which needs no registry user.
+		It("accepts a PAT alone for a local container registry it does not install into", func() {
+			csEnv.GitHubPAT = "fake-pat"
+
+			Expect(bs.ValidateInput()).To(Succeed())
+		})
+
+		// The installation mirrors the package images from ghcr.io into the local registry.
+		Context("when the local container registry is installed into", func() {
+			BeforeEach(func() {
+				csEnv.InstallVersion = "v1.2.3"
+				csEnv.GitHubPAT = "fake-pat"
+				csEnv.RegistryUser = "fake-registry-user"
+
+				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, "codesphere-v1.2.3", mock.Anything).Return(portal.Build{
+					Artifacts: []portal.Artifact{{Filename: "installer-lite.tar.gz"}},
+				}, nil).Maybe()
+			})
+
+			It("accepts full GitHub credentials", func() {
+				Expect(bs.ValidateInput()).To(Succeed())
+			})
+
+			It("rejects a missing PAT", func() {
+				csEnv.GitHubPAT = ""
+
+				Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("github-pat must be set to mirror")))
+			})
+
+			It("rejects a missing registry user", func() {
+				csEnv.RegistryUser = ""
+
+				Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("registry-user must be set to mirror")))
+			})
+
+			It("requires the credentials for a local package too", func() {
+				csEnv.InstallVersion = ""
+				csEnv.InstallLocal = "installer-lite.tar.gz"
+				csEnv.GitHubPAT = ""
+				csEnv.RegistryUser = ""
+
+				fw.EXPECT().Exists(mock.Anything).Return(true).Maybe()
+
+				Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("github-pat must be set to mirror")))
+			})
 		})
 
 		Context("when the GitHub registry is selected", func() {
@@ -262,8 +392,12 @@ var _ = Describe("GCP Bootstrapper", func() {
 			// EnsureVPC
 			gc.EXPECT().CreateVPC(projectID, "us-central1", projectID+"-vpc", projectID+"-us-central1-subnet", projectID+"-router", projectID+"-nat-gateway").Return(nil)
 
-			// EnsureFirewallRules (5 times)
+			// EnsureFirewallRules: the artifact registry keeps internet egress, so the airgapped
+			// egress rules are removed instead of created.
 			gc.EXPECT().CreateFirewallRule(projectID, mock.Anything).Return(nil).Times(5)
+			gc.EXPECT().DeleteFirewallRule(projectID, "deny-external-egress").Return(nil)
+			gc.EXPECT().DeleteFirewallRule(projectID, "allow-internal-egress").Return(nil)
+			gc.EXPECT().DeleteFirewallRule(projectID, "allow-jumpbox-egress").Return(nil)
 
 			// EnsureComputeInstances
 			ipResp := makeRunningInstance("10.0.0.1", "1.2.3.4")
@@ -317,8 +451,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 			// Verify nodes are properly set in the environment
 			Expect(bs.Env.Jumpbox).NotTo(BeNil())
 			Expect(bs.Env.PostgreSQLNode).NotTo(BeNil())
-			Expect(bs.Env.CephNodes).To(HaveLen(3))
-			Expect(bs.Env.ControlPlaneNodes).To(HaveLen(3))
+			primary := bs.Env.DataCenters[0]
+			Expect(primary.CephNodes).To(HaveLen(3))
+			Expect(primary.ControlPlaneNodes).To(HaveLen(3))
 
 			// Verify mock returns expected values
 			Expect(bs.Env.Jumpbox.GetName()).To(Equal("jumpbox"))
@@ -329,13 +464,13 @@ var _ = Describe("GCP Bootstrapper", func() {
 			Expect(bs.Env.PostgreSQLNode.GetExternalIP()).To(Equal("1.2.3.4"))
 			Expect(bs.Env.PostgreSQLNode.GetInternalIP()).To(Equal("10.0.0.1"))
 
-			for _, cephNode := range bs.Env.CephNodes {
+			for _, cephNode := range primary.CephNodes {
 				Expect(cephNode.GetName()).To(MatchRegexp("ceph-\\d+"))
 				Expect(cephNode.GetExternalIP()).To(Equal("1.2.3.4"))
 				Expect(cephNode.GetInternalIP()).To(Equal("10.0.0.1"))
 			}
 
-			for _, cpNode := range bs.Env.ControlPlaneNodes {
+			for _, cpNode := range primary.ControlPlaneNodes {
 				Expect(cpNode.GetName()).To(MatchRegexp("k0s-\\d+"))
 				Expect(cpNode.GetExternalIP()).To(Equal("1.2.3.4"))
 				Expect(cpNode.GetInternalIP()).To(Equal("10.0.0.1"))
@@ -422,7 +557,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				}
 			})
 			JustBeforeEach(func() {
-				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, bs.Env.InstallVersion, bs.Env.InstallHash).Return(portal.Build{
+				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, (files.CodespherePackageConfig{Version: bs.Env.InstallVersion}).FormatVersionForPortal(), bs.Env.InstallHash).Return(portal.Build{
 					Artifacts: artifacts,
 					Hash:      csEnv.InstallHash,
 					Version:   csEnv.InstallVersion,
@@ -446,9 +581,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 					})
 				})
 
-				It("succeeds when package exists and has the lite package", func() {
+				It("preserves the specified build hash", func() {
 					err := bs.ValidateInput()
 					Expect(err).NotTo(HaveOccurred())
+					Expect(csEnv.InstallHash).To(Equal("abc123"))
 				})
 
 				Context("when package exists but does not have the lite package", func() {
@@ -525,6 +661,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Context("when the local file exists", func() {
 					BeforeEach(func() {
 						fw.EXPECT().Exists(csEnv.InstallLocal).Return(true)
+						// Installing into the local container registry mirrors the images from ghcr.io.
+						csEnv.GitHubPAT = "fake-pat"
+						csEnv.RegistryUser = "fake-registry-user"
 					})
 					It("succeeds", func() {
 						err := bs.ValidateInput()
@@ -910,8 +1049,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		Describe("Valid EnsureLocalContainerRegistry", func() {
 			It("installs local registry", func() {
-				vault := &files.InstallVault{}
-				icg.EXPECT().GetVault().Return(vault)
+				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 				// Setup mocked node
 				// Check if running - return error to simulate not running
@@ -919,15 +1057,302 @@ var _ = Describe("GCP Bootstrapper", func() {
 					return strings.Contains(cmd, "podman ps")
 				})).Return(fmt.Errorf("not running"))
 
-				// Install commands (8 commands) + scp/update-ca/docker commands (3 per 4 nodes = 12)
-				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(8 + 12)
+				// Install commands (8) + jumpbox registry access (5)
+				// + scp/update-ca/docker restart (3) for 4 cluster nodes and Postgres.
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(8 + 5 + 3*5)
 
 				bs.Env.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1", nodeClient), fakeNode("k0s-2", nodeClient)}
 				bs.Env.CephNodes = []*node.Node{fakeNode("ceph-1", nodeClient), fakeNode("ceph-2", nodeClient)}
 
 				err := bs.EnsureLocalContainerRegistry()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(vault.GetSecret(files.SecretRegistryUsername).Fields.Password).To(Equal("custom-registry"))
+				Expect(bs.Env.RegistryUsername).To(Equal("custom-registry"))
+				Expect(bs.Env.RegistryPassword).NotTo(BeEmpty())
+				Expect(bs.Env.ContainerRegistryURL).To(Equal(bs.Env.Jumpbox.GetInternalIP()))
+			})
+
+			// A re-run that adds a data center finds the registry already up. Its nodes still
+			// need the registry's self-signed certificate, or every image pull fails.
+			It("distributes the registry certificate to nodes that lack it when the registry is already running", func() {
+				vault := &files.InstallVault{}
+				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: "custom-registry"}})
+				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: "existing-password"}})
+				icg.EXPECT().GetVault().Return(vault)
+
+				bs.Env.MultiDC = true
+				bs.Env.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1", nodeClient)}
+				bs.Env.CephNodes = []*node.Node{fakeNode("ceph-1", nodeClient)}
+				secondary := &datacenter.DataCenter{ID: 2, Suffix: "-dc2"}
+				secondary.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1-dc2", nodeClient)}
+				secondary.CephNodes = []*node.Node{fakeNode("ceph-1-dc2", nodeClient)}
+
+				// Registry is already running with credentials in the vault.
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman ps")
+				})).Return(nil)
+				// Jumpbox registry access is ensured on every run (5 commands).
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return !strings.HasPrefix(cmd, "scp ") && !strings.Contains(cmd, "podman ps")
+				})).Return(nil).Times(5)
+
+				scpTargets := []string{}
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.HasPrefix(cmd, "scp ")
+				})).RunAndReturn(func(_ *node.Node, _ string, cmd string) error {
+					scpTargets = append(scpTargets, cmd)
+					return nil
+				}).Times(5)
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "update-ca-certificates").Return(nil).Times(5)
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "systemctl restart docker.service || true").Return(nil).Times(5)
+				nodeClient.EXPECT().HasFile(mock.Anything, "/usr/local/share/ca-certificates/registry.crt").Return(false)
+
+				// Register the second data center only after ensureDataCenters would have run,
+				// mirroring what EnsureComputeInstances produces for a --multi-dc bootstrap.
+				bs.Env.DataCenters = []*datacenter.DataCenter{
+					{
+						ID:                1,
+						ControlPlaneNodes: bs.Env.ControlPlaneNodes,
+						CephNodes:         bs.Env.CephNodes,
+						InstallConfig: &files.RootConfig{
+							Registry: &files.RegistryConfig{Server: bs.Env.Jumpbox.GetInternalIP()},
+						},
+					},
+					secondary,
+				}
+				bs.Env.DataCenters[0].ConfigManager = icg
+
+				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
+				// Both data centers' cluster nodes and the shared Postgres node.
+				Expect(scpTargets).To(HaveLen(5))
+				Expect(scpTargets).To(ContainElement(ContainSubstring("root@" + bs.Env.PostgreSQLNode.GetInternalIP() + ":")))
+				Expect(bs.Env.RegistryPassword).To(Equal("existing-password"))
+			})
+
+			// Distributing restarts Docker on the node, which would bounce Postgres and the Ceph
+			// daemons on every bootstrap re-run.
+			It("leaves nodes that already trust a running registry alone", func() {
+				vault := &files.InstallVault{}
+				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: "custom-registry"}})
+				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: "existing-password"}})
+				icg.EXPECT().GetVault().Return(vault)
+
+				trusted := fakeNode("k0s-1", nodeClient)
+				added := fakeNode("k0s-1-dc2", nodeClient)
+				bs.Env.DataCenters = []*datacenter.DataCenter{
+					{
+						ID:                1,
+						ControlPlaneNodes: []*node.Node{trusted},
+						CephNodes:         []*node.Node{},
+						InstallConfig: &files.RootConfig{
+							Registry: &files.RegistryConfig{Server: bs.Env.Jumpbox.GetInternalIP()},
+						},
+					},
+					{ID: 2, Suffix: "-dc2", ControlPlaneNodes: []*node.Node{added}, CephNodes: []*node.Node{}},
+				}
+				bs.Env.DataCenters[0].ConfigManager = icg
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman ps")
+				})).Return(nil)
+				// Jumpbox registry access is ensured on every run (5 commands).
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return !strings.HasPrefix(cmd, "scp ") && !strings.Contains(cmd, "podman ps")
+				})).Return(nil).Times(5)
+				nodeClient.EXPECT().HasFile(trusted, "/usr/local/share/ca-certificates/registry.crt").Return(true)
+				nodeClient.EXPECT().HasFile(bs.Env.PostgreSQLNode, "/usr/local/share/ca-certificates/registry.crt").Return(true)
+				nodeClient.EXPECT().HasFile(added, "/usr/local/share/ca-certificates/registry.crt").Return(false)
+
+				// Only the added data center's node gets the certificate and a Docker restart.
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.HasPrefix(cmd, "scp ") && strings.Contains(cmd, "root@"+added.GetInternalIP()+":")
+				})).Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(added, "root", "update-ca-certificates").Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(added, "root", "systemctl restart docker.service || true").Return(nil).Once()
+
+				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
+			})
+
+			// The vault then holds the previous registry's credentials, which the running local
+			// registry would reject.
+			It("generates new credentials when the config points at another registry", func() {
+				vault := &files.InstallVault{}
+				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: "github-user"}})
+				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: "github-pat"}})
+				icg.EXPECT().GetVault().Return(vault)
+
+				bs.Env.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1", nodeClient)}
+				bs.Env.CephNodes = []*node.Node{}
+				bs.Env.DataCenters = []*datacenter.DataCenter{{
+					ID:                1,
+					ControlPlaneNodes: bs.Env.ControlPlaneNodes,
+					CephNodes:         bs.Env.CephNodes,
+					InstallConfig:     &files.RootConfig{Registry: &files.RegistryConfig{Server: "ghcr.io"}},
+				}}
+				bs.Env.DataCenters[0].ConfigManager = icg
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman ps")
+				})).Return(nil)
+				// Install commands (8) + jumpbox registry access (5) + scp/update-ca/docker restart (3)
+				// for the node and Postgres.
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(8 + 5 + 3*2)
+
+				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
+				Expect(bs.Env.RegistryUsername).To(Equal("custom-registry"))
+				Expect(bs.Env.RegistryPassword).NotTo(Equal("github-pat"))
+				Expect(bs.Env.RegistryPassword).NotTo(BeEmpty())
+			})
+
+			// The login commands carry the registry passwords, so a failure is reported by what
+			// failed rather than by the command.
+			It("names the failed jumpbox step without exposing the credentials", func() {
+				icg.EXPECT().GetVault().Return(&files.InstallVault{})
+
+				bs.Env.RegistryUser = "codesphere"
+				bs.Env.GitHubPAT = "secret-pat"
+				bs.Env.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1", nodeClient)}
+				bs.Env.CephNodes = []*node.Node{}
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman ps")
+				})).Return(fmt.Errorf("not running"))
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.HasSuffix(cmd, "ghcr.io")
+				})).Return(fmt.Errorf("unauthorized")).Once()
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.Anything).Return(nil)
+
+				err := bs.EnsureLocalContainerRegistry()
+				Expect(err).To(MatchError(ContainSubstring("while logging in to ghcr.io as codesphere: unauthorized")))
+				Expect(err.Error()).NotTo(ContainSubstring("secret-pat"))
+			})
+
+			It("trusts the registry CA and logs in to both registries on the jumpbox", func() {
+				icg.EXPECT().GetVault().Return(&files.InstallVault{})
+
+				bs.Env.RegistryUser = "codesphere"
+				bs.Env.GitHubPAT = "fake-pat"
+				bs.Env.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1", nodeClient)}
+				bs.Env.CephNodes = []*node.Node{}
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman ps")
+				})).Return(fmt.Errorf("not running"))
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", "update-ca-certificates").Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman login --authfile /root/.docker/config.json") &&
+						strings.HasSuffix(cmd, bs.Env.Jumpbox.GetInternalIP())
+				})).Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman login --authfile /root/.docker/config.json") &&
+						strings.HasSuffix(cmd, "ghcr.io")
+				})).Return(nil).Once()
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil)
+
+				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
+			})
+
+			It("installs the registry with apt-get and trusts its certificate the Ubuntu way", func() {
+				icg.EXPECT().GetVault().Return(&files.InstallVault{})
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman ps")
+				})).Return(fmt.Errorf("not running"))
+
+				commands := []string{}
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.Anything).RunAndReturn(func(_ *node.Node, _ string, cmd string) error {
+					commands = append(commands, cmd)
+					return nil
+				})
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil)
+
+				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
+				Expect(commands).To(ContainElements("apt-get update", "apt-get install -y podman apache2-utils"))
+				Expect(commands).To(ContainElement("cp /root/registry.crt /usr/local/share/ca-certificates/registry.crt"))
+				Expect(commands).To(ContainElement("update-ca-certificates"))
+			})
+
+			It("runs the registry with SELinux relabeled mounts and a fully qualified image", func() {
+				icg.EXPECT().GetVault().Return(&files.InstallVault{})
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman ps")
+				})).Return(fmt.Errorf("not running"))
+
+				commands := []string{}
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).RunAndReturn(func(_ *node.Node, _ string, cmd string) error {
+					commands = append(commands, cmd)
+					return nil
+				})
+
+				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
+				Expect(commands).To(ContainElement(SatisfyAll(
+					ContainSubstring("-v /root/registry.password:/auth/registry.password:Z"),
+					ContainSubstring("-v /root/registry.crt:/certs/registry.crt:Z"),
+					ContainSubstring("-v /root/registry.key:/certs/registry.key:Z"),
+					HaveSuffix("docker.io/library/registry:3"),
+				)))
+			})
+
+			It("installs the registry and trusts its certificate the RHEL way on RHEL hosts", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+
+				icg.EXPECT().GetVault().Return(&files.InstallVault{})
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman ps")
+				})).Return(fmt.Errorf("not running"))
+
+				jumpboxCommands := []string{}
+				nodeCommands := map[string][]string{}
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).RunAndReturn(func(n *node.Node, _ string, cmd string) error {
+					if n == bs.Env.Jumpbox {
+						jumpboxCommands = append(jumpboxCommands, cmd)
+					} else {
+						nodeCommands[n.GetName()] = append(nodeCommands[n.GetName()], cmd)
+					}
+
+					return nil
+				})
+
+				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
+				Expect(jumpboxCommands).To(ContainElement("dnf install -y podman httpd-tools"))
+				Expect(jumpboxCommands).NotTo(ContainElement(ContainSubstring("apt-get")))
+				Expect(jumpboxCommands).To(ContainElement("cp /root/registry.crt /etc/pki/ca-trust/source/anchors/registry.crt"))
+				Expect(jumpboxCommands).To(ContainElement("update-ca-trust"))
+				Expect(jumpboxCommands).To(ContainElement(HaveSuffix(":/etc/pki/ca-trust/source/anchors/registry.crt")))
+				Expect(jumpboxCommands).NotTo(ContainElement(ContainSubstring("/usr/local/share/ca-certificates")))
+				Expect(nodeCommands).NotTo(BeEmpty())
+				Expect(nodeCommands).To(HaveEach(ContainElement("update-ca-trust")))
+			})
+
+			It("only distributes the certificate to RHEL nodes that lack it in the RHEL trust store", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				vault := &files.InstallVault{}
+				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: "custom-registry"}})
+				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: "existing-password"}})
+				icg.EXPECT().GetVault().Return(vault)
+
+				bs.Env.DataCenters = []*datacenter.DataCenter{{
+					ID:                1,
+					ControlPlaneNodes: []*node.Node{fakeNode("k0s-1", nodeClient)},
+					CephNodes:         []*node.Node{},
+					InstallConfig:     &files.RootConfig{Registry: &files.RegistryConfig{Server: bs.Env.Jumpbox.GetInternalIP()}},
+				}}
+				bs.Env.DataCenters[0].ConfigManager = icg
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman ps")
+				})).Return(nil)
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.Anything).Return(nil).Times(5)
+				nodeClient.EXPECT().HasFile(mock.Anything, "/etc/pki/ca-trust/source/anchors/registry.crt").Return(true)
+
+				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
 			})
 		})
 
@@ -975,8 +1400,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 					return strings.Contains(cmd, "podman ps")
 				})).Return(fmt.Errorf("not running"))
 
-				// All 8 install commands succeed
-				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.Anything).Return(nil).Times(8)
+				// All 8 install commands and the 5 jumpbox registry access commands succeed
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.Anything).Return(nil).Times(8 + 5)
 
 				// First scp command fails
 				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
@@ -998,8 +1423,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 					return strings.Contains(cmd, "podman ps")
 				})).Return(fmt.Errorf("not running"))
 
-				// All 8 install commands succeed
-				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.Anything).Return(nil).Times(8)
+				// All 8 install commands and the 5 jumpbox registry access commands succeed
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.Anything).Return(nil).Times(8 + 5)
 				// scp succeeds
 				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
 					return strings.HasPrefix(cmd, "scp ")
@@ -1023,8 +1448,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 					return strings.Contains(cmd, "podman ps")
 				})).Return(fmt.Errorf("not running"))
 
-				// All 8 install commands succeed
-				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.Anything).Return(nil).Times(8)
+				// All 8 install commands and the 5 jumpbox registry access commands succeed
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.Anything).Return(nil).Times(8 + 5)
 
 				// scp succeeds
 				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
@@ -1049,17 +1474,14 @@ var _ = Describe("GCP Bootstrapper", func() {
 			csEnv.GitHubPAT = "fake-pat"
 			csEnv.RegistryUser = "custom-registry"
 		})
-		It("sets configuration options in installconfig", func() {
-			vault := &files.InstallVault{}
-			icg.EXPECT().GetVault().Return(vault)
-
+		// The resolved registry and its credentials live on the environment; every data center's
+		// config picks them up in updateInstallConfig.
+		It("resolves ghcr.io as the registry for all data centers", func() {
 			err := bs.EnsureGitHubAccessConfigured()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(bs.Env.InstallConfig.Registry.Server).To(Equal("ghcr.io"))
-			Expect(vault.GetSecret(files.SecretRegistryUsername).Fields.Password).To(Equal(csEnv.RegistryUser))
-			Expect(vault.GetSecret(files.SecretRegistryPassword).Fields.Password).To(Equal(csEnv.GitHubPAT))
-			Expect(bs.Env.InstallConfig.Registry.LoadContainerImages).To(BeFalse())
-			Expect(bs.Env.InstallConfig.Registry.ReplaceImagesInBom).To(BeFalse())
+			Expect(bs.Env.ContainerRegistryURL).To(Equal("ghcr.io"))
+			Expect(bs.Env.RegistryUsername).To(Equal(csEnv.RegistryUser))
+			Expect(bs.Env.RegistryPassword).To(Equal(csEnv.GitHubPAT))
 		})
 
 		Context("When GitHub PAT is missing", func() {
@@ -1097,29 +1519,72 @@ var _ = Describe("GCP Bootstrapper", func() {
 	})
 
 	Describe("EnsureFirewallRules", func() {
+		expectRules := func(names ...string) {
+			network := fmt.Sprintf("projects/%s/global/networks/%s-vpc", csEnv.ProjectID, csEnv.ProjectID)
+			for _, name := range names {
+				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
+					return r.GetName() == name && r.GetNetwork() == network
+				})).Return(nil).Once()
+			}
+		}
+		expectBaseRules := func() {
+			expectRules("allow-ssh-ext", "allow-internal", "allow-all-egress", "allow-ingress-web", "allow-ingress-postgres")
+		}
+
 		Describe("Valid EnsureFirewallRules", func() {
-			It("creates required firewall rules", func() {
-				// Expect 4 rules: allow-ssh-ext, allow-internal, allow-all-egress, allow-ingress-web, allow-ingress-postgres
-				// Wait, code showed 5 blocks? ssh, internal, egress, web, postgres.
+			It("creates the base rules and blocks internet egress of all VMs but the jumpbox when airgapped", func() {
+				csEnv.Airgapped = true
+
+				expectBaseRules()
 				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-ssh-ext"
-				})).Return(nil)
+					return r.GetName() == "allow-jumpbox-egress" &&
+						r.GetDirection() == "EGRESS" &&
+						r.GetPriority() == 800 &&
+						len(r.GetAllowed()) == 1 && r.GetAllowed()[0].GetIPProtocol() == "all" &&
+						slices.Equal(r.GetDestinationRanges(), []string{"0.0.0.0/0"}) &&
+						slices.Equal(r.GetTargetTags(), []string{"jumpbox"})
+				})).Return(nil).Once()
 				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-internal"
-				})).Return(nil)
+					return r.GetName() == "allow-internal-egress" &&
+						r.GetDirection() == "EGRESS" &&
+						r.GetPriority() == 800 &&
+						len(r.GetAllowed()) == 1 && r.GetAllowed()[0].GetIPProtocol() == "all" &&
+						slices.Equal(r.GetDestinationRanges(), []string{"10.10.0.0/20"}) &&
+						len(r.GetTargetTags()) == 0
+				})).Return(nil).Once()
 				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-all-egress"
-				})).Return(nil)
-				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-ingress-web"
-				})).Return(nil)
-				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-ingress-postgres"
-				})).Return(nil)
+					return r.GetName() == "deny-external-egress" &&
+						r.GetDirection() == "EGRESS" &&
+						r.GetPriority() == 900 &&
+						len(r.GetDenied()) == 1 && r.GetDenied()[0].GetIPProtocol() == "all" &&
+						len(r.GetAllowed()) == 0 &&
+						slices.Equal(r.GetDestinationRanges(), []string{"0.0.0.0/0"}) &&
+						len(r.GetTargetTags()) == 0
+				})).Return(nil).Once()
 
 				err := bs.EnsureFirewallRules()
 				Expect(err).NotTo(HaveOccurred())
 			})
+
+			DescribeTable("removes the airgapped egress rules when not airgapped",
+				func(registryType gcp.RegistryType) {
+					csEnv.RegistryType = registryType
+
+					expectBaseRules()
+
+					deny := gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "deny-external-egress").Return(nil).Once()
+					gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "allow-internal-egress").Return(nil).Once().NotBefore(deny)
+					gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "allow-jumpbox-egress").Return(nil).Once().NotBefore(deny)
+
+					err := bs.EnsureFirewallRules()
+					Expect(err).NotTo(HaveOccurred())
+				},
+				Entry("GitHub", gcp.RegistryTypeGitHub),
+				Entry("artifact registry", gcp.RegistryTypeArtifactRegistry),
+				// Only airgapped installations stage the k0s airgap bundle, so a local container
+				// registry alone must keep internet egress.
+				Entry("local container registry", gcp.RegistryTypeLocalContainer),
+			)
 		})
 
 		Describe("Invalid cases", func() {
@@ -1127,8 +1592,37 @@ var _ = Describe("GCP Bootstrapper", func() {
 				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.Anything).Return(fmt.Errorf("firewall error")).Once()
 
 				err := bs.EnsureFirewallRules()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to create jumpbox ssh firewall rule"))
+				Expect(err).To(MatchError(And(
+					ContainSubstring("failed to create allow-ssh-ext firewall rule"),
+					ContainSubstring("firewall error"),
+				)))
+			})
+
+			It("fails when the egress deny rule creation fails", func() {
+				csEnv.Airgapped = true
+
+				expectBaseRules()
+				expectRules("allow-jumpbox-egress", "allow-internal-egress")
+				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
+					return r.GetName() == "deny-external-egress"
+				})).Return(fmt.Errorf("firewall error")).Once()
+
+				err := bs.EnsureFirewallRules()
+				Expect(err).To(MatchError(And(
+					ContainSubstring("failed to create deny-external-egress firewall rule"),
+					ContainSubstring("firewall error"),
+				)))
+			})
+
+			It("fails when removing the egress deny rule fails", func() {
+				expectBaseRules()
+				gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "deny-external-egress").Return(fmt.Errorf("delete error")).Once()
+
+				err := bs.EnsureFirewallRules()
+				Expect(err).To(MatchError(And(
+					ContainSubstring("failed to delete deny-external-egress firewall rule"),
+					ContainSubstring("delete error"),
+				)))
 			})
 		})
 	})
@@ -1156,9 +1650,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				err := bs.EnsureGatewayIPAddresses()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(bs.Env.GatewayIP).To(Equal("1.1.1.1"))
-				Expect(bs.Env.PublicGatewayIP).To(Equal("2.2.2.2"))
-				Expect(bs.Env.SshProxyIP).To(Equal("3.3.3.3"))
+
+				primary := bs.Env.DataCenters[0]
+				Expect(primary.GatewayIP).To(Equal("1.1.1.1"))
+				Expect(primary.PublicGatewayIP).To(Equal("2.2.2.2"))
+				Expect(primary.SSHProxyIP).To(Equal("3.3.3.3"))
 			})
 		})
 
@@ -1288,13 +1784,414 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("EnsurePackageProxy", func() {
+		It("starts no proxy for an installation that is not air-gapped", func() {
+			bs.Env.HostOS = gcp.HostOSRHEL9
+
+			Expect(bs.EnsurePackageProxy()).To(Succeed())
+			nodeClient.AssertNotCalled(GinkgoT(), "RunCommand", mock.Anything, mock.Anything, mock.Anything)
+		})
+
+		Context("for air-gapped Ubuntu hosts", func() {
+			var commands []string
+
+			BeforeEach(func() {
+				csEnv.Airgapped = true
+				commands = nil
+			})
+
+			JustBeforeEach(func() {
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.Anything).
+					RunAndReturn(func(_ *node.Node, _ string, command string) error {
+						commands = append(commands, command)
+						return nil
+					})
+			})
+
+			It("installs podman with apt to run the same proxy container", func() {
+				Expect(bs.EnsurePackageProxy()).To(Succeed())
+				Expect(len(commands)).To(BeNumerically(">=", 2), "recorded commands: %v", commands)
+				Expect(commands[:2]).To(Equal([]string{"apt-get update", "apt-get install -y podman"}))
+				Expect(commands).To(ContainElement(HavePrefix("podman run -d --restart=always --name package-proxy")))
+			})
+
+			It("allows the hosts of the apt sources the image ships, in both the one-line and the deb822 format", func() {
+				Expect(bs.EnsurePackageProxy()).To(Succeed())
+				Expect(commands).To(ContainElement(
+					"{ grep -hv '^[[:space:]]*#' /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources 2>/dev/null" +
+						" | grep -oE 'https?://[^/:[:space:]]+' | sed -E 's#^https?://##'; } | sort -u > /etc/oms/package-proxy/allowed-domains",
+				))
+			})
+		})
+
+		Context("for air-gapped RHEL hosts", func() {
+			var commands []string
+
+			BeforeEach(func() {
+				csEnv.HostOS = gcp.HostOSRHEL9
+				csEnv.Airgapped = true
+				commands = nil
+			})
+
+			recordJumpboxCommands := func() {
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.Anything).
+					RunAndReturn(func(_ *node.Node, _ string, command string) error {
+						commands = append(commands, command)
+						return nil
+					})
+			}
+
+			It("runs the proxy on the jumpbox with podman", func() {
+				recordJumpboxCommands()
+
+				Expect(bs.EnsurePackageProxy()).To(Succeed())
+				Expect(commands).NotTo(BeEmpty())
+				Expect(commands[0]).To(Equal("dnf install -y podman"))
+				Expect(commands).To(ContainElement(
+					"podman run -d --restart=always --name package-proxy --net=host" +
+						" -v /etc/oms/package-proxy/squid.conf:/etc/squid/squid.conf:Z" +
+						" -v /etc/oms/package-proxy/allowed-domains:/etc/squid/allowed-domains:Z" +
+						" docker.io/ubuntu/squid:6.6-24.04_beta",
+				))
+			})
+
+			It("only passes HTTPS and plain HTTP from the VPC to the allowed hosts", func() {
+				recordJumpboxCommands()
+
+				Expect(bs.EnsurePackageProxy()).To(Succeed())
+				Expect(commands).To(ContainElement(
+					"printf '%s\\n' 'http_port 3128' 'acl vpc src 10.10.0.0/20' " +
+						"'acl package_repos dstdomain -n \"/etc/squid/allowed-domains\"' 'acl https_port port 443' 'acl http_port port 80' " +
+						"'acl CONNECT method CONNECT' 'http_access allow vpc CONNECT https_port package_repos' " +
+						"'http_access allow vpc !CONNECT http_port package_repos' " +
+						"'http_access deny all' > /etc/oms/package-proxy/squid.conf",
+				))
+			})
+
+			It("allows Docker's repository and the repositories the image ships, which the nodes share with the jumpbox", func() {
+				recordJumpboxCommands()
+
+				Expect(bs.EnsurePackageProxy()).To(Succeed())
+				Expect(commands).To(ContainElement(
+					"{ printf '%s\\n' 'download.docker.com'; " +
+						"grep -hv '^[[:space:]]*#' /etc/yum.repos.d/*.repo 2>/dev/null" +
+						" | grep -oE 'https?://[^/:[:space:]]+' | sed -E 's#^https?://##'; } " +
+						"| sort -u > /etc/oms/package-proxy/allowed-domains",
+				))
+			})
+
+			It("replaces a running proxy, so a re-run picks up changed repositories", func() {
+				recordJumpboxCommands()
+
+				Expect(bs.EnsurePackageProxy()).To(Succeed())
+				Expect(slices.Index(commands, "podman rm -f package-proxy || true")).To(BeNumerically("<",
+					slices.IndexFunc(commands, func(command string) bool { return strings.HasPrefix(command, "podman run") })))
+			})
+
+			It("waits for the proxy to answer before the nodes use it", func() {
+				recordJumpboxCommands()
+
+				Expect(bs.EnsurePackageProxy()).To(Succeed())
+				Expect(commands).NotTo(BeEmpty())
+				Expect(commands[len(commands)-1]).To(Equal("timeout 60 sh -c 'until curl -s -o /dev/null http://127.0.0.1:3128; do sleep 2; done'"))
+			})
+
+			It("names the failed step", func() {
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", "dnf install -y podman").Return(nil)
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", "mkdir -p /etc/oms/package-proxy").Return(fmt.Errorf("permission denied"))
+
+				err := bs.EnsurePackageProxy()
+				Expect(err).To(MatchError(ContainSubstring("failed to set up the package proxy on the jumpbox while creating the configuration directory: permission denied")))
+			})
+
+			It("fails without a jumpbox to run on", func() {
+				bs.Env.Jumpbox = nil
+
+				Expect(bs.EnsurePackageProxy()).To(MatchError(ContainSubstring("jumpbox not found")))
+			})
+		})
+	})
+
 	Describe("EnsureHostsConfigured", func() {
+		const dockerRunningCheck = "rpm -q docker-ce >/dev/null 2>&1 && systemctl is-active --quiet docker.service"
+
 		Describe("Valid EnsureHostsConfigured", func() {
 			It("configures hosts", func() {
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil)
 
 				err := bs.EnsureHostsConfigured()
 				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("installs no packages on Ubuntu hosts", func() {
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(_ *node.Node, _ string, command string) error {
+						Expect(command).NotTo(ContainSubstring("install -y"))
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+			})
+
+			It("installs the LVM tools and the container SELinux policy on every RHEL host", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				installs := map[string]int{}
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						if command == "dnf install -y lvm2 container-selinux" {
+							installs[n.GetName()]++
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				Expect(installs).To(Equal(map[string]int{
+					"postgres": 1,
+					"k0s-1":    1, "k0s-2": 1, "k0s-3": 1,
+					"ceph-1": 1, "ceph-2": 1, "ceph-3": 1,
+				}))
+			})
+
+			It("installs and starts Docker from Docker's repository on every RHEL host", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				installs := map[string]int{}
+				starts := map[string]int{}
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						switch command {
+						case dockerRunningCheck:
+							return fmt.Errorf("docker is not installed")
+						case "dnf install -y docker-ce docker-ce-cli containerd.io":
+							installs[n.GetName()]++
+						case "systemctl enable --now docker.service":
+							starts[n.GetName()]++
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+
+				hosts := map[string]int{
+					"postgres": 1,
+					"k0s-1":    1, "k0s-2": 1, "k0s-3": 1,
+					"ceph-1": 1, "ceph-2": 1, "ceph-3": 1,
+				}
+				Expect(installs).To(Equal(hosts))
+				Expect(starts).To(Equal(hosts))
+			})
+
+			It("retries Docker installation after an RPM lock conflict", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				lockErr := fmt.Errorf("command failed: %w\nerror: can't create transaction lock on /var/lib/rpm/.rpm.lock (Resource temporarily unavailable)", &ssh.ExitError{})
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", dockerRunningCheck).Return(fmt.Errorf("not installed"))
+				failed := nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", "dnf install -y docker-ce docker-ce-cli containerd.io").Return(lockErr).Once()
+				nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", "dnf install -y docker-ce docker-ce-cli containerd.io").Return(nil).Once().NotBefore(failed)
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil)
+
+				started := bs.Time.Now()
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				Expect(bs.Time.Now().Sub(started)).To(Equal(10 * time.Second))
+			})
+
+			It("stops retrying a busy RPM lock after five minutes", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				lockErr := fmt.Errorf("command failed: %w\nerror: can't create transaction lock on /var/lib/rpm/.rpm.lock (Resource temporarily unavailable)", &ssh.ExitError{})
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", dockerRunningCheck).Return(fmt.Errorf("not installed"))
+				nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", "dnf install -y docker-ce docker-ce-cli containerd.io").Return(lockErr).Times(31)
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil)
+
+				started := bs.Time.Now()
+				Expect(bs.EnsureHostsConfigured()).To(MatchError(ContainSubstring("RPM transaction lock remained busy for 5m")))
+				Expect(bs.Time.Now().Sub(started)).To(Equal(5 * time.Minute))
+			})
+
+			It("does not retry a genuine package signature failure", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				signatureErr := fmt.Errorf("command failed: %w\nError: GPG check FAILED", &ssh.ExitError{})
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", dockerRunningCheck).Return(fmt.Errorf("not installed"))
+				nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", "dnf install -y docker-ce docker-ce-cli containerd.io").Return(signatureErr).Once()
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil)
+
+				started := bs.Time.Now()
+				Expect(bs.EnsureHostsConfigured()).To(MatchError(ContainSubstring("failed to install Docker on postgres")))
+				Expect(bs.Time.Now()).To(Equal(started))
+			})
+
+			It("leaves hosts alone that already run Docker, so a re-run does not need the Docker repository", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(_ *node.Node, _ string, command string) error {
+						Expect(command).NotTo(ContainSubstring("docker.com"))
+						Expect(command).NotTo(ContainSubstring("docker-ce docker-ce-cli"))
+						Expect(command).NotTo(ContainSubstring("systemctl enable --now docker"))
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+			})
+
+			It("installs Docker only after the container SELinux policy it requires", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+
+				var commands []string
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						if n.GetName() == "postgres" {
+							commands = append(commands, command)
+						}
+
+						if command == dockerRunningCheck {
+							return fmt.Errorf("docker is not installed")
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				Expect(slices.Index(commands, "dnf install -y lvm2 container-selinux")).To(BeNumerically(">=", 0))
+				Expect(slices.Index(commands, "dnf install -y docker-ce docker-ce-cli containerd.io")).To(BeNumerically(">", slices.Index(commands, "dnf install -y lvm2 container-selinux")))
+			})
+
+			It("points the Docker repository at the RHEL 9 packages and removes the podman-docker shim", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+
+				var commands []string
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						if n.GetName() == "postgres" {
+							commands = append(commands, command)
+						}
+
+						if command == dockerRunningCheck {
+							return fmt.Errorf("docker is not installed")
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				Expect(commands).To(ContainElements(
+					"printf '%s\\n' '[docker-ce-stable]' 'name=Docker CE Stable - $basearch' "+
+						"'baseurl=https://download.docker.com/linux/rhel/9/$basearch/stable' 'enabled=1' 'gpgcheck=1' "+
+						"'gpgkey=https://download.docker.com/linux/rhel/gpg' > /etc/yum.repos.d/docker-ce.repo",
+					"if rpm -q podman-docker >/dev/null 2>&1; then dnf remove -y podman-docker; fi",
+				))
+			})
+
+			It("installs Docker through dnf only, so air-gapped hosts fetch it through the package proxy", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(_ *node.Node, _ string, command string) error {
+						Expect(command).NotTo(HavePrefix("curl"))
+
+						if command == dockerRunningCheck {
+							return fmt.Errorf("docker is not installed")
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+			})
+
+			It("points dnf at the package proxy on the jumpbox on every air-gapped RHEL host before installing packages", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				bs.Env.Airgapped = true
+
+				const proxyCommand = "sed -i '/^[[:space:]]*proxy[[:space:]]*=/d' /etc/dnf/dnf.conf" +
+					` && sed -i '/^\[main\]/a proxy=http://10.0.0.1:3128' /etc/dnf/dnf.conf` +
+					" && grep -qx 'proxy=http://10.0.0.1:3128' /etc/dnf/dnf.conf"
+
+				// Whether each node's dnf was pointed at the proxy by the time it installed packages.
+				proxied := map[string]bool{}
+				proxiedAtInstall := map[string]bool{}
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						switch command {
+						case proxyCommand:
+							proxied[n.GetName()] = true
+						case "dnf install -y lvm2 container-selinux":
+							proxiedAtInstall[n.GetName()] = proxied[n.GetName()]
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				Expect(proxiedAtInstall).To(HaveLen(7))
+				Expect(proxiedAtInstall).To(HaveEach(BeTrue()))
+			})
+
+			It("removes the package proxy from RHEL hosts that are not air-gapped, so a re-run without air-gapping installs directly", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				removals := map[string]int{}
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						Expect(command).NotTo(ContainSubstring("proxy=http"))
+
+						if command == "sed -i '/^[[:space:]]*proxy[[:space:]]*=/d' /etc/dnf/dnf.conf" {
+							removals[n.GetName()]++
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				Expect(removals).To(HaveLen(7))
+			})
+
+			It("points apt at the package proxy on the jumpbox on every air-gapped Ubuntu host", func() {
+				bs.Env.Airgapped = true
+
+				const proxyCommand = `printf '%s\n' 'Acquire::http::Proxy "http://10.0.0.1:3128";' 'Acquire::https::Proxy "http://10.0.0.1:3128";'` +
+					" > /etc/apt/apt.conf.d/99oms-package-proxy"
+
+				configured := map[string]int{}
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						if command == proxyCommand {
+							configured[n.GetName()]++
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				Expect(configured).To(Equal(map[string]int{
+					"postgres": 1,
+					"k0s-1":    1, "k0s-2": 1, "k0s-3": 1,
+					"ceph-1": 1, "ceph-2": 1, "ceph-3": 1,
+				}))
+			})
+
+			It("removes the apt proxy drop-in from Ubuntu hosts that are not air-gapped", func() {
+				removals := map[string]int{}
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						Expect(command).NotTo(ContainSubstring("Acquire::"))
+
+						if command == "rm -f /etc/apt/apt.conf.d/99oms-package-proxy" {
+							removals[n.GetName()]++
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				Expect(removals).To(HaveLen(7))
 			})
 
 			It("creates the directory the installer uploads the age key to on every node", func() {
@@ -1355,6 +2252,64 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 
 		Describe("Invalid cases", func() {
+			It("names the packages and the node when the RHEL package install fails", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "sed -i '/^[[:space:]]*proxy[[:space:]]*=/d' /etc/dnf/dnf.conf").Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "dnf install -y lvm2 container-selinux").Return(fmt.Errorf("no repos")).Once()
+
+				err := bs.EnsureHostsConfigured()
+				Expect(err).To(MatchError(ContainSubstring("failed to ensure host packages: failed to install lvm2, container-selinux on postgres: no repos")))
+			})
+
+			It("fails without a jumpbox to point air-gapped hosts at, before touching any node", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				bs.Env.Airgapped = true
+				bs.Env.Jumpbox = nil
+
+				err := bs.EnsureHostsConfigured()
+				Expect(err).To(MatchError(ContainSubstring("failed to find the package proxy for postgres: jumpbox not found")))
+				nodeClient.AssertNotCalled(GinkgoT(), "RunCommand", mock.Anything, mock.Anything, mock.Anything)
+			})
+
+			It("fails when the jumpbox has no internal IP, rather than pointing hosts at a proxy without an address", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				bs.Env.Airgapped = true
+				bs.Env.Jumpbox.InternalIP = ""
+
+				err := bs.EnsureHostsConfigured()
+				Expect(err).To(MatchError(ContainSubstring("failed to find the package proxy for postgres: jumpbox has no internal IP")))
+				nodeClient.AssertNotCalled(GinkgoT(), "RunCommand", mock.Anything, mock.Anything, mock.Anything)
+			})
+
+			It("names the node when dnf cannot be pointed at the package proxy", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				bs.Env.Airgapped = true
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("read-only file system")).Once()
+
+				err := bs.EnsureHostsConfigured()
+				Expect(err).To(MatchError(ContainSubstring("failed to ensure package proxy: failed to configure the package proxy on postgres: read-only file system")))
+			})
+
+			It("fails for an unsupported host OS, as an edited infra file can set one", func() {
+				bs.Env.HostOS = "debian-12"
+
+				err := bs.EnsureHostsConfigured()
+				Expect(err).To(MatchError(ContainSubstring(`failed to get the host OS settings: unsupported host OS "debian-12"`)))
+			})
+
+			It("names Docker and the node when the Docker installation fails on RHEL", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", dockerRunningCheck).Return(fmt.Errorf("docker is not installed"))
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "dnf install -y docker-ce docker-ce-cli containerd.io").Return(fmt.Errorf("repo unreachable")).Once()
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil)
+
+				err := bs.EnsureHostsConfigured()
+				Expect(err).To(MatchError(ContainSubstring("failed to ensure Docker: failed to install Docker on postgres: docker installation command failed: repo unreachable")))
+			})
+
 			It("fails when the secrets directory cannot be created", func() {
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
 					RunAndReturn(func(_ *node.Node, _ string, command string) error {
@@ -1370,6 +2325,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when ConfigureInotifyWatches fails", func() {
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "rm -f /etc/apt/apt.conf.d/99oms-package-proxy").Return(nil)
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("ouch"))
 
 				err := bs.EnsureHostsConfigured()
@@ -1379,6 +2335,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("fails when ConfigureMemoryMap fails", func() {
 				mock.InOrder(
+					nodeClient.EXPECT().RunCommand(mock.Anything, "root", "rm -f /etc/apt/apt.conf.d/99oms-package-proxy").Return(nil).Once(),
+
 					// HasInotifyWatchesConfigured: all 4 checks pass → skip ConfigureInotifyWatches
 					nodeClient.EXPECT().RunCommand(mock.Anything, "root", "sudo grep -E '^fs.inotify.max_user_watches=1048576' /etc/sysctl.conf >/dev/null 2>&1").Return(nil).Once(),
 					nodeClient.EXPECT().RunCommand(mock.Anything, "root", "sudo sysctl -n fs.inotify.max_user_watches | grep -q '^1048576$'").Return(nil).Once(),
@@ -1545,10 +2503,70 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("UpdateInstallConfig", func() {
+		BeforeEach(func() {
+			icg.EXPECT().GetVault().Return(&files.InstallVault{}).Maybe()
+			icg.EXPECT().GenerateSecrets().Return(nil).Maybe()
+			icg.EXPECT().WriteInstallConfig(mock.Anything, mock.Anything).Return(nil).Maybe()
+			icg.EXPECT().WriteVault(mock.Anything, mock.Anything).Return(nil).Maybe()
+			nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+			nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+		})
+
+		It("serves the applications' charts from a mirrored registry", func() {
+			bs.Env.RegistryType = gcp.RegistryTypeLocalContainer
+			bs.Env.InstallConfig.Registry.Server = "10.0.0.1"
+
+			Expect(bs.UpdateInstallConfig()).To(Succeed())
+			Expect(bs.Env.InstallConfig.PcApps).To(HaveKeyWithValue("chartsRegistry", "10.0.0.1/codesphere-cloud/charts"))
+		})
+
+		// A re-run reads the config the previous run wrote, whose jumpbox may have had another IP.
+		It("replaces a charts registry left from a previous registry address", func() {
+			bs.Env.RegistryType = gcp.RegistryTypeLocalContainer
+			bs.Env.InstallConfig.Registry.Server = "10.0.0.8"
+			bs.Env.InstallConfig.PcApps = files.ChartValues{"chartsRegistry": "10.0.0.7/codesphere-cloud/charts"}
+
+			Expect(bs.UpdateInstallConfig()).To(Succeed())
+			Expect(bs.Env.InstallConfig.PcApps).To(HaveKeyWithValue("chartsRegistry", "10.0.0.8/codesphere-cloud/charts"))
+		})
+
+		DescribeTable("leaves the applications' charts on GHCR without a mirror",
+			func(registryType gcp.RegistryType, server string) {
+				bs.Env.RegistryType = registryType
+				bs.Env.InstallConfig.Registry.Server = server
+
+				Expect(bs.UpdateInstallConfig()).To(Succeed())
+				Expect(bs.Env.InstallConfig.PcApps).NotTo(HaveKey("chartsRegistry"))
+			},
+			Entry("GitHub", gcp.RegistryTypeGitHub, "ghcr.io"),
+			// An artifact registry holds no charts, the package is only mirrored into a local one.
+			Entry("artifact registry", gcp.RegistryTypeArtifactRegistry, "europe-docker.pkg.dev/pid/repo"),
+		)
+	})
+
+	DescribeTable("uses a package override only for manual or local installs", func(version, local string, wantsPackage bool) {
+		csEnv.InstallVersion = version
+		csEnv.InstallLocal = local
+		dc := gcp.BuildDataCenters(csEnv)[0]
+
+		command := bs.InstallCommand(dc, "example-installer.tar.gz")
+		if wantsPackage {
+			Expect(command).To(ContainSubstring(" -p example-installer.tar.gz"))
+		} else {
+			Expect(command).NotTo(ContainSubstring(" -p "))
+		}
+	},
+		Entry("manual command without a version", "", "", true),
+		Entry("local archive", "", "local.tar.gz", true),
+		Entry("config-selected version", "master", "", false),
+	)
+
 	Describe("InstallCodesphere", func() {
 		BeforeEach(func() {
 			csEnv.InstallVersion = "v1.2.3"
 			csEnv.InstallHash = "abc1234567890"
+			csEnv.ContainerRegistryURL = "10.10.0.2"
 
 			icg.EXPECT().GetSecretFilePath().Return("/etc/codesphere/secrets/prod.vault.yaml").Maybe()
 		})
@@ -1561,11 +2579,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})
 				It("downloads and installs lite package", func() {
 					// Expect download package
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
 
 					// Expect install codesphere
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-						"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz -s kubernetes,load-container-images").Return(nil)
+						"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -s kubernetes,load-container-images").Return(nil)
 
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
@@ -1579,10 +2596,13 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})
 				It("downloads and installs codesphere", func() {
 					// Expect download package
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H def9876543210 v1.2.3").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p oms-workdir && cd oms-workdir && oms download package -f installer-lite.tar.gz -H def9876543210 codesphere-v1.2.3").Return(nil)
+
+					// Expect mirroring the package artifacts into the local registry
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p oms-workdir/codesphere-v1.2.3-def9876543210-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
 
 					// Expect install codesphere
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-def9876543210-installer-lite.tar.gz -s kubernetes").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml --argo-registry-ca /root/registry.crt -s kubernetes,load-container-images").Return(nil)
 
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
@@ -1590,18 +2610,43 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("downloads and installs codesphere with hash", func() {
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz -s kubernetes").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p oms-workdir && cd oms-workdir && oms download package -f installer-lite.tar.gz -H abc1234567890 codesphere-v1.2.3").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p oms-workdir/codesphere-v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml --argo-registry-ca /root/registry.crt -s kubernetes,load-container-images").Return(nil)
 
 				err := bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
 			})
 
+			It("copies the pc-apps values files to the jumpbox and passes them in order", func() {
+				csEnv.PCAppsValues = []string{"values/base.yaml", "overlay/base.yaml"}
+
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p oms-workdir && cd oms-workdir && oms download package -f installer-lite.tar.gz -H abc1234567890 codesphere-v1.2.3").Return(nil)
+				nodeClient.EXPECT().CopyFile(mock.Anything, "values/base.yaml", "/root/pc-apps-values/0-base.yaml").Return(nil)
+				nodeClient.EXPECT().CopyFile(mock.Anything, "overlay/base.yaml", "/root/pc-apps-values/1-base.yaml").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p oms-workdir/codesphere-v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml --argo-registry-ca /root/registry.crt --pc-apps-values /root/pc-apps-values/0-base.yaml --pc-apps-values /root/pc-apps-values/1-base.yaml -s kubernetes,load-container-images").Return(nil)
+
+				err := bs.InstallCodesphere()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("fails when a pc-apps values file cannot be copied", func() {
+				csEnv.PCAppsValues = []string{"base.yaml"}
+
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p oms-workdir && cd oms-workdir && oms download package -f installer-lite.tar.gz -H abc1234567890 codesphere-v1.2.3").Return(nil)
+				nodeClient.EXPECT().CopyFile(mock.Anything, "base.yaml", "/root/pc-apps-values/0-base.yaml").Return(fmt.Errorf("copy error"))
+
+				err := bs.InstallCodesphere()
+				Expect(err).To(MatchError(ContainSubstring("failed to copy pc-apps values file base.yaml to jumpbox")))
+			})
+
 			It("preserves requested skip steps without duplicating kubernetes", func() {
 				csEnv.InstallSkipSteps = []string{"postgres", "kubernetes"}
 
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz -s kubernetes,postgres").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p oms-workdir && cd oms-workdir && oms download package -f installer-lite.tar.gz -H abc1234567890 codesphere-v1.2.3").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p oms-workdir/codesphere-v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml --argo-registry-ca /root/registry.crt -s kubernetes,postgres,load-container-images").Return(nil)
 
 				err := bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
@@ -1634,7 +2679,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 					It("installs codesphere from local package", func() {
 						nodeClient.EXPECT().CopyFile(mock.Anything, csEnv.InstallLocal, "/root/local-installer-lite.tar.gz").Return(nil)
 						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p local-installer-lite.tar.gz -s kubernetes").Return(nil)
+							"oms copy package -p local-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
+						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p local-installer-lite.tar.gz --argo-registry-ca /root/registry.crt -s kubernetes,load-container-images").Return(nil)
 
 						err := bs.InstallCodesphere()
 						Expect(err).NotTo(HaveOccurred())
@@ -1669,16 +2716,26 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when download package fails", func() {
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(fmt.Errorf("download error"))
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p oms-workdir && cd oms-workdir && oms download package -f installer-lite.tar.gz -H abc1234567890 codesphere-v1.2.3").Return(fmt.Errorf("download error"))
 
 				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to download Codesphere package from jumpbox"))
 			})
 
+			It("fails when mirroring package artifacts fails", func() {
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p oms-workdir && cd oms-workdir && oms download package -f installer-lite.tar.gz -H abc1234567890 codesphere-v1.2.3").Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p oms-workdir/codesphere-v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(fmt.Errorf("copy error")).Once()
+
+				err := bs.InstallCodesphere()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to mirror package artifacts into the local registry"))
+			})
+
 			It("fails when install codesphere fails", func() {
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil).Once()
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz -s kubernetes").Return(fmt.Errorf("install error")).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p oms-workdir && cd oms-workdir && oms download package -f installer-lite.tar.gz -H abc1234567890 codesphere-v1.2.3").Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p oms-workdir/codesphere-v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml --argo-registry-ca /root/registry.crt -s kubernetes,load-container-images").Return(fmt.Errorf("install error")).Once()
 
 				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
@@ -1687,17 +2744,138 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("InstallK0sAndCodesphere", func() {
+		var vault *files.InstallVault
+
+		const installCommand = "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -s kubernetes,load-container-images"
+
+		BeforeEach(func() {
+			csEnv.InstallVersion = "v1.2.3"
+			csEnv.InstallHash = "abc1234567890"
+			csEnv.K0sVersion = "v1.31.14+k0s.0"
+			csEnv.RegistryType = gcp.RegistryTypeGitHub
+
+			icg.EXPECT().GetSecretFilePath().Return("/etc/codesphere/secrets/prod.vault.yaml").Maybe()
+
+			vault = &files.InstallVault{}
+			addKubeconfig(vault)
+			icg.EXPECT().GetVault().Return(vault).Maybe()
+		})
+
+		expectConfigScriptUploaded := func() {
+			fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).Return(nil)
+			nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
+		}
+
+		// expectK0sChecks answers the k0s check of the i-th control plane node with results[i].
+		expectK0sChecks := func(results ...error) {
+			services := []string{"k0scontroller", "k0sworker", "k0sworker"}
+			for i, result := range results {
+				nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[i], "root", k0sCheckCommand(services[i], "v1.31.14+k0s.0")).Return(result)
+			}
+		}
+
+		isK0sInstall := func(command string) bool {
+			return strings.HasPrefix(command, "oms install k0s ")
+		}
+
+		expectK0sDownloaded := func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download k0s --version v1.31.14+k0s.0").Return(nil)
+		}
+
+		It("given a controller without configured k0s, when Codesphere is installed, then k0s is installed first and configured afterwards", func() {
+			expectConfigScriptUploaded()
+			expectK0sChecks(errK0sNotConfigured)
+			expectK0sDownloaded()
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(isK0sInstall)).Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil)
+			install := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand).Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(nil).NotBefore(install.Call)
+
+			Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
+		})
+
+		It("given k0s configured in the requested version on every node, when Codesphere is installed, then k0s is not reinstalled but waited for and configured", func() {
+			expectConfigScriptUploaded()
+			expectK0sChecks(nil, nil, nil)
+
+			wait := nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil)
+			install := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand).Return(nil)
+			install.NotBefore(wait.Call)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(nil).NotBefore(install.Call)
+
+			Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
+		})
+
+		It("given a vault without the kubeconfig, when Codesphere is installed, then k0s is installed again without checking the nodes", func() {
+			vault.Secrets = nil
+
+			expectConfigScriptUploaded()
+			expectK0sDownloaded()
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(isK0sInstall)).Return(fmt.Errorf("stop after the decision"))
+
+			Expect(bs.InstallK0sAndCodesphere()).To(MatchError(ContainSubstring("failed to install k0s from jumpbox")))
+		})
+
+		It("given a worker VM recreated without k0s, when Codesphere is installed, then k0s is installed again", func() {
+			expectConfigScriptUploaded()
+			expectK0sChecks(nil, nil, errK0sNotConfigured)
+			expectK0sDownloaded()
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(isK0sInstall)).Return(fmt.Errorf("stop after the decision"))
+
+			Expect(bs.InstallK0sAndCodesphere()).To(MatchError(ContainSubstring("failed to install k0s from jumpbox")))
+		})
+
+		It("given a node the check cannot reach, when Codesphere is installed, then the bootstrap fails without reinstalling k0s", func() {
+			expectConfigScriptUploaded()
+			expectK0sChecks(nil, fmt.Errorf("failed to get client: i/o timeout"))
+
+			err := bs.InstallK0sAndCodesphere()
+			Expect(err).To(MatchError(ContainSubstring("failed to check the running k0s (data center 1)")))
+			Expect(err).To(MatchError(ContainSubstring("failed to check k0s on k0s-2: failed to get client: i/o timeout")))
+		})
+
+		Context("when only Codesphere is installed", func() {
+			BeforeEach(func() {
+				csEnv.InstallCodesphereOnly = true
+			})
+
+			It("given a running cluster, when Codesphere is installed, then only the Codesphere-only install runs and k0s is left untouched", func() {
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand+" --codesphere-only").Return(nil)
+
+				Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
+			})
+
+			It("given skip steps, when Codesphere is installed, then they are passed on together with --codesphere-only", func() {
+				csEnv.InstallSkipSteps = []string{"set-up-cluster"}
+
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+					"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -s kubernetes,set-up-cluster,load-container-images --codesphere-only").Return(nil)
+
+				Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
+			})
+
+			It("given a failing install, when Codesphere is installed, then the install error is returned", func() {
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand+" --codesphere-only").Return(fmt.Errorf("install error"))
+
+				Expect(bs.InstallK0sAndCodesphere()).To(MatchError(ContainSubstring("failed to install Codesphere")))
+			})
+		})
+	})
+
 	Describe("InstallK0s", func() {
 		BeforeEach(func() {
 			csEnv.InstallVersion = "v1.2.3"
 			csEnv.InstallHash = "abc1234567890"
+			csEnv.K0sVersion = "v1.31.14+k0s.0"
 		})
 
 		It("downloads k0s and lets k0sctl distribute it independently of the Codesphere package", func() {
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-				"oms install k0s --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt").Return(nil)
+				"oms install k0s --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --yes --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt").Return(nil)
 
-			err := bs.InstallK0s()
+			err := bs.InstallK0s(gcp.BuildDataCenters(bs.Env))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1706,8 +2884,178 @@ var _ = Describe("GCP Bootstrapper", func() {
 				return strings.HasPrefix(command, "oms install k0s ")
 			})).Return(fmt.Errorf("k0s error"))
 
-			err := bs.InstallK0s()
+			err := bs.InstallK0s(gcp.BuildDataCenters(bs.Env))
 			Expect(err).To(MatchError(ContainSubstring("failed to install k0s from jumpbox")))
+		})
+
+		It("applies the generated airgap k0sctl config when airgapped", func() {
+			csEnv.Airgapped = true
+
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+				"oms install k0s --config /etc/codesphere/k0sctl-config.yaml --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt").Return(nil)
+
+			Expect(bs.InstallK0s(gcp.BuildDataCenters(bs.Env))).To(Succeed())
+		})
+	})
+
+	Describe("DownloadK0s", func() {
+		BeforeEach(func() {
+			csEnv.K0sVersion = "v1.31.14+k0s.0"
+		})
+
+		It("caches the k0s binary on the jumpbox", func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+				"oms download k0s --version v1.31.14+k0s.0").Return(nil)
+
+			Expect(bs.DownloadK0s()).To(Succeed())
+		})
+
+		It("caches the k0s binary and airgap bundle on the jumpbox for airgapped bootstraps", func() {
+			csEnv.Airgapped = true
+
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+				"oms download k0s --version v1.31.14+k0s.0 --airgapped").Return(nil)
+
+			Expect(bs.DownloadK0s()).To(Succeed())
+		})
+
+		It("reports a failing download on the jumpbox", func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+				"oms download k0s --version v1.31.14+k0s.0").Return(fmt.Errorf("network error"))
+
+			err := bs.DownloadK0s()
+			Expect(err).To(MatchError(ContainSubstring("failed to download k0s on jumpbox")))
+			Expect(err).To(MatchError(ContainSubstring("network error")))
+		})
+	})
+
+	Describe("GenerateK0sAirgapConfig", func() {
+		BeforeEach(func() {
+			csEnv.K0sVersion = "v1.31.14+k0s.0"
+		})
+
+		It("generates the airgap k0sctl config on the jumpbox without installing it", func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --output /etc/codesphere/k0sctl-config.yaml --yes").Return(nil)
+
+			Expect(bs.GenerateK0sAirgapConfig(gcp.BuildDataCenters(bs.Env))).To(Succeed())
+		})
+
+		It("reports a failing config generation on the jumpbox", func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(command string) bool {
+				return strings.HasPrefix(command, "oms init k0s-config ")
+			})).Return(fmt.Errorf("airgap bundle not found"))
+
+			err := bs.GenerateK0sAirgapConfig(gcp.BuildDataCenters(bs.Env))
+			Expect(err).To(MatchError(ContainSubstring("failed to generate k0s airgap config (data center 1)")))
+			Expect(err).To(MatchError(ContainSubstring("airgap bundle not found")))
+		})
+
+		It("generates a separate airgap k0sctl config for every data center", func() {
+			bs.Env.DataCenters = []*datacenter.DataCenter{
+				{ID: 1, RemoteConfigPath: "/etc/codesphere/config.yaml", ControlPlaneNodes: bs.Env.ControlPlaneNodes},
+				{ID: 2, Suffix: "-dc2", RemoteConfigPath: "/etc/codesphere/config-dc2.yaml", ControlPlaneNodes: []*node.Node{fakeNode("k0s-1-dc2", nodeClient)}},
+			}
+
+			var jumpboxCommands []string
+
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.Anything).
+				Run(func(_ *node.Node, _ string, command string) { jumpboxCommands = append(jumpboxCommands, command) }).
+				Return(nil)
+
+			Expect(bs.GenerateK0sAirgapConfig(bs.Env.DataCenters)).To(Succeed())
+			Expect(jumpboxCommands).To(Equal([]string{
+				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --output /etc/codesphere/k0sctl-config.yaml --yes",
+				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config-dc2.yaml --airgapped --output /etc/codesphere/k0sctl-config-dc2.yaml --yes",
+			}))
+		})
+	})
+
+	Describe("EnsureK0s", func() {
+		BeforeEach(func() {
+			csEnv.K0sVersion = "v1.31.14+k0s.0"
+			csEnv.Airgapped = true
+
+			vault := &files.InstallVault{}
+			addKubeconfig(vault)
+			icg.EXPECT().GetVault().Return(vault).Maybe()
+			nodeClient.EXPECT().RunCommand(csEnv.ControlPlaneNodes[0], "root", k0sCheckCommand("k0scontroller", "v1.31.14+k0s.0")).Return(errK0sNotConfigured)
+		})
+
+		It("installs an airgapped cluster from the airgap config it generates", func() {
+			var jumpboxCommands []string
+
+			fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).Return(nil)
+			nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.Anything).
+				Run(func(_ *node.Node, _ string, command string) { jumpboxCommands = append(jumpboxCommands, command) }).
+				Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil)
+
+			Expect(bs.EnsureK0s()).To(Succeed())
+			Expect(jumpboxCommands).To(Equal([]string{
+				"oms download k0s --version v1.31.14+k0s.0 --airgapped",
+				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --output /etc/codesphere/k0sctl-config.yaml --yes",
+				"oms install k0s --config /etc/codesphere/k0sctl-config.yaml --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt",
+			}))
+		})
+
+		Context("when a step fails", func() {
+			var jumpboxCommands []string
+
+			// failJumpboxCommand records the jumpbox commands and fails the one starting with prefix.
+			failJumpboxCommand := func(prefix string) {
+				jumpboxCommands = nil
+
+				fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).Return(nil)
+				nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
+				nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.Anything).
+					RunAndReturn(func(_ *node.Node, _ string, command string) error {
+						jumpboxCommands = append(jumpboxCommands, command)
+						if strings.HasPrefix(command, prefix) {
+							return fmt.Errorf("step error")
+						}
+
+						return nil
+					})
+			}
+
+			It("does not generate a config or install k0s when the bundle download fails", func() {
+				failJumpboxCommand("oms download k0s ")
+
+				Expect(bs.EnsureK0s()).To(MatchError(ContainSubstring("failed to download k0s")))
+				Expect(jumpboxCommands).To(Equal([]string{"oms download k0s --version v1.31.14+k0s.0 --airgapped"}))
+			})
+
+			It("does not install k0s when the airgap config generation fails", func() {
+				failJumpboxCommand("oms init k0s-config ")
+
+				Expect(bs.EnsureK0s()).To(MatchError(ContainSubstring("failed to generate k0s airgap config")))
+				Expect(jumpboxCommands).To(HaveLen(2))
+				Expect(jumpboxCommands).NotTo(ContainElement(HavePrefix("oms install k0s ")))
+			})
+		})
+
+		It("downloads k0s and installs a non-airgapped cluster from the install-config without the airgap steps", func() {
+			csEnv.Airgapped = false
+
+			var jumpboxCommands []string
+
+			fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).Return(nil)
+			nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.Anything).
+				Run(func(_ *node.Node, _ string, command string) { jumpboxCommands = append(jumpboxCommands, command) }).
+				Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil)
+
+			Expect(bs.EnsureK0s()).To(Succeed())
+			Expect(jumpboxCommands).To(Equal([]string{
+				"oms download k0s --version v1.31.14+k0s.0",
+				"oms install k0s --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --yes --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt",
+			}))
 		})
 	})
 
@@ -1727,6 +3075,22 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("RunK0sConfigScript", func() {
+		It("runs the script on the first control plane node", func() {
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(nil)
+
+			Expect(bs.RunK0sConfigScript()).To(Succeed())
+		})
+
+		It("fails when the script exits with an error", func() {
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(fmt.Errorf("command failed: exit status 1"))
+
+			err := bs.RunK0sConfigScript()
+			Expect(err).To(MatchError(ContainSubstring("failed to run k0s config script")))
+			Expect(err).To(MatchError(ContainSubstring("exit status 1")))
+		})
+	})
+
 	Describe("GenerateK0sConfigScript", func() {
 		Describe("Valid GenerateK0sConfigScript", func() {
 			It("generates script", func() {
@@ -1736,6 +3100,39 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				err := bs.GenerateK0sConfigScript()
 				Expect(err).NotTo(HaveOccurred())
+			})
+
+			Describe("script content", func() {
+				var script string
+
+				JustBeforeEach(func() {
+					fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).
+						Run(func(_ string, content []byte, _ os.FileMode) { script = string(content) }).
+						Return(nil)
+					nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
+					nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
+
+					Expect(bs.GenerateK0sConfigScript()).To(Succeed())
+				})
+
+				It("given a natively installed k0s, when the script is generated, then it calls the k0s binary on the PATH", func() {
+					Expect(script).To(ContainSubstring(`KUBECTL="k0s kubectl"`))
+					Expect(script).NotTo(ContainSubstring("/etc/codesphere/deps/kubernetes"))
+				})
+
+				It("given any failing command, when the script runs, then it exits with an error", func() {
+					Expect(script).To(HavePrefix("#!/bin/bash\n\nset -eo pipefail\n"))
+					Expect(script).NotTo(ContainSubstring("set +e"))
+				})
+
+				It("given a rerun on a configured cluster, when the script runs, then k0s is restarted only where it does not run with the cloud provider flag", func() {
+					Expect(script).To(ContainSubstring("tr '\\0' ' ' < /proc/$(systemctl show --property MainPID --value k0scontroller)/cmdline | grep -q -- ' --enable-cloud-provider' || { sed -i "))
+					Expect(script).To(ContainSubstring("systemctl restart k0scontroller; }"))
+				})
+
+				It("given a rerun on an existing cluster, when the script runs, then the cloud-config configmap is applied instead of created", func() {
+					Expect(script).To(ContainSubstring("create configmap cloud-config --from-file=cloud.conf -n kube-system --dry-run=client -o yaml | $KUBECTL apply -f -"))
+				})
 			})
 		})
 

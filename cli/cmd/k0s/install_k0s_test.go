@@ -11,8 +11,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/mock"
-	"gopkg.in/yaml.v3"
 
 	"github.com/codesphere-cloud/oms/cli/cmd/k0s"
 	"github.com/codesphere-cloud/oms/cli/cmd/testutil"
@@ -21,6 +21,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
@@ -42,13 +43,7 @@ var _ = Describe("InstallK0sCmd", func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
 		mockFileWriter = intutil.NewMockFileIO(GinkgoT())
 		globalOpts = &util.GlobalOptions{}
-		opts = &k0s.InstallK0sOpts{
-			GlobalOptions: globalOpts,
-			Version:       "",
-			Package:       "",
-			InstallConfig: "",
-			Force:         false,
-		}
+		opts = &k0s.InstallK0sOpts{GlobalOptions: globalOpts}
 		c = k0s.InstallK0sCmd{
 			Opts:       *opts,
 			Env:        mockEnv,
@@ -64,27 +59,72 @@ var _ = Describe("InstallK0sCmd", func() {
 	Context("RunE method", func() {
 		It("fails when install-config is not provided", func() {
 			c.Opts.InstallConfig = ""
-			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir").Times(2)
-			mockFileWriter.EXPECT().MkdirAll("/test/workdir", os.FileMode(0755)).Return(nil)
 
 			err := c.RunE(nil, nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("install-config"))
 		})
+
+		It("rejects an install-config in single-node mode", func() {
+			c.Opts.Single = true
+			c.Opts.InstallConfig = "config.yaml"
+			err := c.RunE(nil, nil)
+			Expect(err).To(MatchError(ContainSubstring("cannot be used with --single")))
+		})
+	})
+
+	Context("flag validation", func() {
+		var installK0sCmd *cobra.Command
+
+		BeforeEach(func() {
+			parent := &cobra.Command{Use: "install"}
+			k0s.AddInstallCmd(parent, globalOpts)
+			installK0sCmd, _, _ = parent.Find([]string{"k0s"})
+		})
+
+		DescribeTable("rejects flags that are ignored with --config",
+			func(args ...string) {
+				Expect(installK0sCmd.ParseFlags(append([]string{"--config", "k0sctl.yaml"}, args...))).To(Succeed())
+				err := installK0sCmd.ValidateFlagGroups()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("config"))
+			},
+			Entry("--version", "--version", "v1.31.14+k0s.0"),
+			Entry("--package", "--package", "pkg.tar.gz"),
+			Entry("--ssh-key-path", "--ssh-key-path", "id_rsa"),
+			Entry("--no-download", "--no-download"),
+			Entry("--install-config", "--install-config", "config.yaml"),
+		)
+
+		It("rejects --yes with --config", func() {
+			Expect(installK0sCmd.ParseFlags([]string{"--config", "k0sctl.yaml", "--yes"})).To(Succeed())
+			Expect(installK0sCmd.ValidateFlagGroups()).To(MatchError(ContainSubstring("yes")))
+		})
+
+		It("accepts flags that still apply with --config", func() {
+			Expect(installK0sCmd.ParseFlags([]string{
+				"--config", "k0sctl.yaml", "--k0sctl-version", "v0.17.4", "--force",
+				"--vault", "prod.vault.yaml", "--vault-type", "plain",
+			})).To(Succeed())
+			Expect(installK0sCmd.ValidateFlagGroups()).To(Succeed())
+		})
 	})
 
 	Context("InstallK0s method", func() {
 		var (
-			mockPM     *installer.MockPackageManager
-			mockK0s    *installer.MockK0sManager
-			mockK0sctl *installer.MockK0sctlManager
-			tempDir    string
+			mockPM       *installer.MockPackageManager
+			mockK0s      *installer.MockK0sManager
+			mockK0sctl   *installer.MockK0sctlManager
+			mockPrompter *prompt.MockPrompter
+			tempDir      string
 		)
 
 		BeforeEach(func() {
 			mockPM = installer.NewMockPackageManager(GinkgoT())
 			mockK0s = installer.NewMockK0sManager(GinkgoT())
 			mockK0sctl = installer.NewMockK0sctlManager(GinkgoT())
+			mockPrompter = prompt.NewMockPrompter(GinkgoT())
+			c.Prompter = mockPrompter
 			var err error
 			tempDir, err = os.MkdirTemp("", "install-k0s-test-*")
 			Expect(err).NotTo(HaveOccurred())
@@ -99,60 +139,46 @@ var _ = Describe("InstallK0sCmd", func() {
 			}
 		})
 
-		createTestConfig := func(managedByCodesphere bool) *files.RootConfig {
-			return &files.RootConfig{
-				Datacenter: files.DatacenterConfig{
-					ID:          1,
-					Name:        "test-dc",
-					City:        "Test City",
-					CountryCode: "US",
-				},
-				Kubernetes: files.KubernetesConfig{
-					ManagedByCodesphere: managedByCodesphere,
-					ControlPlanes: []files.K8sNode{
-						{IPAddress: "192.168.1.100"},
-					},
-					APIServerHost: "api.test.example.com",
-				},
-				Codesphere: files.CodesphereConfig{
-					Domain:   "test.example.com",
-					PublicIP: "192.168.1.100",
-					DeployConfig: files.DeployConfig{
-						Images: map[string]files.ImageConfig{},
-					},
-					Plans: files.PlansConfig{
-						HostingPlans:   map[int]files.HostingPlan{},
-						WorkspacePlans: map[int]files.WorkspacePlan{},
-					},
-				},
-			}
-		}
+		createTestConfig := newTestInstallConfig
 
 		writeTestConfig := func(config *files.RootConfig) string {
-			configPath := filepath.Join(tempDir, "install-config.yaml")
-			configData, err := yaml.Marshal(config)
-			Expect(err).NotTo(HaveOccurred())
-			err = os.WriteFile(configPath, configData, 0644)
-			Expect(err).NotTo(HaveOccurred())
-			return configPath
+			return writeTestInstallConfig(tempDir, config)
+		}
+
+		setupWorkdirMocks := func() {
+			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
+			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+		}
+
+		defaultConfigPath := func() string {
+			return filepath.Join(tempDir, "k0sctl-config-test-dc.yaml")
 		}
 
 		It("fails when install-config file does not exist", func() {
 			c.Opts.InstallConfig = "/nonexistent/install-config.yaml"
 
-			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
-			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+			setupWorkdirMocks()
 
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to load install-config"))
 		})
 
-		It("fails when install-config specifies external Kubernetes", func() {
-			c.Opts.InstallConfig = writeTestConfig(createTestConfig(false))
+		It("rejects remote SSH settings in single-node mode without invoking k0sctl", func() {
+			c.Opts.Single = true
+			c.Opts.SSHKeyPath = "/tmp/key"
 
 			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
 			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			Expect(err).To(MatchError(ContainSubstring("not supported with --single")))
+		})
+
+		It("fails when install-config specifies external Kubernetes", func() {
+			c.Opts.InstallConfig = writeTestConfig(createTestConfig(false))
+
+			setupWorkdirMocks()
 
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
@@ -165,11 +191,11 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.Version = "v1.30.0+k0s.0"
 			c.Opts.Force = true
 
-			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
-			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+			setupWorkdirMocks()
+			mockFileWriter.EXPECT().Exists(defaultConfigPath()).Return(false)
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", true, false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0sctl.EXPECT().Download("", true, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{Force: true}).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", true).Return(nil)
 
@@ -177,15 +203,58 @@ var _ = Describe("InstallK0sCmd", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		Context("with an existing generated k0sctl config", func() {
+			overwriteQuestion := mock.MatchedBy(func(question string) bool {
+				return strings.Contains(question, "already exists")
+			})
+
+			BeforeEach(func() {
+				c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
+				c.Opts.Version = "v1.29.0+k0s.0"
+			})
+
+			It("overwrites it after confirmation", func() {
+				setupWorkdirMocks()
+				mockFileWriter.EXPECT().Exists(defaultConfigPath()).Return(true)
+				mockPrompter.EXPECT().Bool(overwriteQuestion, false).Return(true)
+				mockK0s.EXPECT().Download("v1.29.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
+				mockFileWriter.EXPECT().WriteFile(defaultConfigPath(), mock.Anything, os.FileMode(0644)).Return(nil)
+				mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
+				mockK0sctl.EXPECT().Apply(defaultConfigPath(), "/tmp/k0sctl", false).Return(nil)
+
+				Expect(c.InstallK0s(mockPM, mockK0s, mockK0sctl)).To(Succeed())
+			})
+
+			It("installs nothing when overwriting is declined", func() {
+				setupWorkdirMocks()
+				mockFileWriter.EXPECT().Exists(defaultConfigPath()).Return(true)
+				mockPrompter.EXPECT().Bool(overwriteQuestion, false).Return(false)
+
+				Expect(c.InstallK0s(mockPM, mockK0s, mockK0sctl)).To(MatchError(ContainSubstring("already exists")))
+			})
+
+			It("overwrites it without asking with --yes", func() {
+				c.Opts.Yes = true
+
+				setupWorkdirMocks()
+				mockK0s.EXPECT().Download("v1.29.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
+				mockFileWriter.EXPECT().WriteFile(defaultConfigPath(), mock.Anything, os.FileMode(0644)).Return(nil)
+				mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
+				mockK0sctl.EXPECT().Apply(defaultConfigPath(), "/tmp/k0sctl", false).Return(nil)
+
+				Expect(c.InstallK0s(mockPM, mockK0s, mockK0sctl)).To(Succeed())
+			})
+		})
+
 		It("downloads k0s when package is not specified", func() {
 			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
 			c.Opts.Package = ""
 			c.Opts.Version = "v1.29.0+k0s.0"
 
-			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
-			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
-			mockK0s.EXPECT().Download("v1.29.0+k0s.0", false, false).Return("/downloaded/k0s", nil)
-			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+			setupWorkdirMocks()
+			mockFileWriter.EXPECT().Exists(defaultConfigPath()).Return(false)
+			mockK0s.EXPECT().Download("v1.29.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 
@@ -197,14 +266,34 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
 			c.Opts.Package = ""
 
-			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
-			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+			setupWorkdirMocks()
+			mockFileWriter.EXPECT().Exists(defaultConfigPath()).Return(false)
 			mockK0s.EXPECT().GetLatestVersion().Return("v1.30.0+k0s.0", nil)
-			mockK0s.EXPECT().Download("v1.30.0+k0s.0", false, false).Return("", os.ErrNotExist)
+			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("", os.ErrNotExist)
 
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to download k0s"))
+			Expect(err.Error()).To(ContainSubstring("failed to get k0s binary"))
+		})
+
+		It("applies the k0sctl config given with --config without generating one", func() {
+			c.Opts.K0sctlConfig = "/etc/codesphere/k0sctl-config.yaml"
+
+			setupWorkdirMocks()
+			mockFileWriter.EXPECT().Exists("/etc/codesphere/k0sctl-config.yaml").Return(true)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Apply("/etc/codesphere/k0sctl-config.yaml", "/tmp/k0sctl", false).Return(nil)
+
+			Expect(c.InstallK0s(mockPM, mockK0s, mockK0sctl)).To(Succeed())
+		})
+
+		It("fails when the k0sctl config given with --config does not exist", func() {
+			c.Opts.K0sctlConfig = "/nonexistent/k0sctl-config.yaml"
+
+			setupWorkdirMocks()
+			mockFileWriter.EXPECT().Exists("/nonexistent/k0sctl-config.yaml").Return(false)
+
+			Expect(c.InstallK0s(mockPM, mockK0s, mockK0sctl)).To(MatchError(ContainSubstring("k0sctl config '/nonexistent/k0sctl-config.yaml' does not exist")))
 		})
 
 		It("fails when k0sctl download fails", func() {
@@ -212,11 +301,12 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.Package = "test-package.tar.gz"
 			c.Opts.Version = "v1.30.0+k0s.0"
 
-			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
-			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+			setupWorkdirMocks()
+			mockFileWriter.EXPECT().Exists(defaultConfigPath()).Return(false)
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false, false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0sctl.EXPECT().Download("", false, false).Return("", os.ErrPermission)
+			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("", os.ErrPermission)
 
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
@@ -228,11 +318,11 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.Package = "test-package.tar.gz"
 			c.Opts.Version = "v1.30.0+k0s.0"
 
-			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
-			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+			setupWorkdirMocks()
+			mockFileWriter.EXPECT().Exists(defaultConfigPath()).Return(false)
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false, false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(os.ErrPermission)
 
@@ -245,7 +335,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false, false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 		}
 
@@ -595,11 +685,13 @@ var _ = Describe("InstallK0sCmd", func() {
 				c.Opts.Vault = vaultPath
 				c.Opts.VaultPrivKey = ageKeyPath
 
-				// Use mockFileWriter to simulate an I/O error during encryption.
+				// The vault itself is written through the real filesystem, so the
+				// failure is provoked on the filesystem instead of via the mock.
 				c.FileWriter = mockFileWriter
 
 				setupCommonMocks()
 				mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+				mockFileWriter.EXPECT().Exists(defaultConfigPath()).Return(false)
 
 				// Allow the k0sctl config write to succeed.
 				mockFileWriter.EXPECT().WriteFile(mock.MatchedBy(func(path string) bool {
@@ -607,28 +699,21 @@ var _ = Describe("InstallK0sCmd", func() {
 				}), mock.Anything, mock.Anything).Return(nil)
 				mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
-				mockFileWriter.EXPECT().MkdirAll(mock.Anything, os.FileMode(0755)).Return(nil)
 
-				// Vault exists and is encrypted.
-				mockFileWriter.EXPECT().Exists(vaultPath).Return(true)
-
-				// Simulate encryption failure: writing the temporary vault file fails.
-				mockFileWriter.EXPECT().WriteFile(vaultPath+".tmp", mock.Anything, os.FileMode(0600)).
-					Return(os.ErrPermission)
+				// Make the vault directory unwritable so the SOPS backend cannot create
+				// its temporary files while the existing vault file stays readable.
+				Expect(os.Chmod(tempDir, 0500)).To(Succeed())
+				DeferCleanup(func() { _ = os.Chmod(tempDir, 0755) })
 
 				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to write temporary vault file"))
+				Expect(err.Error()).To(ContainSubstring("failed to create temporary plaintext vault"))
 
 				// Verify the vault file is unchanged.
 				currentData, err := os.ReadFile(vaultPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(string(currentData)).To(Equal(string(origData)),
 					"vault should be untouched when encryption fails")
-
-				// Verify no tmp file is left behind.
-				tmpPath := vaultPath + ".tmp"
-				Expect(tmpPath).NotTo(BeAnExistingFile())
 			})
 		})
 	})

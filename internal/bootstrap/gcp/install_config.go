@@ -7,9 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"reflect"
+	"slices"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
+	"github.com/codesphere-cloud/oms/internal/codesphere"
+	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
@@ -21,13 +25,33 @@ const (
 	vaultTransferSuffix     string = ".plain"
 )
 
-// EnsureInstallConfig prepares the primary data center's install config.
+// errRemoteConfigMissing reports that the jumpbox holds no config for a data center. Recovering
+// a secondary data center tolerates this, since --multi-dc can add one to an existing project.
+var errRemoteConfigMissing = errors.New("no install config found on the jumpbox")
+
+// EnsureInstallConfig prepares the primary data center's install config. Secondary data centers
+// are handled separately in Bootstrap, after the primary's secrets exist.
 func (b *GCPBootstrapper) EnsureInstallConfig() error {
 	if err := b.ensureDataCenters(); err != nil {
 		return err
 	}
 
-	return b.ensureInstallConfig(b.primaryDC())
+	if err := b.ensureInstallConfig(b.primaryDC()); err != nil {
+		return err
+	}
+
+	cfg := b.primaryDC().InstallConfig
+	if b.Env.InstallVersion == "" && b.Env.InstallLocal == "" && cfg != nil && cfg.Operations != nil && cfg.Operations.Codesphere.Version != "" {
+		b.Env.InstallVersion = cfg.Operations.Codesphere.Version
+		if b.Env.InstallHash == "" {
+			b.Env.InstallHash = cfg.Operations.Codesphere.Hash
+		}
+		// Config is loaded after the initial validation. Validate the selected
+		// package and installation credentials before provisioning infrastructure.
+		return b.ValidateInput()
+	}
+
+	return nil
 }
 
 // ensureInstallConfig uses the data center's local config or recovers it from an existing
@@ -36,12 +60,18 @@ func (b *GCPBootstrapper) ensureInstallConfig(dc *datacenter.DataCenter) error {
 	// recovery will overwrite local config or create a new file
 	if b.Env.RecoverConfig {
 		err := b.recoverConfig(dc)
-		if err != nil {
+		if errors.Is(err, errRemoteConfigMissing) && !dc.IsPrimary() {
+			// A secondary data center may not exist on the jumpbox yet, which is the case when
+			// --multi-dc is used to add one to an existing single-DC project. Its config is
+			// derived from the primary's instead.
+			b.stlog.Logf("No config found on the jumpbox for data center %d, generating a new one", dc.ID)
+		} else if err != nil {
 			return fmt.Errorf("failed to recover config: %w", err)
 		}
 	}
 
-	if b.fw.Exists(dc.InstallConfigPath) {
+	configExists := b.fw.Exists(dc.InstallConfigPath)
+	if configExists {
 		if err := b.loadVaultForConfigTemplating(dc); err != nil {
 			return fmt.Errorf("failed to load vault templating: %w", err)
 		}
@@ -52,16 +82,43 @@ func (b *GCPBootstrapper) ensureInstallConfig(dc *datacenter.DataCenter) error {
 		}
 
 		dc.ExistingConfigUsed = true
-	} else {
+		dc.InstallConfig = dc.ConfigManager.GetInstallConfig()
+	} else if dc.IsPrimary() {
 		err := dc.ConfigManager.ApplyProfile("minimal")
 		if err != nil {
 			return fmt.Errorf("failed to apply profile: %w", err)
 		}
+
+		dc.InstallConfig = dc.ConfigManager.GetInstallConfig()
+	}
+	// A secondary data center without a config of its own is left unset here, so
+	// seedSecondaryDataCenter can derive it from the primary data center instead of the profile.
+
+	if !dc.IsPrimary() {
+		return nil
 	}
 
-	dc.InstallConfig = dc.ConfigManager.GetInstallConfig()
+	if err := b.loadInstallVault(dc.ConfigManager); err != nil {
+		return err
+	}
 
-	b.mirrorPrimaryDataCenter()
+	if len(b.installInputPaths()) == 0 {
+		return nil
+	}
+
+	if !configExists {
+		if err := b.loadVaultForConfigTemplating(dc); err != nil {
+			return err
+		}
+	}
+
+	config, err := b.loadInstallInputs(*dc.InstallConfig, dc.ConfigManager)
+	if err != nil {
+		return err
+	}
+
+	dc.InstallConfig = &config
+	dc.ConfigManager.SetInstallConfig(&config)
 
 	return nil
 }
@@ -69,6 +126,10 @@ func (b *GCPBootstrapper) ensureInstallConfig(dc *datacenter.DataCenter) error {
 func (b *GCPBootstrapper) loadVaultForConfigTemplating(dc *datacenter.DataCenter) error {
 	if err := dc.ConfigManager.LoadVaultFromFileOrCreate(dc.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault from file: %w", err)
+	}
+
+	if dc.IsPrimary() {
+		return b.loadInstallVault(dc.ConfigManager)
 	}
 
 	return nil
@@ -91,6 +152,12 @@ func (b *GCPBootstrapper) recoverConfig(dc *datacenter.DataCenter) error {
 	}
 
 	b.Env.Jumpbox = jumpbox
+
+	// Only a secondary data center may legitimately be absent from the jumpbox, so only there is
+	// it worth probing first; the primary's missing config stays a download failure.
+	if !dc.IsPrimary() && !b.Env.Jumpbox.NodeClient.HasFile(jumpbox, dc.RemoteConfigPath) {
+		return fmt.Errorf("%w at %s", errRemoteConfigMissing, dc.RemoteConfigPath)
+	}
 
 	err = b.Env.Jumpbox.NodeClient.DownloadFile(jumpbox, dc.RemoteConfigPath, dc.InstallConfigPath)
 	if err != nil {
@@ -129,7 +196,8 @@ func (b *GCPBootstrapper) recoverVault(dc *datacenter.DataCenter) error {
 }
 
 // UpdateInstallConfig applies the environment to the primary data center's install config and
-// vault, writes both locally and uploads them to the jumpbox.
+// vault, writes both locally and uploads them to the jumpbox. Secondary data centers go through
+// updateInstallConfig directly, after their config and vault have been derived from the primary's.
 func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	if err := b.ensureDataCenters(); err != nil {
 		return err
@@ -139,31 +207,51 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 }
 
 func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
+	if b.Env.InstallVersion != "" {
+		dc.InstallConfig.SetCodespherePackage(b.Env.InstallVersion, b.Env.InstallHash)
+	}
 	// Update install config with necessary values
-	dc.InstallConfig.Datacenter.ID = dc.ID
-	dc.InstallConfig.Datacenter.Name = dc.Name
-	dc.InstallConfig.Datacenter.City = "Karlsruhe"
-	dc.InstallConfig.Datacenter.CountryCode = "DE"
-
+	dc.InstallConfig.Datacenter = datacenterConfig(dc)
 	// Each data center reads and writes its own vault. The installer resolves the vault from
 	// secrets.baseDir, so sharing a directory would let one data center's ceph and kubernetes
 	// steps overwrite another's credentials.
 	dc.InstallConfig.Secrets.BaseDir = dc.SecretsDir
-	if b.Env.RegistryType != RegistryTypeGitHub {
-		dc.InstallConfig.Registry.ReplaceImagesInBom = true
-		dc.InstallConfig.Registry.LoadContainerImages = true
+	if b.Env.ContainerRegistryURL != "" {
+		dc.InstallConfig.Registry.Server = b.Env.ContainerRegistryURL
 	}
 
-	if dc.InstallConfig.Postgres.Primary == nil {
-		dc.InstallConfig.Postgres.Primary = &files.PostgresPrimaryConfig{
-			Hostname: b.Env.PostgreSQLNode.GetName(),
+	if b.Env.RegistryUsername != "" || b.Env.RegistryPassword != "" {
+		dc.ConfigManager.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUsername}})
+		dc.ConfigManager.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.RegistryPassword}})
+	}
+
+	dc.InstallConfig.Registry.LoadContainerImages = false
+	dc.InstallConfig.Registry.ReplaceImagesInBom = b.Env.RegistryType != RegistryTypeGitHub
+
+	// The pc-applications chart pulls the chart of every application it creates from
+	// chartsRegistry and defaults it to GHCR. Only a local container registry is filled with the
+	// package's artifacts, so only it can serve those charts as well. The bootstrap owns that
+	// registry's address and rewrites registry.server on every run, so chartsRegistry follows it
+	// too: a value kept from an earlier run would still name a previous jumpbox's IP.
+	if b.Env.RegistryType == RegistryTypeLocalContainer {
+		if dc.InstallConfig.PcApps == nil {
+			dc.InstallConfig.PcApps = files.ChartValues{}
 		}
+
+		chartsRegistry, err := installer.ChartRegistryURL(dc.InstallConfig.Registry.Server)
+		if err != nil {
+			return fmt.Errorf("resolving pc-apps chart registry: %w", err)
+		}
+
+		if existing, _ := dc.InstallConfig.PcApps["chartsRegistry"].(string); existing != "" && existing != chartsRegistry {
+			b.stlog.Logf("Replacing pcApps.chartsRegistry %s from the install config with the local registry at %s", existing, chartsRegistry)
+		}
+
+		dc.InstallConfig.PcApps["chartsRegistry"] = chartsRegistry
 	}
 
-	previousPrimaryIP := dc.InstallConfig.Postgres.Primary.IP
-	previousPrimaryHostname := dc.InstallConfig.Postgres.Primary.Hostname
-	dc.InstallConfig.Postgres.Primary.IP = b.Env.PostgreSQLNode.GetInternalIP()
-	dc.InstallConfig.Postgres.Primary.Hostname = b.Env.PostgreSQLNode.GetName()
+	previousPrimaryIP, previousPrimaryHostname := b.applyPostgresConfig(dc)
+	b.applyDataCenterTopology(dc)
 
 	dc.InstallConfig.Ceph.CsiKubeletDir = "/var/lib/k0s/kubelet"
 	// All data centers share the project's subnet; their Ceph clusters stay separate because
@@ -247,10 +335,16 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	// custom domains resolve to the data center hosting them.
 	dc.InstallConfig.Codesphere.Domain = "cs." + b.Env.BaseDomain
 	dc.InstallConfig.Codesphere.WorkspaceHostingBaseDomain = dc.WorkspaceHostingBaseDomain
+
 	dc.InstallConfig.Codesphere.CustomDomains = files.CustomDomainsConfig{
 		CNameBaseDomain: dc.WorkspaceHostingBaseDomain,
 	}
-	dc.InstallConfig.Codesphere.PublicIP = dc.ControlPlaneNodes[1].GetExternalIP()
+	if b.Env.MultiDC {
+		dc.InstallConfig.Codesphere.PublicIP = dc.PublicGatewayIP
+	} else {
+		dc.InstallConfig.Codesphere.PublicIP = dc.ControlPlaneNodes[1].GetExternalIP()
+	}
+
 	dc.InstallConfig.Codesphere.DNSServers = []string{"8.8.8.8"}
 	dc.InstallConfig.Codesphere.DeployConfig = bootstrap.DefaultCodesphereDeployConfig()
 	dc.InstallConfig.Codesphere.Plans = bootstrap.DefaultCodespherePlans()
@@ -337,7 +431,7 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	if b.Env.OidcIssuerURL != "" && b.Env.OidcClientID != "" && b.Env.OidcClientSecret != "" {
 		name := b.Env.OidcProviderName
 		if name == "" {
-			name = "OIDC"
+			name = files.DefaultOidcProviderName
 		}
 
 		dc.InstallConfig.Codesphere.OAuth = &files.OAuthProvidersConfig{
@@ -375,15 +469,22 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	b.applyPrometheusRemoteWriteConfig(dc)
 	b.applyOpenfgaBackupConfig(dc)
 
-	// Secret generation is idempotent and also backfills secrets introduced
-	// after an existing vault was created (for example the auth keys required by
-	// the ArgoCD pre-step).
+	// Secret generation is idempotent and also backfills secrets introduced after an existing
+	// vault was created (for example the auth keys required by the ArgoCD pre-step). For a
+	// secondary data center it is what regenerates the secrets dropped from the seeded vault: the
+	// sentinels stop everything except its own ingress CA and cephadm key from being touched.
 	if err := dc.ConfigManager.GenerateSecrets(); err != nil {
 		return fmt.Errorf("failed to generate secrets: %w", err)
 	}
 
 	if dc.ExistingConfigUsed {
 		if err := b.regeneratePostgresCerts(dc, previousPrimaryIP, previousPrimaryHostname); err != nil {
+			return err
+		}
+	}
+
+	if !dc.IsPrimary() {
+		if err := b.verifySecondaryDataCenterSecrets(b.primaryDC(), dc); err != nil {
 			return err
 		}
 	}
@@ -444,8 +545,6 @@ func (b *GCPBootstrapper) copyConfigAndVaultToJumpbox(dc *datacenter.DataCenter)
 		return fmt.Errorf("failed to copy secrets file to jumpbox: %w", err)
 	}
 
-	b.mirrorPrimaryDataCenter()
-
 	return nil
 }
 
@@ -479,25 +578,14 @@ func (b *GCPBootstrapper) removeVaultTransfer(transferPath string) error {
 	return nil
 }
 
-// WriteAndEncryptVault uploads the install config and vault and encrypts the vault on the
-// jumpbox. The plaintext transfer copy is removed last, so a failed removal never keeps the
-// jumpbox vault in plaintext.
-func (b *GCPBootstrapper) WriteAndEncryptVault() (err error) {
-	defer func() { err = errors.Join(err, b.removeVaultTransferCopy()) }()
-
-	if err := b.stlog.Step("Update install config", b.UpdateInstallConfig); err != nil {
-		return fmt.Errorf("failed to update install config: %w", err)
+// WriteAndEncryptVault writes the primary data center's install config and vault and encrypts
+// the vault on the jumpbox.
+func (b *GCPBootstrapper) WriteAndEncryptVault() error {
+	if err := b.ensureDataCenters(); err != nil {
+		return err
 	}
 
-	if err := b.stlog.Step("Ensure age key", b.EnsureAgeKey); err != nil {
-		return fmt.Errorf("failed to ensure age key: %w", err)
-	}
-
-	if err := b.stlog.Step("Encrypt vault", b.EncryptVault); err != nil {
-		return fmt.Errorf("failed to encrypt vault: %w", err)
-	}
-
-	return nil
+	return b.writeDataCenterConfig(b.primaryDC())
 }
 
 func (b *GCPBootstrapper) removeVaultTransferCopy() error {
@@ -578,6 +666,113 @@ func (b *GCPBootstrapper) applyACMEConfig(dc *datacenter.DataCenter) error {
 	return nil
 }
 
+// datacenterConfig describes a data center the way the install config does. All data centers of a
+// bootstrapped instance live in the same GCP region, so city and country code are the same for all
+// of them.
+func datacenterConfig(dc *datacenter.DataCenter) files.DatacenterConfig {
+	return files.DatacenterConfig{
+		ID:          dc.ID,
+		Name:        dc.Name,
+		City:        "Karlsruhe",
+		CountryCode: "DE",
+	}
+}
+
+// applyDataCenterTopology tells the platform about every data center of the installation. Without
+// it, the installer defaults the list to the local data center, so each data center of a multi-DC
+// instance would render as a single-data-center one. The list is identical in every data center's
+// config; dataCenter stays the local one, so the platform still knows which data center it runs in.
+//
+// A single data center keeps the list unset and relies on the installer's default, so its config is
+// unchanged from what OMS has always written.
+func (b *GCPBootstrapper) applyDataCenterTopology(dc *datacenter.DataCenter) {
+	if len(b.Env.DataCenters) < 2 {
+		return
+	}
+
+	all := make([]files.DatacenterConfig, 0, len(b.Env.DataCenters))
+	for _, other := range b.Env.DataCenters {
+		all = append(all, datacenterConfig(other))
+	}
+
+	dc.InstallConfig.DataCenters = all
+	// Clients land in the primary data center, which is also the one cs.<base-domain> resolves to.
+	dc.InstallConfig.DefaultDataCenterID = b.primaryDC().ID
+
+	b.dropAvailableDataCentersOverride(dc)
+}
+
+// dropAvailableDataCentersOverride removes the chart override OMS used to write before the
+// installer supported dataCenters in the config. A recovered config may still carry it, where it
+// would shadow the list above with a bare ID list. Any other override content is left alone.
+func (b *GCPBootstrapper) dropAvailableDataCentersOverride(dc *datacenter.DataCenter) {
+	global, ok := dc.InstallConfig.Codesphere.Override["global"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	delete(global, "availableDataCenters")
+
+	if len(global) == 0 {
+		delete(dc.InstallConfig.Codesphere.Override, "global")
+	}
+
+	if len(dc.InstallConfig.Codesphere.Override) == 0 {
+		dc.InstallConfig.Codesphere.Override = nil
+	}
+}
+
+// applyPostgresConfig points the data center at its PostgreSQL server. The primary data center
+// installs the server on its own node; every other data center connects to that same server as
+// an external one and skips the postgres install step.
+//
+// Returns the primary IP and hostname the config held before, so regeneratePostgresCerts can
+// tell whether the server's identity changed.
+func (b *GCPBootstrapper) applyPostgresConfig(dc *datacenter.DataCenter) (previousIP, previousHostname string) {
+	if dc.ExternalPostgres {
+		dc.InstallConfig.Postgres = files.PostgresConfig{
+			Mode: "external",
+			// The server certificate carries only an IP SAN, so the address must be the IP.
+			ServerAddress: b.Env.PostgreSQLNode.GetInternalIP(),
+			// Secondary data centers connect to the installed server as an external one.
+			Port: files.PostgresPort,
+			// The CA certificate lives in the config, not the vault, and cannot be re-derived
+			// from the CA key — so it has to be copied from the primary data center.
+			CACertPem: b.primaryDC().InstallConfig.Postgres.CACertPem,
+			Primary:   nil,
+			Replica:   nil,
+		}
+		b.skipInstallerStep(dc, "postgres")
+
+		return "", ""
+	}
+
+	if dc.InstallConfig.Postgres.Primary == nil {
+		dc.InstallConfig.Postgres.Primary = &files.PostgresPrimaryConfig{
+			Hostname: b.Env.PostgreSQLNode.GetName(),
+		}
+	}
+
+	previousIP = dc.InstallConfig.Postgres.Primary.IP
+	previousHostname = dc.InstallConfig.Postgres.Primary.Hostname
+	dc.InstallConfig.Postgres.Primary.IP = b.Env.PostgreSQLNode.GetInternalIP()
+	dc.InstallConfig.Postgres.Primary.Hostname = b.Env.PostgreSQLNode.GetName()
+
+	return previousIP, previousHostname
+}
+
+// skipInstallerStep persists a skipped installer step in the data center's config, so manual
+// `oms install codesphere` re-runs on the jumpbox skip it too.
+func (b *GCPBootstrapper) skipInstallerStep(dc *datacenter.DataCenter, step string) {
+	if dc.InstallConfig.Operations == nil {
+		dc.InstallConfig.Operations = &files.OperationsConfig{}
+	}
+
+	if !slices.Contains(dc.InstallConfig.Operations.Skip, step) {
+		dc.InstallConfig.Operations.Skip = append(dc.InstallConfig.Operations.Skip, step)
+	}
+}
+
 func (b *GCPBootstrapper) applyPcAppsDefaults(dc *datacenter.DataCenter) {
 	dc.InstallConfig.PcApps = util.DeepMergeMaps(dc.InstallConfig.PcApps, files.ChartValues{
 		"applications": map[string]any{
@@ -624,18 +819,18 @@ func (b *GCPBootstrapper) applyPcAppsDefaults(dc *datacenter.DataCenter) {
 func (b *GCPBootstrapper) applyManagedServiceDefaults(dc *datacenter.DataCenter) {
 	if dc.InstallConfig.Codesphere.ManagedServices == nil {
 		ms := []files.ManagedServiceConfig{
-			{Name: "postgres", Version: "v1"},
-			{Name: "babelfish", Version: "v1"},
-			{Name: "s3", Version: "v1"},
-			{Name: "virtual-k8s", Version: "v1"},
-			{Name: "ferretdb", Version: "v0"},
-			{Name: "opensearch", Version: "v0"},
-			{Name: "valkey", Version: "v0"},
-			{Name: "rabbitmq", Version: "v0"},
+			{Name: "postgres", SchemaVersion: "v1"},
+			{Name: "babelfish", SchemaVersion: "v1"},
+			{Name: "s3", SchemaVersion: "v1"},
+			{Name: "virtual-k8s", SchemaVersion: "v1"},
+			{Name: "ferretdb", SchemaVersion: "v0"},
+			{Name: "opensearch", SchemaVersion: "v0"},
+			{Name: "valkey", SchemaVersion: "v0"},
+			{Name: "rabbitmq", SchemaVersion: "v0"},
 		}
 
 		if util.InstallVersionAtLeast(b.Env.InstallVersion, "v1.106.0") {
-			ms = append(ms, files.ManagedServiceConfig{Name: "url-shortener", Version: "v0"})
+			ms = append(ms, files.ManagedServiceConfig{Name: "url-shortener", SchemaVersion: "v0"})
 		}
 
 		dc.InstallConfig.Codesphere.ManagedServices = ms
@@ -660,6 +855,7 @@ func (b *GCPBootstrapper) EnsureOpenfgaBackupBucket() error {
 	if err := b.GCPClient.EnsureStorageBucket(b.Env.ProjectID, bucketName, b.Env.Region); err != nil {
 		return fmt.Errorf("failed to ensure openfga backup bucket: %w", err)
 	}
+
 	b.Env.OpenfgaBackupBucket = bucketName
 
 	// The HMAC secret cannot be retrieved after creation, so only create a new key
@@ -670,10 +866,12 @@ func (b *GCPBootstrapper) EnsureOpenfgaBackupBucket() error {
 	}
 
 	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", openfgaBackupSAName, b.Env.ProjectID)
+
 	accessID, secret, err := b.GCPClient.CreateHMACKey(b.Env.ProjectID, saEmail)
 	if err != nil {
 		return fmt.Errorf("failed to create openfga backup HMAC key: %w", err)
 	}
+
 	b.Env.OpenfgaBackupAccessKeyID = accessID
 	b.Env.OpenfgaBackupSecret = secret
 
@@ -752,8 +950,13 @@ func (b *GCPBootstrapper) applyPrometheusRemoteWriteConfig(dc *datacenter.DataCe
 }
 
 // regeneratePostgresCerts regenerates PostgreSQL TLS certificates when the IP/hostname
-// changed or no private key was loaded from the vault.
+// changed or no private key was loaded from the vault. It is a no-op for a data center that
+// connects to an external server, since that server owns its own certificates.
 func (b *GCPBootstrapper) regeneratePostgresCerts(dc *datacenter.DataCenter, previousPrimaryIP, previousPrimaryHostname string) error {
+	if dc.InstallConfig.Postgres.Primary == nil {
+		return nil
+	}
+
 	vault := dc.ConfigManager.GetVault()
 	primaryKeySecret := vault.GetSecret(files.SecretPostgresPrimaryServerKeyPem)
 	primaryNeedsRegen := primaryKeySecret == nil || primaryKeySecret.File == nil ||
@@ -851,10 +1054,12 @@ func (b *GCPBootstrapper) ensureSecrets(dc *datacenter.DataCenter) error {
 	}
 
 	if dc.IsPrimary() {
+		if err := b.loadInstallVault(dc.ConfigManager); err != nil {
+			return err
+		}
+
 		b.Env.Secrets = dc.ConfigManager.GetVault()
 	}
-
-	b.mirrorPrimaryDataCenter()
 
 	return nil
 }
@@ -898,6 +1103,102 @@ func (b *GCPBootstrapper) decryptVault(dc *datacenter.DataCenter, dst string) er
 	err = b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("SOPS_AGE_KEY_FILE=%s sops --decrypt --in-place %s", dc.RemoteAgeKeyPath(), dst))
 	if err != nil {
 		return fmt.Errorf("failed to decrypt vault on jumpbox: %w", err)
+	}
+
+	return nil
+}
+
+// writeDataCenterConfig writes the data center's install config and vault, then places the
+// encrypted vault and its age identity on the jumpbox. The plaintext transfer copy is removed
+// last, so a failed removal never keeps the jumpbox vault in plaintext.
+func (b *GCPBootstrapper) writeDataCenterConfig(dc *datacenter.DataCenter) (err error) {
+	defer func() { err = errors.Join(err, b.removeVaultTransferCopy()) }()
+
+	err = b.stlog.Step(dc.StepName("Update install config"), func() error {
+		return b.updateInstallConfig(dc)
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update install config of data center %d: %w", dc.ID, err)
+	}
+
+	err = b.stlog.Step(dc.StepName("Ensure age key"), func() error {
+		return b.ensureAgeKey(dc)
+	})
+	if err != nil {
+		return fmt.Errorf("failed to ensure age key of data center %d: %w", dc.ID, err)
+	}
+
+	err = b.stlog.Step(dc.StepName("Encrypt vault"), func() error {
+		return b.encryptVault(dc)
+	})
+	if err != nil {
+		return fmt.Errorf("failed to encrypt vault of data center %d: %w", dc.ID, err)
+	}
+
+	return nil
+}
+
+// seedSecondaryDataCenter derives a secondary data center's config and vault from the primary
+// one's, for the parts it does not already have. Secrets tied to the shared database and to
+// cross-data-center authentication are copied verbatim; the per-cluster ones are dropped so
+// GenerateSecrets regenerates them for this data center.
+//
+// Anything the data center already loaded from its own files is kept, so re-runs do not rotate a
+// live installation's secrets.
+func (b *GCPBootstrapper) seedSecondaryDataCenter(primary, dc *datacenter.DataCenter) error {
+	if dc.InstallConfig == nil {
+		config, err := secrets.DeriveDataCenterConfig(primary.InstallConfig)
+		if err != nil {
+			return fmt.Errorf("failed to derive config from data center %d: %w", primary.ID, err)
+		}
+
+		dc.ConfigManager.SetInstallConfig(config)
+		dc.InstallConfig = dc.ConfigManager.GetInstallConfig()
+	}
+
+	if len(dc.ConfigManager.GetVault().Secrets) == 0 {
+		dc.ConfigManager.SetVault(secrets.DeriveDataCenterVault(primary.ConfigManager.GetVault()))
+	}
+
+	return nil
+}
+
+// verifySecondaryDataCenterSecrets fails the bootstrap if a secondary data center's secrets
+// diverged from the primary's where they must match. Divergent PostgreSQL roles would let one
+// data center's install rotate credentials the other one is using, and a divergent token key
+// would break cross-data-center authentication — both only visible long after the fact.
+func (b *GCPBootstrapper) verifySecondaryDataCenterSecrets(primary, dc *datacenter.DataCenter) error {
+	primaryVault := primary.ConfigManager.GetVault()
+	vault := dc.ConfigManager.GetVault()
+
+	shared := []string{files.SecretTokenPrivateKey, files.SecretPostgresPassword}
+	for _, svc := range codesphere.PostgresServices {
+		shared = append(shared, files.PostgresUserSecretName(svc.Name), files.PostgresPasswordSecretName(svc.Name))
+	}
+
+	for _, name := range shared {
+		expected := primaryVault.GetSecret(name)
+		if expected == nil {
+			continue
+		}
+
+		if !reflect.DeepEqual(vault.GetSecret(name), expected) {
+			return fmt.Errorf("secret %q of data center %d differs from the primary data center, but both use the same database", name, dc.ID)
+		}
+	}
+
+	if dc.InstallConfig.Postgres.CACertPem == "" {
+		return fmt.Errorf("data center %d has no postgres CA certificate and could not verify the shared server", dc.ID)
+	}
+
+	for _, name := range []string{files.SecretKubeConfig, files.SecretCephSshPrivateKey} {
+		if vault.GetSecret(name) == nil {
+			continue
+		}
+
+		if reflect.DeepEqual(vault.GetSecret(name), primaryVault.GetSecret(name)) {
+			return fmt.Errorf("secret %q of data center %d is the primary data center's, but they run separate clusters", name, dc.ID)
+		}
 	}
 
 	return nil

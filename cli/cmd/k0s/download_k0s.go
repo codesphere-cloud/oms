@@ -27,21 +27,20 @@ type DownloadK0sCmd struct {
 
 type DownloadK0sOpts struct {
 	*util.GlobalOptions
-	Version string
-	Force   bool
+	Version       string
+	K0sctlVersion string
+	Force         bool
+	Airgap        bool
+	Path          string
 }
 
 func (c *DownloadK0sCmd) RunE(_ *cobra.Command, args []string) error {
 	hw := portal.NewHttpWrapper()
 	env := c.Env
 	k0s := installer.NewK0s(hw, env, c.FileWriter)
+	k0sctl := installer.NewK0sctl(hw, env, c.FileWriter)
 
-	err := c.DownloadK0s(k0s)
-	if err != nil {
-		return fmt.Errorf("failed to download k0s: %w", err)
-	}
-
-	return nil
+	return c.DownloadK0s(k0s, k0sctl)
 }
 
 func AddDownloadCmd(download *cobra.Command, opts *util.GlobalOptions) {
@@ -49,42 +48,69 @@ func AddDownloadCmd(download *cobra.Command, opts *util.GlobalOptions) {
 		cmd: &cobra.Command{
 			Use:   "k0s",
 			Short: "Download k0s Kubernetes distribution",
-			Long: packageio.Long(`Download a k0s binary directly to the OMS workdir.
-			Will download the latest version if no version is specified.`),
+			Long: packageio.Long(`Download the k0s and k0sctl binaries to the OMS cache.
+			Defaults to the versions 'oms install k0s' expects, so a later installation finds
+			them in the cache and does not need internet access.`),
 			Example: util.FormatExamples("download k0s", []packageio.Example{
 				{Cmd: "", Desc: "Download k0s using the Go-native implementation"},
 				{Cmd: "--version 1.22.0", Desc: "Download a specific version of k0s"},
+				{Cmd: "--k0sctl-version v0.33.1", Desc: "Download a specific version of k0sctl"},
 				{Cmd: "--force", Desc: "Force download even if k0s binary exists"},
+				{Cmd: "--airgapped", Desc: "Also download the airgap image bundle for that version into the OMS cache"},
+				{Cmd: "--airgapped --path <file>", Desc: "Also download the airgap image bundle for that version to the given file"},
 			}),
 		},
 		Opts:       DownloadK0sOpts{GlobalOptions: opts},
 		Env:        env.NewEnv(),
 		FileWriter: intutil.NewFilesystemWriter(),
 	}
-	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", "", "Version of k0s to download")
+	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", installer.DefaultK0sVersion, "Version of k0s to download")
+	k0s.cmd.Flags().StringVar(&k0s.Opts.K0sctlVersion, "k0sctl-version", installer.DefaultK0sctlVersion, "Version of k0sctl to download")
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Force, "force", "f", false, "Force download even if k0s binary exists")
+	k0s.cmd.Flags().BoolVar(&k0s.Opts.Airgap, "airgapped", false, "Also download the airgap image bundle for that version")
+	k0s.cmd.Flags().StringVar(&k0s.Opts.Path, "path", "", "File to save the airgap image bundle to (requires --airgapped; default: the OMS cache)")
 
 	util.AddCmd(download, k0s.cmd)
 
 	k0s.cmd.RunE = k0s.RunE
 }
 
-func (c *DownloadK0sCmd) DownloadK0s(k0s installer.K0sManager) error {
-	version := c.Opts.Version
-	var err error
-	if version == "" {
-		version, err = k0s.GetLatestVersion()
-		if err != nil {
-			return fmt.Errorf("failed to get latest k0s version: %w", err)
-		}
+// DownloadK0s downloads the k0s and k0sctl binaries and, with --airgapped, the airgap
+// image bundle.
+func (c *DownloadK0sCmd) DownloadK0s(k0s installer.K0sManager, k0sctl installer.K0sctlManager) error {
+	if c.Opts.Path != "" && !c.Opts.Airgap {
+		return fmt.Errorf("--path requires --airgapped")
 	}
 
-	k0sPath, err := k0s.Download(version, c.Opts.Force, !c.Opts.Verbose)
+	version, err := installer.ResolveK0sVersion(k0s, c.Opts.Version)
+	if err != nil {
+		return err
+	}
+
+	opts := installer.DownloadOptions{Force: c.Opts.Force, Quiet: !c.Opts.Verbose}
+
+	k0sPath, err := k0s.Download(version, opts)
 	if err != nil {
 		return fmt.Errorf("failed to download k0s: %w", err)
 	}
 
-	log.Printf("k0s binary downloaded successfully at '%s'", k0sPath)
+	log.Printf("k0s binary downloaded successfully to '%s'", k0sPath)
+
+	k0sctlPath, err := k0sctl.Download(c.Opts.K0sctlVersion, opts)
+	if err != nil {
+		return fmt.Errorf("failed to download k0sctl: %w", err)
+	}
+
+	log.Printf("k0sctl binary downloaded successfully to '%s'", k0sctlPath)
+
+	if c.Opts.Airgap {
+		bundlePath, err := k0s.DownloadAirgapBundle(version, c.Opts.Path, opts)
+		if err != nil {
+			return fmt.Errorf("failed to download k0s airgap bundle: %w", err)
+		}
+
+		log.Printf("k0s airgap bundle downloaded to '%s'", bundlePath)
+	}
 
 	return nil
 }

@@ -21,6 +21,7 @@ like downloading new versions.
 * [oms add-cluster-admin](oms_add-cluster-admin.md)	 - Set the cluster admin email in a Kubernetes secret
 * [oms beta](oms_beta.md)	 - Commands for early testing
 * [oms build](oms_build.md)	 - Build and push images to a registry
+* [oms cleanup](oms_cleanup.md)	 - Remove installed components
 * [oms copy](oms_copy.md)	 - Copy resources between locations
 * [oms create](oms_create.md)	 - Create resources for Codesphere
 * [oms download](oms_download.md)	 - Download resources available through OMS

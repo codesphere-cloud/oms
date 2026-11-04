@@ -33,16 +33,18 @@ type VMDef struct {
 // cephNodesPerDataCenter and k0sNodesPerDataCenter are the per-data-center node counts. Three
 // Ceph nodes are the minimum for replication; three k0s nodes give one control plane and three
 // workers, as written into the install config.
+// jumpboxTag is the network tag of the jumpbox VM, which the air-gapped egress rules exempt.
 const (
 	cephNodesPerDataCenter = 3
 	k0sNodesPerDataCenter  = 3
+	jumpboxTag             = "jumpbox"
 )
 
 // sharedVMDefs returns the VMs that exist once per project, regardless of how many data centers
 // are bootstrapped. The postgres node hosts the database both data centers share.
 func sharedVMDefs() []VMDef {
 	return []VMDef{
-		{Name: "jumpbox", MachineType: "e2-medium", Tags: []string{"jumpbox", "ssh"}, AdditionalDisks: []int64{}, ExternalIP: true},
+		{Name: "jumpbox", MachineType: "e2-medium", Tags: []string{jumpboxTag, "ssh"}, AdditionalDisks: []int64{}, ExternalIP: true},
 		{Name: "postgres", MachineType: "e2-standard-2", Tags: []string{"postgres"}, AdditionalDisks: []int64{}, ExternalIP: true},
 	}
 }
@@ -78,6 +80,10 @@ func dataCenterVMDefs(dcID int, suffix string) []VMDef {
 // Ceph and k0s VMs of each data center. When the environment carries no data centers — as with
 // an infra file written before multi-DC support — it falls back to a single unsuffixed one.
 func VMDefsForEnv(env *CodesphereEnvironment) []VMDef {
+	if env.SingleVM {
+		return []VMDef{SingleVMDef(env.MachineType)}
+	}
+
 	defs := sharedVMDefs()
 
 	dcs := env.DataCenters
@@ -89,13 +95,58 @@ func VMDefsForEnv(env *CodesphereEnvironment) []VMDef {
 		defs = append(defs, dataCenterVMDefs(dc.ID, dc.Suffix)...)
 	}
 
+	if env.MachineType != "" {
+		for i := range defs {
+			defs[i].MachineType = env.MachineType
+		}
+	}
+
 	return defs
+}
+
+// SingleVMDef describes the all-in-one test host. The extra disk is reserved for Rook/Ceph.
+func SingleVMDef(machineType string) VMDef {
+	if machineType == "" {
+		machineType = "e2-standard-8"
+	}
+
+	return VMDef{Name: "codesphere", MachineType: machineType, Tags: []string{"ssh", "k0s"}, AdditionalDisks: []int64{100}, ExternalIP: true}
+}
+
+// EnsureSingleVM provisions only the all-in-one host, using the same instance lifecycle and
+// Spot capacity fallback as the regular GCP bootstrap.
+func (b *GCPBootstrapper) EnsureSingleVM() error {
+	sshKeys, err := b.getSSHKeys()
+	if err != nil {
+		return fmt.Errorf("failed to determine SSH keys: %w", err)
+	}
+
+	logs := make(chan string, 1)
+	result, err := b.ensureVM(SingleVMDef(b.Env.MachineType), b.Env.RootDiskSize, sshKeys, logs)
+	close(logs)
+
+	for message := range logs {
+		b.stlog.Logf("%s", message)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	b.Env.Jumpbox = &node.Node{NodeClient: b.NodeClient, FileIO: b.fw, KeyPath: util.ExpandPath(b.Env.SSHPrivateKeyPath)}
+	b.Env.Jumpbox.UpdateNode(result.name, result.externalIP, result.internalIP)
+
+	return nil
 }
 
 // validateVMProvisioningOptions checks that spot and preemptible options are not both set
 func (b *GCPBootstrapper) validateVMProvisioningOptions() error {
 	if b.Env.SpotVMs && b.Env.Preemptible {
 		return fmt.Errorf("cannot specify both --spot-vms and --preemptible flags; use --spot-vms for the newer spot VM model")
+	}
+
+	if _, err := b.Env.HostOS.settings(); err != nil {
+		return fmt.Errorf("invalid --os: %w", err)
 	}
 
 	return nil
@@ -208,8 +259,6 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 		})
 	}
 
-	b.mirrorPrimaryDataCenter()
-
 	return nil
 }
 
@@ -292,6 +341,11 @@ func (b *GCPBootstrapper) buildInstanceSpec(vm VMDef, rootDiskSize int64, sshKey
 	subnetwork := fmt.Sprintf("projects/%s/regions/%s/subnetworks/%s-%s-subnet", projectID, region, projectID, region)
 	diskType := fmt.Sprintf("projects/%s/zones/%s/diskTypes/pd-ssd", projectID, zone)
 
+	sourceImage, err := b.Env.HostOS.SourceImage()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get the source image for the VMs: %w", err)
+	}
+
 	disks := []*computepb.AttachedDisk{
 		{
 			Boot:       protoBool(true),
@@ -300,7 +354,7 @@ func (b *GCPBootstrapper) buildInstanceSpec(vm VMDef, rootDiskSize int64, sshKey
 			InitializeParams: &computepb.AttachedDiskInitializeParams{
 				DiskType:    &diskType,
 				DiskSizeGb:  protoInt64(rootDiskSize),
-				SourceImage: protoString("projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"),
+				SourceImage: &sourceImage,
 			},
 		},
 	}
@@ -422,7 +476,7 @@ func (b *GCPBootstrapper) CreateInstanceWithFallback(projectID, zone string, ins
 		return nil
 	}
 
-	if b.Env.SpotVMs && IsSpotCapacityError(err) {
+	if b.Env.SpotVMs && !b.Env.SpotOnly && IsSpotCapacityError(err) {
 		logCh <- fmt.Sprintf("Spot capacity unavailable for %s, falling back to standard VM", vmName)
 
 		instance.Scheduling = &computepb.Scheduling{}

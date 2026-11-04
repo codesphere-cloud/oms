@@ -14,24 +14,35 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+// Resources applies the Codesphere-managed Kubernetes resources an ArgoCD installation needs.
+//
 //mockery:generate: true
-type ArgoCDResources interface {
+type Resources interface {
 	ApplyAll(ctx context.Context) error
 }
+
+// defaultOciUsername is the user of the Codesphere registry on GHCR, which is where the Helm
+// charts are pulled from unless an installation mirrors them into a registry of its own.
+const defaultOciUsername = "github"
 
 type argoCDResources struct {
 	clientset kubernetes.Interface
 
-	DatacenterId   string
+	DatacenterID   string
+	OciUsername    string
 	OciPassword    string
 	OciRegistryURL string
 	GitPassword    string
 }
 
-func NewArgoCDResources(clientset kubernetes.Interface, dataCenterId string, ociPassword string, ociRegistryURL string, gitPassword string) (ArgoCDResources, error) {
+// NewResources collects the Codesphere-managed resources an ArgoCD installation needs, above
+// all the repository credentials it pulls the Helm charts with. An empty ociUsername falls back to
+// the GHCR user.
+func NewResources(clientset kubernetes.Interface, dataCenterID string, ociUsername string, ociPassword string, ociRegistryURL string, gitPassword string) (Resources, error) {
 	return &argoCDResources{
 		clientset:      clientset,
-		DatacenterId:   dataCenterId,
+		DatacenterID:   dataCenterID,
+		OciUsername:    ociUsernameOrDefault(ociUsername),
 		OciPassword:    ociPassword,
 		OciRegistryURL: ociRegistryURL,
 		GitPassword:    gitPassword,
@@ -48,7 +59,7 @@ var helmRegistryTpl []byte
 var gitRepoTpl []byte
 
 func (a *argoCDResources) ApplyAll(ctx context.Context) error {
-	if a.DatacenterId != "" {
+	if a.DatacenterID != "" {
 		if err := a.applyLocalCluster(ctx); err != nil {
 			return fmt.Errorf("applying local cluster secret: %w", err)
 		}
@@ -73,31 +84,43 @@ func (a *argoCDResources) ApplyAll(ctx context.Context) error {
 
 func (a *argoCDResources) applyLocalCluster(ctx context.Context) error {
 	log.Println("Applying local cluster secret... ")
+
 	rendered, err := k8s.RenderTemplate(localClusterTpl, map[string]string{
-		"DC_NUMBER": a.DatacenterId,
+		"DC_NUMBER": a.DatacenterID,
 	})
 	if err != nil {
 		return fmt.Errorf("rendering local cluster template: %w", err)
 	}
 
-	return k8s.ApplySecretFromYAML(ctx, a.clientset, rendered)
+	if err := k8s.ApplySecretFromYAML(ctx, a.clientset, rendered); err != nil {
+		return fmt.Errorf("applying local cluster secret: %w", err)
+	}
+
+	return nil
 }
 
 func (a *argoCDResources) applyHelmRegistrySecret(ctx context.Context) error {
 	log.Println("Applying helm registry secret... ")
+
 	rendered, err := k8s.RenderTemplate(helmRegistryTpl, map[string]string{
 		"SECRET_CODESPHERE_OCI_READ": a.OciPassword,
 		"OCI_REGISTRY_URL":           a.OciRegistryURL,
+		"OCI_USERNAME":               a.OciUsername,
 	})
 	if err != nil {
 		return fmt.Errorf("rendering helm registry template: %w", err)
 	}
 
-	return k8s.ApplySecretFromYAML(ctx, a.clientset, rendered)
+	if err := k8s.ApplySecretFromYAML(ctx, a.clientset, rendered); err != nil {
+		return fmt.Errorf("applying helm registry secret: %w", err)
+	}
+
+	return nil
 }
 
 func (a *argoCDResources) applyGitRepoSecret(ctx context.Context) error {
 	log.Println("Applying git repo secret... ")
+
 	rendered, err := k8s.RenderTemplate(gitRepoTpl, map[string]string{
 		"SECRET_CODESPHERE_REPOS_READ": a.GitPassword,
 	})
@@ -105,5 +128,9 @@ func (a *argoCDResources) applyGitRepoSecret(ctx context.Context) error {
 		return fmt.Errorf("rendering git repo template: %w", err)
 	}
 
-	return k8s.ApplySecretFromYAML(ctx, a.clientset, rendered)
+	if err := k8s.ApplySecretFromYAML(ctx, a.clientset, rendered); err != nil {
+		return fmt.Errorf("applying git repo secret: %w", err)
+	}
+
+	return nil
 }

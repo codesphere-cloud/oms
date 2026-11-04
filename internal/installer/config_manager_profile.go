@@ -80,18 +80,16 @@ func (g *InstallConfig) applyCommonProperties() {
 	}
 
 	if g.Config.Cluster.Certificates.CA.Algorithm == "" {
-		g.Config.Cluster.Certificates = files.ClusterCertificates{
-			CA: files.CAConfig{
-				Algorithm:   "RSA",
-				KeySizeBits: 2048,
-			},
+		g.Config.Cluster.Certificates.CA = files.CAConfig{
+			Algorithm:   "RSA",
+			KeySizeBits: 2048,
 		}
 	}
 	if g.Config.Cluster.Gateway.ServiceType == "" {
-		g.Config.Cluster.Gateway = files.GatewayConfig{ServiceType: "LoadBalancer"}
+		g.Config.Cluster.Gateway.ServiceType = "LoadBalancer"
 	}
 	if g.Config.Cluster.PublicGateway.ServiceType == "" {
-		g.Config.Cluster.PublicGateway = files.GatewayConfig{ServiceType: "LoadBalancer"}
+		g.Config.Cluster.PublicGateway.ServiceType = "LoadBalancer"
 	}
 
 	if g.Config.Cluster.MetalLB == nil {
@@ -189,6 +187,15 @@ func (g *InstallConfig) applyCommonProperties() {
 	if g.Config.Secrets.BaseDir == "" {
 		g.Config.Secrets.BaseDir = "/root/secrets"
 	}
+
+	// OpenFGA's database is a CloudNativePG cluster, so every profile needs the operator.
+	if g.Config.Cluster.PgOperator == nil {
+		g.Config.Cluster.PgOperator = &files.PgOperatorConfig{Enabled: true}
+	}
+
+	if g.Config.Cluster.BarmanCloudPlugin == nil {
+		g.Config.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{Enabled: true}
+	}
 }
 
 // ensureMonitoringDefaults populates the monitoring stack with the given enabled
@@ -235,7 +242,8 @@ func (g *InstallConfig) applyProfileDev() error {
 	}
 
 	g.ensureMonitoringDefaults("dev", false, false, false)
-	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
+
+	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequestsSingleReplica); err != nil {
 		return fmt.Errorf("applying resource profile: %w", err)
 	}
 	return nil
@@ -248,23 +256,13 @@ func (g *InstallConfig) applyProfileMinimal() error {
 
 	g.ensureMonitoringDefaults("dev", true, true, true)
 	g.ensureWorkspacePlans("Standard Developer", 1)
-	if g.Config.Cluster.BarmanCloudPlugin == nil {
-		g.Config.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{
-			Enabled: true,
-		}
-	}
-	if g.Config.Cluster.PgOperator == nil {
-		g.Config.Cluster.PgOperator = &files.PgOperatorConfig{
-			Enabled: true,
-		}
-	}
 	if g.Config.Cluster.RgwLoadBalancer == nil {
 		g.Config.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{
 			Enabled: true,
 		}
 	}
 
-	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
+	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequestsSingleReplica); err != nil {
 		return fmt.Errorf("applying resource profile: %w", err)
 	}
 	return nil

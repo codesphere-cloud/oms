@@ -12,14 +12,18 @@ import (
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
 type InitInstallConfigCmd struct {
-	cmd        *cobra.Command
-	Opts       *InitInstallConfigOpts
-	FileWriter intutil.FileIO
+	cmd                   *cobra.Command
+	Opts                  *InitInstallConfigOpts
+	FileWriter            intutil.FileIO
+	generatedAgeKey       string
+	generatedAgeRecipient string
 }
 
 type InitInstallConfigOpts struct {
@@ -30,6 +34,8 @@ type InitInstallConfigOpts struct {
 	VaultType  string
 	AgeKey     string
 
+	CodesphereVersion    string
+	CodesphereHash       string
 	Profile              string
 	AnsibleInventoryFile string
 
@@ -113,12 +119,63 @@ type InitInstallConfigOpts struct {
 }
 
 func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
+	vaultType, err := vault.ParseType(c.Opts.VaultType)
+	if err != nil {
+		return fmt.Errorf("failed to parse vault type %s: %w", c.Opts.VaultType, err)
+	}
+
+	if vaultType == vault.TypeSOPS && sops.ValidateConfiguration(c.Opts.AgeKey) != nil {
+		if err := c.generateMissingAgeKey(); err != nil {
+			return err
+		}
+	}
+
 	icg, err := installer.NewInstallConfigManager(c.Opts.VaultType, c.Opts.AgeKey)
 	if err != nil {
 		return fmt.Errorf("failed to initialize config manager: %w", err)
 	}
 
 	return c.InitInstallConfig(icg)
+}
+
+// generateMissingAgeKey is called for a SOPS vault without a configured age key. It
+// generates a fresh age key in memory, makes it available to SOPS and keeps it so it
+// can be shown to the user once.
+func (c *InitInstallConfigCmd) generateMissingAgeKey() error {
+	if c.Opts.ValidateOnly {
+		return missingAgeKeyError(fmt.Sprintf("reading the SOPS vault %s", c.Opts.VaultFile))
+	}
+
+	encrypted, err := vault.IsEncryptedFile(c.FileWriter, c.Opts.VaultFile)
+	if err != nil {
+		return fmt.Errorf("failed to check if %s is encrypted: %w", c.Opts.VaultFile, err)
+	}
+
+	if encrypted {
+		return missingAgeKeyError(fmt.Sprintf("%s is already SOPS-encrypted; replacing it", c.Opts.VaultFile))
+	}
+
+	secretKey, recipient, err := sops.GenerateAgeIdentity()
+	if err != nil {
+		return fmt.Errorf("failed to generate age identity: %w", err)
+	}
+
+	if err := sops.SetGeneratedAgeKey(secretKey); err != nil {
+		return fmt.Errorf("failed to set generated age key: %w", err)
+	}
+
+	c.generatedAgeKey = secretKey
+	c.generatedAgeRecipient = recipient
+
+	log.Println("No age key configured (--age-key, SOPS_AGE_KEY or SOPS_AGE_KEY_FILE); generating a new age key to encrypt the vault.")
+
+	return nil
+}
+
+// missingAgeKeyError explains the options when an operation needs an age key.
+func missingAgeKeyError(operation string) error {
+	return fmt.Errorf("%s requires an age key: pass --age-key or set SOPS_AGE_KEY/SOPS_AGE_KEY_FILE, "+
+		"or use --vault-type plain. CAUTION: --vault-type plain stores unencrypted secrets on disk, do not use it in production", operation)
 }
 
 func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
@@ -132,9 +189,6 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 			- config.yaml: Main configuration (infrastructure, networking, plans)
 			- prod.vault.yaml: Secrets file (keys, certificates, passwords)
 			
-			Note: When --interactive=true (default), all other configuration flags are ignored 
-			and you will be prompted for all settings interactively.
-			
 			Note: When using ansible-inventory make sure the inventory follows our supported structure.
 			Supported YAML format (where 'hosts' is a dictionary of hostname keys):
 			- <k8s-cp|k8s-workers|ceph>.hosts.<hostname>.private_ip
@@ -146,7 +200,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 			`),
 			Example: util.FormatExamples("init install-config", []csio.Example{
 				{Cmd: "-c config.yaml --vault prod.vault.yaml", Desc: "Create config files interactively"},
-				{Cmd: "--profile dev -c config.yaml --vault prod.vault.yaml", Desc: "Use dev profile with defaults"},
+				{Cmd: "--profile dev --codesphere-version 1.111.0 --codesphere-hash abc123 -c config.yaml --vault prod.vault.yaml", Desc: "Use dev profile with defaults"},
 				{Cmd: "--profile production -c config.yaml --vault prod.vault.yaml", Desc: "Use production profile"},
 				{Cmd: "--profile production -c config.yaml --ansible-inventory inventory.yaml", Desc: "Use ansible inventory for host definitions"},
 				{Cmd: "--validate -c config.yaml --vault prod.vault.yaml", Desc: "Validate existing configuration files"},
@@ -156,17 +210,19 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 		FileWriter: intutil.NewFilesystemWriter(),
 	}
 
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereVersion, "codesphere-version", "", "Codesphere version to write to operations.codesphere.version")
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereHash, "codesphere-hash", "", "Optional Codesphere build hash to write to operations.codesphere.hash")
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Output file path for config.yaml")
 	c.cmd.Flags().StringVar(&c.Opts.VaultFile, "vault", "prod.vault.yaml", "Output file path for prod.vault.yaml")
 	c.cmd.Flags().StringVar(&c.Opts.VaultType, "vault-type", "sops", "Vault storage type (sops or plain)")
-	c.cmd.Flags().StringVar(&c.Opts.AgeKey, "age-key", "", "Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)")
+	c.cmd.Flags().StringVar(&c.Opts.AgeKey, "age-key", "", "Path to the age private key for the sops vault (falls back to SOPS_AGE_KEY or SOPS_AGE_KEY_FILE; if none is set, a new key is generated and printed once)")
 
 	c.cmd.Flags().StringVar(&c.Opts.Profile, "profile", "", "Use a predefined configuration profile (dev, production, minimal)")
 	c.cmd.Flags().StringVar(&c.Opts.AnsibleInventoryFile, "ansible-inventory", "", "Path to Ansible inventory file to import host information from")
 
 	c.cmd.Flags().BoolVar(&c.Opts.ValidateOnly, "validate", false, "Validate existing config files instead of creating new ones")
 	c.cmd.Flags().BoolVar(&c.Opts.WithComments, "with-comments", false, "Add helpful comments to the generated YAML files")
-	c.cmd.Flags().BoolVar(&c.Opts.Interactive, "interactive", true, "Enable interactive prompting (when true, other config flags are ignored)")
+	c.cmd.Flags().BoolVar(&c.Opts.Interactive, "interactive", true, "Enable interactive prompting (version and hash flags provide prompt defaults)")
 	c.cmd.Flags().BoolVar(&c.Opts.GenerateKeys, "generate-keys", true, "Generate SSH keys and certificates")
 	c.cmd.Flags().StringVar(&c.Opts.SecretsBaseDir, "secrets-dir", "/root/secrets", "Secrets base directory")
 
@@ -230,6 +286,9 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 }
 
 func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigManager) error {
+	if c.Opts.CodesphereHash != "" && c.Opts.CodesphereVersion == "" {
+		return fmt.Errorf("--codesphere-hash requires --codesphere-version")
+	}
 	if c.Opts.ValidateOnly {
 		return c.validateOnly(icg)
 	}
@@ -250,6 +309,10 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		}
 	}
 
+	if c.Opts.CodesphereVersion != "" {
+		icg.GetInstallConfig().SetCodespherePackage(c.Opts.CodesphereVersion, c.Opts.CodesphereHash)
+	}
+
 	if c.Opts.Interactive {
 		err = icg.CollectInteractively()
 		if err != nil {
@@ -257,6 +320,10 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		}
 	} else {
 		c.updateConfigFromOpts(icg.GetInstallConfig(), icg.GetVault())
+	}
+
+	if err := installer.DefaultChartsRegistry(icg.GetInstallConfig()); err != nil {
+		return fmt.Errorf("resolving pc-apps chart registry: %w", err)
 	}
 
 	validationWarnings := icg.ValidateInstallConfig()
@@ -275,8 +342,9 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	// The freshly generated vault is SOPS-encrypted automatically with the
-	// configured age key (--age-key or SOPS_AGE_KEY[_FILE]).
+	// A sops vault is encrypted with the configured age key (--age-key or
+	// SOPS_AGE_KEY[_FILE]) or with the key generated in generateMissingAgeKey. A plain
+	// vault is written unencrypted.
 	if err := icg.WriteVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
@@ -313,9 +381,32 @@ func (c *InitInstallConfigCmd) printSuccessMessage(warningCount int) {
 	log.Println(strings.Repeat("=", 70))
 
 	log.Println("\nIMPORTANT: Keys and certificates have been generated and embedded in the vault file.")
-	log.Println("   The vault file has been encrypted with SOPS automatically.")
+
+	if c.Opts.VaultType == string(vault.TypePlain) {
+		log.Println("   The vault file is NOT encrypted. Do not use a plain vault in production.")
+	} else {
+		log.Println("   The vault file has been encrypted with SOPS automatically.")
+	}
 	log.Println("   Keep the vault file and its decryption key secure.")
 	log.Println()
+
+	if c.generatedAgeKey != "" {
+		c.printGeneratedAgeKey()
+	}
+}
+
+// printGeneratedAgeKey shows the generated age key exactly once. OMS does not store it.
+func (c *InitInstallConfigCmd) printGeneratedAgeKey() {
+	log.Println(strings.Repeat("!", 70))
+	log.Println("A new age key was generated to encrypt the vault. It is shown only ONCE and is NOT stored anywhere.")
+	log.Println("Store it in a secure place (e.g. a password manager). Without it the vault cannot be decrypted.")
+	log.Println("Save the following lines to a file (e.g. age_key.txt, mode 0600) and pass it with")
+	log.Println("--age-key or SOPS_AGE_KEY_FILE for later commands:")
+	log.Println()
+	log.Printf("# public key: %s\n", c.generatedAgeRecipient)
+	log.Println(c.generatedAgeKey)
+	log.Println()
+	log.Println(strings.Repeat("!", 70))
 }
 
 func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) error {

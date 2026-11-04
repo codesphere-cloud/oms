@@ -12,6 +12,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 var _ = Describe("ConfigYaml", func() {
@@ -270,6 +271,20 @@ codesphere:
 
 			err = rootConfig.Unmarshal(data)
 			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Describe("RegistryConfig.WorkspaceImage", func() {
+		It("registry server -> image named after the image and flavor", func() {
+			registry := files.RegistryConfig{Server: "registry.example.com"}
+
+			Expect(registry.WorkspaceImage("ubuntu-24.04", "default")).To(Equal("registry.example.com/ubuntu-24.04-default"))
+		})
+
+		It("registry server with a trailing slash -> image without a double slash", func() {
+			registry := files.RegistryConfig{Server: "registry.example.com/private-cloud/"}
+
+			Expect(registry.WorkspaceImage("ubuntu-24.04", "gpu")).To(Equal("registry.example.com/private-cloud/ubuntu-24.04-gpu"))
 		})
 	})
 
@@ -615,39 +630,12 @@ var _ = Describe("RootConfig Clone", func() {
 })
 
 var _ = Describe("ManagedService plan parameters", func() {
-	It("parses the old format where each plan parameter is a {pricedAs, schema} object", func() {
-		yamlData := `
-codesphere:
-  managedServices:
-    - name: ferretdb
-      version: v0
-      plans:
-        - id: 0
-          name: Small
-          parameters:
-            storage:
-              pricedAs: storage-mib
-              schema:
-                type: integer
-                default: 512
-                minimum: 512
-`
-		var config files.RootConfig
-		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
-
-		Expect(config.Codesphere.ManagedServices).To(HaveLen(1))
-		storage := config.Codesphere.ManagedServices[0].Plans[0].Parameters["storage"]
-		Expect(storage.IsScalar).To(BeFalse())
-		Expect(storage.Legacy.PricedAs).To(Equal("storage-mib"))
-		Expect(storage.Legacy.Schema).To(HaveKeyWithValue("default", 512))
-	})
-
 	It("parses the new format with scalar plan parameters and a provider-level resourceParameters block", func() {
 		yamlData := `
 codesphere:
   managedServices:
     - name: ferretdb
-      version: v0
+      schemaVersion: v0
       resourceParameters:
         storage:
           pricedAs: storage-mib
@@ -665,15 +653,14 @@ codesphere:
 		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
 
 		svc := config.Codesphere.ManagedServices[0]
+		Expect(svc.SchemaVersion).To(Equal("v0"))
 		resource := svc.ResourceParameters["storage"]
 		Expect(resource.PricedAs).To(Equal("storage-mib"))
 		Expect(resource.Schema).To(HaveKeyWithValue("type", "integer"))
 
 		params := svc.Plans[0].Parameters
-		Expect(params["storage"].IsScalar).To(BeTrue())
-		Expect(params["storage"].Value).To(Equal(512))
-		Expect(params["cpu"].IsScalar).To(BeTrue())
-		Expect(params["cpu"].Value).To(Equal(0))
+		Expect(params["storage"]).To(Equal(512))
+		Expect(params["cpu"]).To(Equal(0))
 	})
 
 	It("preserves a new-format managed service through a Clone round-trip", func() {
@@ -681,7 +668,7 @@ codesphere:
 codesphere:
   managedServices:
     - name: virtual-k8s
-      version: v1
+      schemaVersion: v1
       resourceParameters:
         cpu:
           pricedAs: cpu-tenths
@@ -703,10 +690,12 @@ codesphere:
 `
 		var config files.RootConfig
 		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
+		Expect(config.Codesphere.ManagedServices[0].SchemaVersion).To(Equal("v1"))
 
 		clone, err := config.Clone()
 		Expect(err).NotTo(HaveOccurred())
 
+		Expect(clone.Codesphere.ManagedServices[0].SchemaVersion).To(Equal("v1"))
 		Expect(clone.Codesphere.ManagedServices).To(Equal(config.Codesphere.ManagedServices))
 	})
 
@@ -715,7 +704,7 @@ codesphere:
 codesphere:
   managedServices:
     - name: ferretdb
-      version: v0
+      schemaVersion: v0
       plans:
         - id: 0
           name: Small
@@ -724,31 +713,211 @@ codesphere:
 `
 		var config files.RootConfig
 		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
+		Expect(config.Codesphere.ManagedServices[0].SchemaVersion).To(Equal("v0"))
 
 		clone, err := config.Clone()
 		Expect(err).NotTo(HaveOccurred())
 
-		storage := clone.Codesphere.ManagedServices[0].Plans[0].Parameters["storage"]
-		Expect(storage.Legacy.Schema).To(BeNil())
+		params := clone.Codesphere.ManagedServices[0].Plans[0].Parameters
+		Expect(params).To(HaveKeyWithValue("storage", BeNil()))
+	})
+})
+
+var _ = Describe("CodespherePackageVersion", func() {
+	DescribeTable("resolves the configured portal version", func(input, expected string) {
+		cfg := files.NewRootConfig()
+		Expect(cfg.Unmarshal([]byte("operations:\n  codesphere: " + input + "\n  skip: [ceph]\n"))).To(Succeed())
+		version, err := cfg.CodespherePackageVersion()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(version).To(Equal(expected))
+		Expect(cfg.Operations.Skip).To(Equal([]string{"ceph"}))
+	},
+		Entry("plain version", "1.95.0", "codesphere-v1.95.0"),
+		Entry("quoted two-component version", `"1.10"`, "codesphere-v1.10"),
+		Entry("v version", "v1.95.0", "codesphere-v1.95.0"),
+		Entry("portal tag", "codesphere-v1.95.0", "codesphere-v1.95.0"),
+		Entry("prerelease", "1.95.0-rc.1", "codesphere-v1.95.0-rc.1"),
+		Entry("branch", "release/test", "release/test"),
+	)
+	DescribeTable("reads object selections with optional hashes", func(input, version, hash string) {
+		cfg := files.NewRootConfig()
+		Expect(cfg.Unmarshal([]byte(input))).To(Succeed())
+		selected, err := cfg.CodespherePackageVersion()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(selected).To(Equal(version))
+		Expect(cfg.Operations.Codesphere.Hash).To(Equal(hash))
+		encoded, err := yaml.Marshal(cfg)
+		Expect(err).NotTo(HaveOccurred())
+
+		clone := files.NewRootConfig()
+		Expect(clone.Unmarshal(encoded)).To(Succeed())
+		Expect(clone.Operations.Codesphere).To(Equal(cfg.Operations.Codesphere))
+	},
+		Entry("version only", "operations:\n  codesphere: {version: 1.111.0}\n", "codesphere-v1.111.0", ""),
+		Entry("quoted two-component version", "operations:\n  codesphere: {version: \"1.10\"}\n", "codesphere-v1.10", ""),
+		Entry("version and hash", "operations:\n  codesphere: {version: 1.111.0, hash: abc123}\n", "codesphere-v1.111.0", "abc123"),
+		Entry("branch and hash", "operations:\n  codesphere: {version: master, hash: abc123}\n", "master", "abc123"),
+	)
+	It("preserves skip steps when setting a package", func() {
+		cfg := files.RootConfig{Operations: &files.OperationsConfig{Skip: []string{"ceph"}}}
+		cfg.SetCodespherePackage("1.111.0", "abc123")
+		Expect(cfg.Operations.Codesphere).To(Equal(files.CodespherePackageConfig{Version: "1.111.0", Hash: "abc123"}))
+		Expect(cfg.Operations.Skip).To(Equal([]string{"ceph"}))
+	})
+	DescribeTable("rejects unsupported selection types", func(selection string) {
+		cfg := files.NewRootConfig()
+		Expect(cfg.Unmarshal([]byte("operations:\n  codesphere: " + selection))).NotTo(Succeed())
+	}, Entry("list", "[1.111.0]"), Entry("boolean", "true"), Entry("unquoted numeric version", "1.10"))
+
+	DescribeTable("rejects a missing version", func(operations *files.OperationsConfig) {
+		cfg := files.RootConfig{Operations: operations}
+		_, err := cfg.CodespherePackageVersion()
+		Expect(err).To(MatchError(ContainSubstring("operations.codesphere is required")))
+	},
+		Entry("no operations", nil),
+		Entry("only skip steps", &files.OperationsConfig{Skip: []string{"ceph"}}),
+		Entry("empty version", &files.OperationsConfig{}),
+		Entry("hash without version", &files.OperationsConfig{Codesphere: files.CodespherePackageConfig{Hash: "abc123"}}),
+	)
+})
+
+var _ = Describe("RootConfig round-trip", func() {
+	roundTrip := func(path string) (map[string]interface{}, map[string]interface{}) {
+		data, err := os.ReadFile(path)
+		Expect(err).NotTo(HaveOccurred())
+
+		var original map[string]interface{}
+		Expect(yaml.Unmarshal(data, &original)).To(Succeed())
+
+		config := files.NewRootConfig()
+		Expect(config.Unmarshal(data)).To(Succeed())
+		marshaled, err := config.Marshal()
+		Expect(err).NotTo(HaveOccurred())
+
+		var saved map[string]interface{}
+		Expect(yaml.Unmarshal(marshaled, &saved)).To(Succeed())
+
+		return original, saved
+	}
+
+	It("keeps every field the Codesphere values are built from", func() {
+		original, saved := roundTrip(filepath.Join("testdata", "values_config.yaml"))
+
+		// Merging the original over the saved config only changes it if a field was lost or altered.
+		// Fields OMS always writes, like secrets.baseDir, are allowed to be added.
+		_, savedCopy := roundTrip(filepath.Join("testdata", "values_config.yaml"))
+		Expect(util.DeepMergeMaps(savedCopy, original)).To(Equal(saved))
+	})
+})
+
+var _ = Describe("RootConfig data centers", func() {
+	var (
+		primary   = files.DatacenterConfig{ID: 1, Name: "primary", City: "Karlsruhe", CountryCode: "DE"}
+		secondary = files.DatacenterConfig{ID: 2, Name: "secondary", City: "Frankfurt", CountryCode: "DE"}
+	)
+
+	Describe("AllDataCenters", func() {
+		It("no .dataCenters -> only .dataCenter", func() {
+			config := files.RootConfig{Datacenter: primary}
+
+			Expect(config.AllDataCenters()).To(Equal([]files.DatacenterConfig{primary}))
+		})
+
+		It(".dataCenters set -> .dataCenters", func() {
+			config := files.RootConfig{Datacenter: primary, DataCenters: []files.DatacenterConfig{secondary, primary}}
+
+			Expect(config.AllDataCenters()).To(Equal([]files.DatacenterConfig{secondary, primary}))
+		})
 	})
 
-	It("fails with a clear error on an unsupported plan parameter shape", func() {
-		yamlData := `
-codesphere:
-  managedServices:
-    - name: ferretdb
-      version: v0
-      plans:
-        - id: 0
-          name: Small
-          parameters:
-            storage:
-              - 1
-              - 2
-`
-		var config files.RootConfig
-		err := config.Unmarshal([]byte(yamlData))
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("unsupported plan parameter shape"))
+	Describe("ValidateDataCenters", func() {
+		It("valid data centers with a default -> no error", func() {
+			config := files.RootConfig{
+				Datacenter:          primary,
+				DataCenters:         []files.DatacenterConfig{primary, secondary},
+				DefaultDataCenterID: 2,
+			}
+
+			Expect(config.ValidateDataCenters()).To(Succeed())
+		})
+
+		It("only .dataCenter -> no error", func() {
+			config := files.RootConfig{Datacenter: primary}
+
+			Expect(config.ValidateDataCenters()).To(Succeed())
+		})
+
+		It("data center with id 0 in .dataCenters -> error", func() {
+			config := files.RootConfig{
+				Datacenter:  primary,
+				DataCenters: []files.DatacenterConfig{primary, {ID: 0, Name: "zero"}},
+			}
+
+			Expect(config.ValidateDataCenters()).To(MatchError(ContainSubstring(`data center "zero" has id 0`)))
+		})
+
+		It(".dataCenter with id 0 and no .dataCenters -> error", func() {
+			config := files.RootConfig{Datacenter: files.DatacenterConfig{ID: 0, Name: "zero"}}
+
+			Expect(config.ValidateDataCenters()).To(MatchError(ContainSubstring(`data center "zero" has id 0`)))
+		})
+
+		It("data center with a negative id -> error", func() {
+			config := files.RootConfig{
+				Datacenter:  primary,
+				DataCenters: []files.DatacenterConfig{primary, {ID: -1, Name: "negative"}},
+			}
+
+			Expect(config.ValidateDataCenters()).To(MatchError(ContainSubstring(`data center "negative" has id -1`)))
+		})
+
+		It("duplicate id -> error", func() {
+			config := files.RootConfig{
+				Datacenter:  primary,
+				DataCenters: []files.DatacenterConfig{primary, secondary, primary},
+			}
+
+			Expect(config.ValidateDataCenters()).To(MatchError(ContainSubstring("duplicate data center id 1")))
+		})
+
+		It(".dataCenters without .dataCenter -> error", func() {
+			config := files.RootConfig{
+				Datacenter:  primary,
+				DataCenters: []files.DatacenterConfig{secondary},
+			}
+
+			Expect(config.ValidateDataCenters()).To(MatchError(ContainSubstring("is missing .dataCenter (id 1)")))
+		})
+
+		It(".dataCenters entry that differs from .dataCenter -> error naming both", func() {
+			renamed := primary
+			renamed.Name = "renamed"
+			config := files.RootConfig{
+				Datacenter:  primary,
+				DataCenters: []files.DatacenterConfig{renamed, secondary},
+			}
+
+			err := config.ValidateDataCenters()
+
+			Expect(err).To(MatchError(ContainSubstring("entry with id 1 differs from .dataCenter")))
+			Expect(err).To(MatchError(ContainSubstring("Name:renamed")))
+			Expect(err).To(MatchError(ContainSubstring("Name:primary")))
+		})
+
+		It("unknown default -> error", func() {
+			config := files.RootConfig{
+				Datacenter:          primary,
+				DataCenters:         []files.DatacenterConfig{primary, secondary},
+				DefaultDataCenterID: 3,
+			}
+
+			Expect(config.ValidateDataCenters()).To(MatchError(ContainSubstring(".defaultDataCenterId 3 is not one")))
+		})
+
+		It("no .dataCenters and a default of another data center -> error", func() {
+			config := files.RootConfig{Datacenter: primary, DefaultDataCenterID: 2}
+
+			Expect(config.ValidateDataCenters()).To(MatchError(ContainSubstring(".defaultDataCenterId 2 is not one")))
+		})
 	})
 })

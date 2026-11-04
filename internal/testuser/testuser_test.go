@@ -218,7 +218,7 @@ var _ = Describe("createInDB", func() {
 		Expect(m.ExpectationsWereMet()).NotTo(HaveOccurred())
 	})
 
-	It("uses a custom datacenter ID for the created team", func() {
+	It("uses a custom datacenter ID and queues the OpenFGA membership tuple with SeedAuthz", func() {
 		sqlDB, m, err := sqlmock.New()
 		Expect(err).NotTo(HaveOccurred())
 		defer func() { _ = sqlDB.Close() }()
@@ -240,12 +240,15 @@ var _ = Describe("createInDB", func() {
 		m.ExpectExec(`INSERT INTO "teamService".team_members`).
 			WithArgs(42, 7).
 			WillReturnResult(sqlmock.NewResult(1, 1))
+		m.ExpectExec(`INSERT INTO "teamService".fga_outbox`).
+			WithArgs("user:42", "resource_group:7").
+			WillReturnResult(sqlmock.NewResult(1, 1))
 		m.ExpectExec(`INSERT INTO public_api_service.tokens`).
 			WithArgs(hashedToken, 42).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		m.ExpectCommit()
 
-		result, err := (&TestUserCreator{opts: CreateTestUserOpts{Host: "test", Password: "test", DatacenterID: 77}, db: sqlDB, email: TestEmail}).createInDB(hashedPassword, hashedToken)
+		result, err := (&TestUserCreator{opts: CreateTestUserOpts{Host: "test", Password: "test", DatacenterID: 77, SeedAuthz: true}, db: sqlDB, email: TestEmail}).createInDB(hashedPassword, hashedToken)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Email).To(Equal(TestEmail))
 		Expect(m.ExpectationsWereMet()).NotTo(HaveOccurred())

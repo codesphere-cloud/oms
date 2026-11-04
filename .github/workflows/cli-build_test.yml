@@ -77,6 +77,43 @@ jobs:
               --vault ""
           done
 
+      - name: Generate an install config without an age key
+        if: ${{ matrix.task == 'install-config' }}
+        env:
+          SOPS_AGE_KEY_FILE: ""
+        run: |
+          set -euo pipefail
+          ./oms init install-config \
+            --profile dev \
+            --interactive=false \
+            -c config-generated-key.yaml \
+            --vault prod-generated-key.vault.yaml 2>&1 | tee generate.log
+
+          if ! grep -q 'ENC\[' prod-generated-key.vault.yaml; then
+            echo "expected a SOPS-encrypted vault encrypted with a generated age key" >&2
+            exit 1
+          fi
+
+          grep -E '^(# public key: |AGE-SECRET-KEY-)' generate.log > generated_age_key.txt
+          if ! grep -q '^AGE-SECRET-KEY-' generated_age_key.txt; then
+            echo "expected the generated age key to be printed" >&2
+            exit 1
+          fi
+
+          if ! ./oms init install-config \
+            --validate \
+            --age-key generated_age_key.txt \
+            -c config-generated-key.yaml \
+            --vault prod-generated-key.vault.yaml 2>&1 | tee validate.log; then
+            echo "expected the vault to be decryptable with the printed age key" >&2
+            exit 1
+          fi
+
+          if ! grep -q 'Configuration is valid!' validate.log; then
+            echo "expected validation to succeed with the printed age key" >&2
+            exit 1
+          fi
+
       - name: Slack Notification on Failure
         if: ${{ failure() && github.ref == 'refs/heads/main' }}
         uses: ./.github/actions/slack-notify

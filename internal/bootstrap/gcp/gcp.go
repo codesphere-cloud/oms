@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -25,15 +26,22 @@ import (
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/testuser"
 	"github.com/codesphere-cloud/oms/internal/util"
+	"golang.org/x/crypto/ssh"
 )
 
 // InstallerArchiveName is the package artifact bootstrapping downloads and installs.
 const InstallerArchiveName = "installer-lite.tar.gz"
 
+// jumpboxOmsWorkdir is shared by package mirroring and config-based installation.
+const jumpboxOmsWorkdir = "oms-workdir"
+
 // remoteK0sConfigScriptPath is where each data center's k0s configuration script is placed on
 // that data center's first control plane node. Data centers have separate nodes, so the path can
 // be the same for all of them.
 const remoteK0sConfigScriptPath = "/root/configure-k0s.sh"
+
+// remotePCAppsValuesDir is where the --pc-apps-values files are copied to on the jumpbox.
+const remotePCAppsValuesDir = "/root/pc-apps-values"
 
 // installerNodeSecretsDir is where the Codesphere installer uploads a data center's age key on
 // every one of that data center's nodes. The path is fixed even though the installer reads the key
@@ -47,6 +55,14 @@ const installerNodeSecretsDir = "/etc/codesphere/secrets"
 // also each data center's ceph.nodesSubnet; their Ceph clusters stay separate because each has
 // its own hosts, monitors and FSID.
 const vpcSubnetCIDR = "10.10.0.0/20"
+
+// The firewall rules that cut an installation using the local container registry off from the
+// internet: every VM except the jumpbox, which hosts the registry.
+const (
+	airgappedAllowJumpboxEgressRule  = "allow-jumpbox-egress"
+	airgappedAllowInternalEgressRule = "allow-internal-egress"
+	airgappedDenyEgressRule          = "deny-external-egress"
+)
 
 // CheckOMSManagedLabel checks if the given labels map indicates an OMS-managed project.
 // A project is considered OMS-managed if it has the 'oms-managed' label set to "true".
@@ -74,7 +90,6 @@ var DefaultInternalFlags []string = []string{
 
 var DefaultPreviewFlags []string = []string{
 	"openfga-authz",
-	"cluster-admin",
 	"secret-management",
 	"sub-path-mount",
 	"workspace-ssh",
@@ -94,15 +109,22 @@ type GCPBootstrapper struct {
 	Env               *CodesphereEnvironment
 	vaultTransferCopy string
 	// SSH command runner
-	NodeClient   node.NodeClient
-	PortalClient portal.Portal
-	GitHubClient github.GitHubClient
+	NodeClient         node.NodeClient
+	PortalClient       portal.Portal
+	GitHubClient       github.GitHubClient
+	InstallVaultLoader InstallVaultLoader
+	installVault       *files.InstallVault
 }
 
 // primaryDC returns the first data center, which owns the shared PostgreSQL server and the
 // platform gateway that codesphere.domain resolves to.
 func (b *GCPBootstrapper) primaryDC() *datacenter.DataCenter {
 	return b.Env.DataCenters[0]
+}
+
+// secondaryDCs returns every data center apart from the primary one.
+func (b *GCPBootstrapper) secondaryDCs() []*datacenter.DataCenter {
+	return b.Env.DataCenters[1:]
 }
 
 // allNodes returns every node of the project: the jumpbox, the shared postgres node and all
@@ -133,17 +155,22 @@ type CodesphereEnvironment struct {
 	PostgreSQLNode *node.Node `json:"postgres_node"`
 	// MultiDC bootstraps two data centers that share the PostgreSQL server but run separate
 	// Kubernetes and Ceph clusters.
-	MultiDC bool `json:"multi_dc"`
+	MultiDC     bool   `json:"multi_dc"`
+	SingleVM    bool   `json:"single_vm,omitempty"`
+	MachineType string `json:"machine_type,omitempty"`
+	// HostOS is the operating system the VMs boot. Existing VMs keep the one they were created with.
+	HostOS HostOS `json:"host_os,omitempty"`
 	// DataCenters holds the per-data-center state. It always has at least one entry.
 	DataCenters []*datacenter.DataCenter `json:"datacenters"`
 	// DNSRecords records the DNS records the bootstrap created, so cleanup deletes exactly
 	// those instead of recomputing the list.
 	DNSRecords []DNSRecordName `json:"dns_records,omitempty"`
-	// ControlPlaneNodes and CephNodes are where the primary data center's nodes lived before
-	// multi-DC support. The steps that have not been migrated to DataCenters yet still use
-	// them, and infra files written by an earlier OMS carry the nodes here.
-	ControlPlaneNodes []*node.Node `json:"control_plane_nodes"`
-	CephNodes         []*node.Node `json:"ceph_nodes"`
+	// ControlPlaneNodes, CephNodes, GatewayIP, PublicGatewayIP and SSHProxyIP are where the
+	// primary data center's nodes and addresses lived before multi-DC support. Nothing writes
+	// them any more; they are only read, by ensureDataCenters, so an infra file written by an
+	// earlier OMS still yields a usable primary data center.
+	ControlPlaneNodes []*node.Node `json:"control_plane_nodes,omitempty"`
+	CephNodes         []*node.Node `json:"ceph_nodes,omitempty"`
 	// ContainerRegistryURL is the resolved registry server all data centers pull images from.
 	ContainerRegistryURL          string       `json:"container_registry_url,omitempty"`
 	RegistryUsername              string       `json:"-"`
@@ -153,14 +180,17 @@ type CodesphereEnvironment struct {
 	InstallLocal                  string       `json:"install_local"`
 	InstallHash                   string       `json:"install_hash"`
 	InstallSkipSteps              []string     `json:"install_skip_steps"`
+	InstallCodesphereOnly         bool         `json:"-"`
 	Preemptible                   bool         `json:"preemptible"`
 	SpotVMs                       bool         `json:"spot_vms"`
+	SpotOnly                      bool         `json:"spot_only,omitempty"`
 	WriteConfig                   bool         `json:"-"`
 	RecoverConfig                 bool         `json:"-"`
-	GatewayIP                     string       `json:"gateway_ip"`
-	PublicGatewayIP               string       `json:"public_gateway_ip"`
-	SshProxyIP                    string       `json:"ssh_proxy_ip"`
+	GatewayIP                     string       `json:"gateway_ip,omitempty"`
+	PublicGatewayIP               string       `json:"public_gateway_ip,omitempty"`
+	SSHProxyIP                    string       `json:"ssh_proxy_ip,omitempty"`
 	RegistryType                  RegistryType `json:"registry_type"`
+	Airgapped                     bool         `json:"airgapped,omitempty"`
 	GitHubPAT                     string       `json:"-"`
 	GitHubAppName                 string       `json:"-"`
 	GitHubTeamOrg                 string       `json:"github_team_org"`
@@ -194,12 +224,16 @@ type CodesphereEnvironment struct {
 	LocalTraceEndpoint     string `json:"-"`
 
 	// Config
-	InstallConfigPath string              `json:"-"`
-	SecretsFilePath   string              `json:"-"`
-	VaultType         vault.Type          `json:"-"`
-	AgeKey            string              `json:"-"`
-	InstallConfig     *files.RootConfig   `json:"-"`
-	Secrets           *files.InstallVault `json:"-"`
+	InstallConfigPath         string              `json:"-"`
+	InstallConfigTemplatePath string              `json:"-"`
+	InstallConfigs            []string            `json:"-"`
+	InstallVaultPath          string              `json:"-"`
+	InstallVaultPrivKey       string              `json:"-"`
+	SecretsFilePath           string              `json:"-"`
+	VaultType                 vault.Type          `json:"-"`
+	AgeKey                    string              `json:"-"`
+	InstallConfig             *files.RootConfig   `json:"-"`
+	Secrets                   *files.InstallVault `json:"-"`
 
 	// GCP Specific
 	ProjectDisplayName         string `json:"project_display_name"`
@@ -237,6 +271,9 @@ type CodesphereEnvironment struct {
 	RootDiskSize   int64  `json:"root_disk_size"`
 	// Local OMS binary copied to the jumpbox instead of installing a release.
 	RemoteOmsBinaryPath string `json:"-"`
+	// PCAppsValues are local pc-apps values files. They are copied to the jumpbox unchanged and
+	// passed to the install command in the given order, so later files win.
+	PCAppsValues []string `json:"-"`
 
 	// OpenFGA database backups. The bucket lives in the project and is removed
 	// together with the project on cleanup. Access key/secret are populated only
@@ -244,6 +281,9 @@ type CodesphereEnvironment struct {
 	OpenfgaBackupBucket      string `json:"openfga_backup_bucket"`
 	OpenfgaBackupAccessKeyID string `json:"-"`
 	OpenfgaBackupSecret      string `json:"-"`
+
+	// K0s
+	K0sVersion string `json:"k0s_version"`
 }
 
 func NewGCPBootstrapper(
@@ -260,16 +300,17 @@ func NewGCPBootstrapper(
 	gitHubClient github.GitHubClient,
 ) (*GCPBootstrapper, error) {
 	return &GCPBootstrapper{
-		ctx:          ctx,
-		stlog:        stlog,
-		fw:           fw,
-		icg:          icg,
-		GCPClient:    gcpClient,
-		Env:          CodesphereEnv,
-		NodeClient:   sshRunner,
-		PortalClient: portalClient,
-		Time:         time,
-		GitHubClient: gitHubClient,
+		ctx:                ctx,
+		stlog:              stlog,
+		fw:                 fw,
+		icg:                icg,
+		GCPClient:          gcpClient,
+		Env:                CodesphereEnv,
+		NodeClient:         sshRunner,
+		PortalClient:       portalClient,
+		Time:               time,
+		GitHubClient:       gitHubClient,
+		InstallVaultLoader: &sopsInstallVaultLoader{fileIO: fw},
 	}, nil
 }
 
@@ -361,6 +402,14 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to ensure jumpbox is configured: %w", err)
 	}
 
+	// Air-gapped nodes install the packages the host OS lacks through the package proxy.
+	if b.Env.Airgapped {
+		err = b.stlog.Step("Ensure package proxy", b.EnsurePackageProxy)
+		if err != nil {
+			return fmt.Errorf("failed to ensure package proxy: %w", err)
+		}
+	}
+
 	err = b.stlog.Step("Ensure hosts are configured", b.EnsureHostsConfigured)
 	if err != nil {
 		return fmt.Errorf("failed to ensure hosts are configured: %w", err)
@@ -381,9 +430,41 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	}
 
 	if b.Env.WriteConfig {
-		err = b.WriteAndEncryptVault()
+		err = b.writeDataCenterConfig(b.primaryDC())
 		if err != nil {
 			return err
+		}
+	}
+
+	// Secondary data centers fall back to deriving their config and vault from the primary one,
+	// so this has to run after the primary's secrets were generated above.
+	for _, dc := range b.secondaryDCs() {
+		err = b.stlog.Step(dc.StepName("Ensure install config"), func() error {
+			return b.ensureInstallConfig(dc)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to ensure install config of data center %d: %w", dc.ID, err)
+		}
+
+		err = b.stlog.Step(dc.StepName("Ensure secrets"), func() error {
+			return b.ensureSecrets(dc)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to ensure secrets of data center %d: %w", dc.ID, err)
+		}
+
+		err = b.stlog.Step(dc.StepName("Derive config and vault"), func() error {
+			return b.seedSecondaryDataCenter(b.primaryDC(), dc)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to derive data center %d: %w", dc.ID, err)
+		}
+
+		if b.Env.WriteConfig {
+			err = b.writeDataCenterConfig(dc)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -393,21 +474,9 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	}
 
 	if b.Env.InstallVersion != "" || b.Env.InstallLocal != "" {
-		err = b.EnsureK0s()
+		err = b.InstallK0sAndCodesphere()
 		if err != nil {
-			return fmt.Errorf("failed to install k0s: %w", err)
-		}
-
-		err = b.InstallCodesphere()
-		if err != nil {
-			return fmt.Errorf("failed to install Codesphere: %w", err)
-		}
-
-		// Every data center is installed before any k0s script runs, so a script never patches
-		// gateway services an install has yet to create.
-		err = b.RunK0sConfigScript()
-		if err != nil {
-			return fmt.Errorf("failed to run k0s config script: %w", err)
+			return err
 		}
 	}
 
@@ -456,6 +525,7 @@ func (b *GCPBootstrapper) createTestUser() error {
 		DBName:       testuser.DefaultDBName,
 		SSLMode:      "require",
 		DatacenterID: primary.ID,
+		SeedAuthz:    primary.InstallConfig.Codesphere.Preview["openfga-authz"],
 	})
 	if err != nil {
 		return err
@@ -471,11 +541,22 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return fmt.Errorf("acme-staging cannot be combined with google-acme-issuer")
 	}
 
-	if b.Env.RemoteOmsBinaryPath != "" && !b.fw.Exists(b.Env.RemoteOmsBinaryPath) {
-		return fmt.Errorf("remote OMS binary not found at path: %s", b.Env.RemoteOmsBinaryPath)
+	err := b.validateCodesphereOnly()
+	if err != nil {
+		return err
 	}
 
-	err := b.validateInstallVersion()
+	if err := b.validateBootstrapFiles(); err != nil {
+		return err
+	}
+
+	for _, valuesFile := range b.Env.PCAppsValues {
+		if !b.fw.Exists(valuesFile) {
+			return fmt.Errorf("pc-apps values file not found at path: %s", valuesFile)
+		}
+	}
+
+	err = b.validateInstallVersion()
 	if err != nil {
 		return err
 	}
@@ -520,7 +601,68 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
+	err = b.validateMultiDC()
+	if err != nil {
+		return err
+	}
+
 	return b.validateTelemetryExportParams()
+}
+
+// validateCodesphereOnly rejects a Codesphere-only install that has nothing to install, or that
+// would upload a vault other than the jumpbox's: the bootstrap copies its vault to the jumpbox,
+// and only the jumpbox's copy holds the kubeconfig "oms install k0s" added, which a
+// Codesphere-only install does not add again.
+func (b *GCPBootstrapper) validateCodesphereOnly() error {
+	if !b.Env.InstallCodesphereOnly {
+		return nil
+	}
+
+	if b.Env.InstallVersion == "" && b.Env.InstallLocal == "" {
+		return fmt.Errorf("install-codesphere-only requires install-version or install-local")
+	}
+
+	if !b.Env.RecoverConfig {
+		return fmt.Errorf("install-codesphere-only requires recover-config, so the install keeps the jumpbox's config and vault")
+	}
+
+	return nil
+}
+
+// validateMultiDC rejects flag combinations a multi-data-center bootstrap cannot satisfy.
+func (b *GCPBootstrapper) validateMultiDC() error {
+	if !b.Env.MultiDC {
+		return nil
+	}
+
+	// A secondary data center's config and vault are derived from the primary's, which only
+	// happens when configs are written.
+	if !b.Env.WriteConfig {
+		return fmt.Errorf("multi-dc requires write-config to be enabled")
+	}
+
+	// The data center IDs are derived (1 and 2) and drive the workspace hosting domains.
+	if b.Env.DatacenterIDExplicit {
+		return fmt.Errorf("datacenter-id cannot be combined with multi-dc, the IDs are derived")
+	}
+
+	// The k0s cluster is named codesphere-<datacenter name>, so both names must be set and
+	// distinct. BuildDataCenters derives the second one by suffixing the first.
+	if b.Env.DatacenterName == "" {
+		return fmt.Errorf("datacenter-name is required with multi-dc")
+	}
+
+	// Every data center gets its own local config and vault, derived by suffixing these paths.
+	for name, path := range map[string]string{
+		"install-config": b.Env.InstallConfigPath,
+		"secrets-file":   b.Env.SecretsFilePath,
+	} {
+		if path == "" {
+			return fmt.Errorf("cannot derive a per-data-center path: %s is empty", name)
+		}
+	}
+
+	return nil
 }
 
 func (b *GCPBootstrapper) validateClusterAdminEmail() error {
@@ -562,14 +704,14 @@ func (b *GCPBootstrapper) validateInstallVersion() error {
 		return nil
 	}
 
-	build, err := b.PortalClient.GetBuild(portal.CodesphereProduct, b.Env.InstallVersion, b.Env.InstallHash)
+	build, err := b.PortalClient.GetBuild(portal.CodesphereProduct, b.codesphereVersionForPortal(), b.Env.InstallHash)
 	if err != nil {
 		return fmt.Errorf("failed to get codesphere package: %w", err)
 	}
 
-	if b.Env.InstallHash == "" {
-		b.Env.InstallHash = build.Hash
-	}
+	// Persist the resolved hash so config, archive paths and registry mirroring
+	// all refer to the same build when no hash was supplied.
+	b.Env.InstallHash = build.Hash
 
 	requiredFilename := InstallerArchiveName
 	filenames := []string{}
@@ -675,101 +817,138 @@ func (b *GCPBootstrapper) EnsureVPC() error {
 }
 
 func (b *GCPBootstrapper) EnsureFirewallRules() error {
-	networkName := fmt.Sprintf("%s-vpc", b.Env.ProjectID)
+	network := fmt.Sprintf("projects/%s/global/networks/%s-vpc", b.Env.ProjectID, b.Env.ProjectID)
 
-	// Allow external SSH to Jumpbox
-	sshRule := &computepb.Firewall{
-		Name:      protoString("allow-ssh-ext"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.Env.ProjectID, networkName)),
-		Direction: protoString("INGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{
-				IPProtocol: protoString("tcp"),
-				Ports:      []string{"22"},
-			},
-		},
-		SourceRanges: []string{"0.0.0.0/0"},
-		TargetTags:   []string{"ssh"},
-		Description:  protoString("Allow external SSH to Jumpbox"),
+	rules := baseFirewallRules()
+	if b.Env.SingleVM {
+		for _, rule := range rules {
+			if rule.GetName() == "allow-ingress-web" {
+				rule.Allowed[0].Ports = append(rule.Allowed[0].Ports, "2222")
+			}
+		}
 	}
 
-	err := b.GCPClient.CreateFirewallRule(b.Env.ProjectID, sshRule)
+	err := b.createFirewallRules(network, rules)
 	if err != nil {
-		return fmt.Errorf("failed to create jumpbox ssh firewall rule: %w", err)
+		return err
 	}
 
-	// Allow all internal traffic
-	internalRule := &computepb.Firewall{
-		Name:      protoString("allow-internal"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.Env.ProjectID, networkName)),
-		Direction: protoString("INGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{IPProtocol: protoString("all")},
+	return b.ensureAirgappedEgressRules(network)
+}
+
+// baseFirewallRules returns the firewall rules every installation gets, whatever its registry type.
+func baseFirewallRules() []*computepb.Firewall {
+	return []*computepb.Firewall{
+		{
+			Name:         protoString("allow-ssh-ext"),
+			Direction:    protoString("INGRESS"),
+			Priority:     protoInt32(1000),
+			Allowed:      []*computepb.Allowed{{IPProtocol: protoString("tcp"), Ports: []string{"22"}}},
+			SourceRanges: []string{"0.0.0.0/0"},
+			TargetTags:   []string{"ssh"},
+			Description:  protoString("Allow external SSH to Jumpbox"),
 		},
-		SourceRanges: []string{vpcSubnetCIDR},
-		Description:  protoString("Allow all internal traffic"),
-	}
-
-	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, internalRule)
-	if err != nil {
-		return fmt.Errorf("failed to create internal firewall rule: %w", err)
-	}
-
-	// Allow all egress
-	egressRule := &computepb.Firewall{
-		Name:      protoString("allow-all-egress"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.Env.ProjectID, networkName)),
-		Direction: protoString("EGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{IPProtocol: protoString("all")},
+		{
+			Name:         protoString("allow-internal"),
+			Direction:    protoString("INGRESS"),
+			Priority:     protoInt32(1000),
+			Allowed:      []*computepb.Allowed{{IPProtocol: protoString("all")}},
+			SourceRanges: []string{vpcSubnetCIDR},
+			Description:  protoString("Allow all internal traffic"),
 		},
-		DestinationRanges: []string{"0.0.0.0/0"},
-		Description:       protoString("Allow all egress"),
-	}
-
-	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, egressRule)
-	if err != nil {
-		return fmt.Errorf("failed to create egress firewall rule: %w", err)
-	}
-
-	// Allow ingress for web (HTTP/HTTPS)
-	webRule := &computepb.Firewall{
-		Name:      protoString("allow-ingress-web"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.Env.ProjectID, networkName)),
-		Direction: protoString("INGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{IPProtocol: protoString("tcp"), Ports: []string{"80", "443"}},
+		{
+			Name:              protoString("allow-all-egress"),
+			Direction:         protoString("EGRESS"),
+			Priority:          protoInt32(1000),
+			Allowed:           []*computepb.Allowed{{IPProtocol: protoString("all")}},
+			DestinationRanges: []string{"0.0.0.0/0"},
+			Description:       protoString("Allow all egress"),
 		},
-		SourceRanges: []string{"0.0.0.0/0"},
-		Description:  protoString("Allow HTTP/HTTPS ingress"),
-	}
-
-	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, webRule)
-	if err != nil {
-		return fmt.Errorf("failed to create web firewall rule: %w", err)
-	}
-
-	// Allow ingress for PostgreSQL
-	postgresRule := &computepb.Firewall{
-		Name:      protoString("allow-ingress-postgres"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.Env.ProjectID, networkName)),
-		Direction: protoString("INGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{IPProtocol: protoString("tcp"), Ports: []string{"5432"}},
+		{
+			Name:         protoString("allow-ingress-web"),
+			Direction:    protoString("INGRESS"),
+			Priority:     protoInt32(1000),
+			Allowed:      []*computepb.Allowed{{IPProtocol: protoString("tcp"), Ports: []string{"80", "443"}}},
+			SourceRanges: []string{"0.0.0.0/0"},
+			Description:  protoString("Allow HTTP/HTTPS ingress"),
 		},
-		SourceRanges: []string{"0.0.0.0/0"},
-		TargetTags:   []string{"postgres"},
-		Description:  protoString("Allow external access to PostgreSQL"),
+		{
+			Name:         protoString("allow-ingress-postgres"),
+			Direction:    protoString("INGRESS"),
+			Priority:     protoInt32(1000),
+			Allowed:      []*computepb.Allowed{{IPProtocol: protoString("tcp"), Ports: []string{"5432"}}},
+			SourceRanges: []string{"0.0.0.0/0"},
+			TargetTags:   []string{"postgres"},
+			Description:  protoString("Allow external access to PostgreSQL"),
+		},
+	}
+}
+
+// airgappedEgressRules returns the firewall rules that cut every VM but the jumpbox off from the
+// internet. The deny applies to all VMs, so a VM type added later is air-gapped as well; the
+// higher priority allows keep traffic inside the VPC and give the jumpbox its internet access.
+// All of them take precedence over allow-all-egress.
+func airgappedEgressRules() []*computepb.Firewall {
+	return []*computepb.Firewall{
+		{
+			Name:              protoString(airgappedAllowJumpboxEgressRule),
+			Direction:         protoString("EGRESS"),
+			Priority:          protoInt32(800),
+			Allowed:           []*computepb.Allowed{{IPProtocol: protoString("all")}},
+			DestinationRanges: []string{"0.0.0.0/0"},
+			TargetTags:        []string{jumpboxTag},
+			Description:       protoString("Allow internet egress of the jumpbox, which hosts the local container registry"),
+		},
+		{
+			Name:              protoString(airgappedAllowInternalEgressRule),
+			Direction:         protoString("EGRESS"),
+			Priority:          protoInt32(800),
+			Allowed:           []*computepb.Allowed{{IPProtocol: protoString("all")}},
+			DestinationRanges: []string{vpcSubnetCIDR},
+			Description:       protoString("Allow egress of air-gapped VMs inside the VPC"),
+		},
+		{
+			Name:              protoString(airgappedDenyEgressRule),
+			Direction:         protoString("EGRESS"),
+			Priority:          protoInt32(900),
+			Denied:            []*computepb.Denied{{IPProtocol: protoString("all")}},
+			DestinationRanges: []string{"0.0.0.0/0"},
+			Description:       protoString("Simulate an air-gapped installation: block internet egress of all VMs but the jumpbox"),
+		},
+	}
+}
+
+// createFirewallRules creates the given rules in the project's VPC network.
+func (b *GCPBootstrapper) createFirewallRules(network string, rules []*computepb.Firewall) error {
+	for _, rule := range rules {
+		rule.Network = protoString(network)
+
+		err := b.GCPClient.CreateFirewallRule(b.Env.ProjectID, rule)
+		if err != nil {
+			return fmt.Errorf("failed to create %s firewall rule: %w", rule.GetName(), err)
+		}
 	}
 
-	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, postgresRule)
-	if err != nil {
-		return fmt.Errorf("failed to create postgres firewall rule: %w", err)
+	return nil
+}
+
+// ensureAirgappedEgressRules cuts all VMs but the jumpbox off from the internet for an airgapped
+// installation. They keep reaching each other and the jumpbox inside the VPC, and the jumpbox keeps
+// its internet access to download the package and mirror the images into its registry. Replies to
+// inbound connections still pass, since GCP firewall rules are stateful. A local container registry
+// alone does not cut the VMs off, as only airgapped installations stage the k0s airgap bundle.
+// Without airgapping the rules are removed, so a re-run that switches it off can pull again.
+func (b *GCPBootstrapper) ensureAirgappedEgressRules(network string) error {
+	if b.Env.Airgapped {
+		return b.createFirewallRules(network, airgappedEgressRules())
+	}
+
+	// Delete the deny first, so the jumpbox and internal traffic are never blocked in between.
+	for _, name := range []string{airgappedDenyEgressRule, airgappedAllowInternalEgressRule, airgappedAllowJumpboxEgressRule} {
+		err := b.GCPClient.DeleteFirewallRule(b.Env.ProjectID, name)
+		if err != nil {
+			return fmt.Errorf("failed to delete %s firewall rule: %w", name, err)
+		}
 	}
 
 	return nil
@@ -787,8 +966,6 @@ func (b *GCPBootstrapper) EnsureGatewayIPAddresses() error {
 			return err
 		}
 	}
-
-	b.mirrorPrimaryDataCenter()
 
 	return nil
 }
@@ -948,9 +1125,26 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 		return err
 	}
 
+	hostOSSettings, err := b.Env.HostOS.settings()
+	if err != nil {
+		return fmt.Errorf("failed to get the host OS settings: %w", err)
+	}
+
 	allNodes := append([]*node.Node{b.Env.PostgreSQLNode}, b.clusterNodes()...)
 
 	for _, node := range allNodes {
+		if err := b.ensureNodePackageProxy(node, hostOSSettings); err != nil {
+			return fmt.Errorf("failed to ensure package proxy: %w", err)
+		}
+
+		if err := ensureHostPackages(node, hostOSSettings); err != nil {
+			return fmt.Errorf("failed to ensure host packages: %w", err)
+		}
+
+		if err := b.ensureDocker(node, hostOSSettings); err != nil {
+			return fmt.Errorf("failed to ensure Docker: %w", err)
+		}
+
 		if !node.HasInotifyWatchesConfigured() {
 			err := node.ConfigureInotifyWatches()
 			if err != nil {
@@ -990,6 +1184,104 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 	return nil
 }
 
+// ensureHostPackages installs the packages the host OS lacks for Codesphere on the node. dnf and
+// apt-get skip packages that are already installed, so this is safe to re-run.
+func ensureHostPackages(n *node.Node, hostOSSettings hostOSSettings) error {
+	if len(hostOSSettings.hostPackages) == 0 {
+		return nil
+	}
+
+	for _, cmd := range hostOSSettings.installCommands(hostOSSettings.hostPackages) {
+		err := n.RunSSHCommand("root", cmd)
+		if err != nil {
+			return fmt.Errorf("failed to install %s on %s: %w", strings.Join(hostOSSettings.hostPackages, ", "), n.GetName(), err)
+		}
+	}
+
+	return nil
+}
+
+// ensureDocker installs and starts Docker on the node where the installer does not provide it.
+// The installer's docker step only checks that Docker runs, so it has to be there before the
+// installation starts. A node that already runs Docker is left alone, so a re-run neither needs the
+// Docker repository to be reachable nor touches healthy hosts.
+func (b *GCPBootstrapper) ensureDocker(n *node.Node, hostOSSettings hostOSSettings) error {
+	if len(hostOSSettings.dockerInstallCommands) == 0 {
+		return nil
+	}
+
+	if n.RunSSHCommand("root", hostOSSettings.dockerInstalledCommand) == nil {
+		return nil
+	}
+
+	for _, cmd := range hostOSSettings.dockerInstallCommands {
+		err := b.runDockerInstallCommand(n, cmd)
+		if err != nil {
+			return fmt.Errorf("failed to install Docker on %s: %w", n.GetName(), err)
+		}
+	}
+
+	return nil
+}
+
+// runDockerInstallCommand retries RPM transaction lock contention caused by background
+// updates. Other package failures and SSH transport errors fail immediately.
+func (b *GCPBootstrapper) runDockerInstallCommand(n *node.Node, command string) error {
+	deadline := b.Time.Now().Add(5 * time.Minute)
+
+	for {
+		err := n.RunSSHCommand("root", command)
+		if err == nil {
+			return nil
+		}
+
+		var exitErr *ssh.ExitError
+		if !strings.HasPrefix(command, "dnf ") || !errors.As(err, &exitErr) ||
+			!strings.Contains(err.Error(), "can't create transaction lock on ") ||
+			!strings.Contains(err.Error(), "Resource temporarily unavailable") {
+			return fmt.Errorf("docker installation command failed: %w", err)
+		}
+
+		if !b.Time.Now().Before(deadline) {
+			return fmt.Errorf("RPM transaction lock remained busy for 5m: %w", err)
+		}
+
+		b.stlog.Logf("RPM transaction lock busy on %s; retrying Docker installation in 10s", n.GetName())
+		b.Time.Sleep(10 * time.Second)
+	}
+}
+
+// InstallK0sAndCodesphere installs k0s and Codesphere into every data center and then runs the
+// k0s config scripts. A Codesphere-only install leaves k0s and its config script alone.
+func (b *GCPBootstrapper) InstallK0sAndCodesphere() error {
+	if b.Env.InstallCodesphereOnly {
+		log.Printf("Warning: installing only Codesphere. k0s, PostgreSQL, Ceph and the database keep their current state, so installing an older version than the running one, e.g. for a rollback, can fail or leave the instance broken.")
+	} else {
+		err := b.EnsureK0s()
+		if err != nil {
+			return fmt.Errorf("failed to install k0s: %w", err)
+		}
+	}
+
+	err := b.InstallCodesphere()
+	if err != nil {
+		return fmt.Errorf("failed to install Codesphere: %w", err)
+	}
+
+	if b.Env.InstallCodesphereOnly {
+		return nil
+	}
+
+	// Every data center is installed before any k0s script runs, so a script never patches
+	// gateway services an install has yet to create.
+	err = b.RunK0sConfigScript()
+	if err != nil {
+		return fmt.Errorf("failed to run k0s config script: %w", err)
+	}
+
+	return nil
+}
+
 // InstallCodesphere installs Codesphere into every data center from the shared jumpbox, in
 // ascending data center order. The order matters: the primary data center's install creates the
 // database, roles and schema that the secondary ones reuse.
@@ -1002,7 +1294,21 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 		return fmt.Errorf("failed to ensure Codesphere package on jumpbox: %w", err)
 	}
 
+	if err := b.CopyPCAppsValuesToJumpbox(); err != nil {
+		return err
+	}
+
 	packageFilename := b.codespherePackageFilename()
+
+	if b.Env.RegistryType == RegistryTypeLocalContainer {
+		err := b.stlog.Step("Mirror package artifacts into the local registry", func() error {
+			return b.mirrorPackageToLocalRegistry(packageFilename)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to mirror package artifacts into the local registry: %w", err)
+		}
+	}
+
 	for _, dc := range b.Env.DataCenters {
 		err := b.stlog.Step(dc.StepName("Install Codesphere"), func() error {
 			return b.runInstallCommand(dc, packageFilename)
@@ -1015,12 +1321,16 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 	return nil
 }
 
+func (b *GCPBootstrapper) codesphereVersionForPortal() string {
+	return (files.CodespherePackageConfig{Version: b.Env.InstallVersion}).FormatVersionForPortal()
+}
+
 func (b *GCPBootstrapper) codespherePackageFilename() string {
 	if b.Env.InstallLocal != "" {
 		return "local-" + InstallerArchiveName
 	}
 
-	return portal.BuildPackageFilenameFromParts(b.Env.InstallVersion, b.Env.InstallHash, InstallerArchiveName)
+	return filepath.Join(jumpboxOmsWorkdir, portal.BuildPackageFilenameFromParts(b.codesphereVersionForPortal(), b.Env.InstallHash, InstallerArchiveName))
 }
 
 func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
@@ -1039,13 +1349,19 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
 		return errors.New("either install version or a local package must be specified to install Codesphere")
 	}
 
+	// Installation downloads from config itself. Only local-registry mirroring
+	// needs the archive beforehand, because it runs before installation.
+	if b.Env.RegistryType != RegistryTypeLocalContainer {
+		return nil
+	}
+
 	if b.Env.InstallHash == "" {
 		return fmt.Errorf("install hash must be set when install version is set")
 	}
 
 	b.stlog.Logf("Downloading Codesphere package...")
-	downloadCmd := fmt.Sprintf("oms download package -f %s -H %s %s",
-		InstallerArchiveName, b.Env.InstallHash, b.Env.InstallVersion)
+	downloadCmd := fmt.Sprintf("mkdir -p %[1]s && cd %[1]s && oms download package -f %[2]s -H %[3]s %[4]s",
+		jumpboxOmsWorkdir, InstallerArchiveName, b.Env.InstallHash, b.codesphereVersionForPortal())
 
 	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {
@@ -1068,8 +1384,64 @@ func (b *GCPBootstrapper) runInstallCommand(dc *datacenter.DataCenter, packageFi
 // InstallCommand returns the command that installs Codesphere into the given data center from
 // the jumpbox. It is also printed for the operator when the bootstrap does not install itself.
 func (b *GCPBootstrapper) InstallCommand(dc *datacenter.DataCenter, packageFilename string) string {
-	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s -p %s%s",
-		dc.RemoteConfigPath, dc.RemoteAgeKeyPath(), dc.RemoteVaultPath(), packageFilename, b.generateSkipStepsArg())
+	packageArg := ""
+	// Without a selected version this also renders the manual install command
+	// with its package placeholder after an infrastructure-only bootstrap.
+	if b.Env.InstallVersion == "" || b.Env.InstallLocal != "" {
+		packageArg = " -p " + packageFilename
+	}
+
+	codesphereOnlyArg := ""
+	if b.Env.InstallCodesphereOnly {
+		codesphereOnlyArg = " --codesphere-only"
+	}
+
+	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s%s%s%s%s%s",
+		dc.RemoteConfigPath, dc.RemoteAgeKeyPath(), dc.RemoteVaultPath(), packageArg,
+		b.generateRegistryTrustArg(), b.generatePCAppsValuesArg(), b.generateSkipStepsArg(), codesphereOnlyArg)
+}
+
+// remotePCAppsValuesPath is where the i-th pc-apps values file is stored on the jumpbox. The index
+// keeps files with the same name apart.
+func remotePCAppsValuesPath(i int, localPath string) string {
+	return fmt.Sprintf("%s/%d-%s", remotePCAppsValuesDir, i, filepath.Base(localPath))
+}
+
+// CopyPCAppsValuesToJumpbox copies the pc-apps values files to the jumpbox unchanged, so the
+// install command can pass them on to the installer.
+func (b *GCPBootstrapper) CopyPCAppsValuesToJumpbox() error {
+	for i, valuesFile := range b.Env.PCAppsValues {
+		remotePath := remotePCAppsValuesPath(i, valuesFile)
+		b.stlog.Logf("Copying pc-apps values %s to jumpbox at %s...", valuesFile, remotePath)
+
+		err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, valuesFile, remotePath)
+		if err != nil {
+			return fmt.Errorf("failed to copy pc-apps values file %s to jumpbox: %w", valuesFile, err)
+		}
+	}
+
+	return nil
+}
+
+func (b *GCPBootstrapper) generatePCAppsValuesArg() string {
+	var arg strings.Builder
+	for i, valuesFile := range b.Env.PCAppsValues {
+		arg.WriteString(" --pc-apps-values " + remotePCAppsValuesPath(i, valuesFile))
+	}
+
+	return arg.String()
+}
+
+// generateRegistryTrustArg points the installation at the certificate authority of the local
+// container registry, which EnsureLocalContainerRegistry leaves on the jumpbox. ArgoCD pulls the
+// Helm charts from that registry and verifies its certificate inside its own containers, where the
+// jumpbox's trust store does not reach.
+func (b *GCPBootstrapper) generateRegistryTrustArg() string {
+	if b.Env.RegistryType != RegistryTypeLocalContainer {
+		return ""
+	}
+
+	return " --argo-registry-ca " + jumpboxRegistryCertFile
 }
 
 func (b *GCPBootstrapper) generateSkipStepsArg() string {
@@ -1078,9 +1450,7 @@ func (b *GCPBootstrapper) generateSkipStepsArg() string {
 	skipSteps := []string{"kubernetes"}
 	skipSteps = util.AppendUnique(skipSteps, b.Env.InstallSkipSteps...)
 
-	if b.Env.RegistryType == RegistryTypeGitHub {
-		skipSteps = util.AppendUnique(skipSteps, "load-container-images")
-	}
+	skipSteps = util.AppendUnique(skipSteps, "load-container-images")
 
 	if len(skipSteps) == 0 {
 		return ""

@@ -15,6 +15,5 @@ func AddCmd(parent *cobra.Command, cmd *cobra.Command) {
 }
 
 type GlobalOptions struct {
-	OmsPortalApiKey string
-	Verbose         bool
+	Verbose bool
 }

@@ -10,7 +10,7 @@ stringData:
   name: codesphere-charts
   url: "${OCI_REGISTRY_URL}"
   type: helm
-  username: github
+  username: "${OCI_USERNAME}"
   password: "${SECRET_CODESPHERE_OCI_READ}"
   enableOCI: "true"
 

@@ -4,8 +4,11 @@ Install a Codesphere instance
 
 ### Synopsis
 
-Install a Codesphere instance with the provided package, configuration file, and private key.
+Install a Codesphere instance with the provided configuration file and private key.
+When --package is omitted, operations.codesphere selects the version to download
+and reuse in OMS_WORKDIR. An explicit --package overrides the configured version.
 Uses the private-cloud-installer.js script included in the package to perform the installation.
+Use the dependencies and platform subcommands with --local-components for a prepared local cluster.
 
 ```
 oms install codesphere [flags]
@@ -14,6 +17,9 @@ oms install codesphere [flags]
 ### Examples
 
 ```
+# Install the operations.codesphere version, downloading it to OMS_WORKDIR if needed
+$ oms install codesphere -c config.yaml -k <path-to-private-key>
+
 # Skip most pre-installation steps. E.g. if you only need to re-apply Codesphere's helm charts
 $ oms install codesphere -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml -s copy-dependencies,extract-dependencies,load-container-images,ceph,postgres,kubernetes,docker
 
@@ -26,21 +32,27 @@ $ oms install codesphere -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-
 
 ```
       --argo-force-conflicts         Force SSA ownership conflicts during ArgoCD install
+      --argo-registry-ca string      Path to the certificate authority of the OCI registry, needed when its certificate is self-signed
       --argo-registry-url string     OCI registry URL for the ArgoCD Helm chart (defaults to registry.server from config.yaml)
-      --argo-repo string             ArgoCD Helm chart repository URL (default "https://argoproj.github.io/argo-helm")
-      --argo-values stringArray      ArgoCD values YAML file (can be specified multiple times)
-      --argo-version string          ArgoCD Helm chart version to install
+      --argo-repo string             Upstream ArgoCD chart repository; requires --argo-version (default "https://argoproj.github.io/argo-helm")
+      --argo-values stringArray      ArgoCD values YAML file; packaged chart settings go under argo-cd (repeatable)
+      --argo-version string          Upstream ArgoCD Helm chart version; overrides the packaged chart
       --auto-approve                 Auto approve confirmation prompts with default values (default true)
       --codesphere-only              Install only Codesphere without dependencies
   -c, --config stringArray           Path to a Codesphere Private Cloud configuration file (yaml). Can be specified multiple times and merged in order
       --direct-connection            Use direct connection for installation, requires having access to the cluster nodes from your machine
   -f, --force                        Enforce package extraction
   -h, --help                         help for codesphere
-  -p, --package string               Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load binaries, installer etc. from
+      --local-components             Run selected install components on the local host
+      --local-config-dir string      Config directory for local install components
+  -p, --package string               Package file to use. This flag overrides the version specified in the configuration file.
       --pc-apps-values stringArray   pc-apps values YAML file (can be specified multiple times)
   -k, --priv-key string              Path to the age private key (required for sops unless an age key environment variable is set)
+      --registry string              Registry host with optional port and repository path, without a scheme (overrides registry.server); Codesphere artifacts use <registry>/codesphere-cloud
   -s, --skip-steps strings           Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, postgres, kubernetes, docker, argocd
+      --timer                        Show how long each step took and a final timing summary table
       --vault string                 Path to the prod.vault.yaml file used for config templating
+      --vault-secret-name string     Secret in the codesphere namespace the vault is written to (as source for ESO). (default "cs-vault")
 ```
 
 ### Options inherited from parent commands

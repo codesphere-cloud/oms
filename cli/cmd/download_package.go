@@ -24,9 +24,11 @@ type DownloadPackageCmd struct {
 
 type DownloadPackageOpts struct {
 	*util.GlobalOptions
-	Version  string
-	Hash     string
-	Filename string
+	Version    string
+	Hash       string
+	Filename   string
+	Quiet      bool
+	NoProgress bool
 }
 
 func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
@@ -60,7 +62,10 @@ func AddDownloadPackageCmd(download *cobra.Command, opts *util.GlobalOptions) {
 			Use:   "package [VERSION]",
 			Short: "Download a codesphere package",
 			Long: io.Long(`Download a specific version of a Codesphere package
-				To list available packages, run oms list packages.`),
+				To list available packages, run oms list packages.
+
+				Download progress is shown by default. Use --quiet (-q) or --no-progress
+				to suppress progress, including when --verbose is enabled.`),
 			Args: cobra.ArbitraryArgs,
 			Example: util.FormatExamples("download package", []io.Example{
 				{Cmd: "codesphere-v1.55.0", Desc: "Download Codesphere version 1.55.0"},
@@ -89,6 +94,8 @@ func AddDownloadPackageCmd(download *cobra.Command, opts *util.GlobalOptions) {
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Version, "version", "V", "", "Codesphere version to download")
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Hash, "hash", "H", "", "Hash of the version to download if multiple builds exist for the same version")
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Filename, "file", "f", "installer-lite.tar.gz", "Specify artifact to download")
+	pkg.cmd.Flags().BoolVarP(&pkg.Opts.Quiet, "quiet", "q", false, "Suppress progress output during download")
+	pkg.cmd.Flags().BoolVar(&pkg.Opts.NoProgress, "no-progress", false, "Suppress progress output during download")
 	util.AddCmd(download, pkg.cmd)
 
 	pkg.cmd.RunE = pkg.RunE
@@ -99,7 +106,7 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 
 	if err := portal.DownloadAndVerifyBuild(p, c.FileWriter, portal.CodesphereProduct, build, filename, fullFilename, portal.DownloadOptions{
 		Resume: true,
-		Quiet:  !c.Opts.Verbose,
+		Quiet:  c.Opts.Quiet || c.Opts.NoProgress,
 	}); err != nil {
 		return fmt.Errorf("failed to download and verify build: %w", err)
 	}

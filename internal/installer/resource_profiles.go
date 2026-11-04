@@ -14,6 +14,9 @@ type ResourceProfile string
 
 const (
 	ResourceProfileNoRequests ResourceProfile = "noRequests"
+	// ResourceProfileNoRequestsSingleReplica is ResourceProfileNoRequests with a
+	// single replica for the Codesphere services, for setups with a single node.
+	ResourceProfileNoRequestsSingleReplica ResourceProfile = "noRequestsSingleReplica"
 )
 
 // ApplyResourceProfile mutates a RootConfig in-place to apply the requested
@@ -25,14 +28,19 @@ func ApplyResourceProfile(config *files.RootConfig, profile ResourceProfile) err
 
 	switch profile {
 	case ResourceProfileNoRequests:
-		applyNoRequestsProfile(config)
+		applyNoRequestsProfile(config, 2)
+		return nil
+	case ResourceProfileNoRequestsSingleReplica:
+		applyNoRequestsProfile(config, 1)
 		return nil
 	default:
 		return fmt.Errorf("unsupported resource profile %q", profile)
 	}
 }
 
-func applyNoRequestsProfile(config *files.RootConfig) {
+// applyNoRequestsProfile zeroes resource requests and sets serviceReplicas for
+// the Codesphere services that run more than one replica by default.
+func applyNoRequestsProfile(config *files.RootConfig, serviceReplicas int) {
 	if config.Cluster.CertManager == nil {
 		config.Cluster.CertManager = &files.CertManagerConfig{}
 	}
@@ -170,8 +178,10 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 		},
 	})
 
+	// The PC installer installs an unset component, so creating one to hold the
+	// override must not disable it.
 	if config.Cluster.PgOperator == nil {
-		config.Cluster.PgOperator = &files.PgOperatorConfig{}
+		config.Cluster.PgOperator = &files.PgOperatorConfig{Enabled: true}
 	}
 	config.Cluster.PgOperator.Override = util.DeepMergeMaps(config.Cluster.PgOperator.Override, map[string]any{
 		"cloudnative-pg": map[string]any{
@@ -182,7 +192,7 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	})
 
 	if config.Cluster.BarmanCloudPlugin == nil {
-		config.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{}
+		config.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{Enabled: true}
 	}
 	config.Cluster.BarmanCloudPlugin.Override = util.DeepMergeMaps(config.Cluster.BarmanCloudPlugin.Override, map[string]any{
 		"plugin-barman-cloud": map[string]any{
@@ -233,18 +243,27 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 		"payment_service",
 		"public_api_service",
 		"team_service",
+		"vm_vnc_proxy",
+		"website",
 		"workspace_proxy",
 		"workspace_service",
 	} {
 		serviceProfiles[serviceName] = map[string]any{
+			"replicas": 1,
 			"requests": zeroRequests(),
 		}
 	}
-	serviceProfiles["deployment_service"].(map[string]any)["replicas"] = 2
-	serviceProfiles["public_api_service"].(map[string]any)["replicas"] = 2
-	serviceProfiles["team_service"].(map[string]any)["replicas"] = 2
-	serviceProfiles["workspace_service"].(map[string]any)["replicas"] = 2
-	serviceProfiles["auth_service"].(map[string]any)["replicas"] = 2
+
+	serviceProfiles["deployment_service"].(map[string]any)["replicas"] = serviceReplicas
+	serviceProfiles["public_api_service"].(map[string]any)["replicas"] = serviceReplicas
+	serviceProfiles["team_service"].(map[string]any)["replicas"] = serviceReplicas
+	serviceProfiles["workspace_service"].(map[string]any)["replicas"] = serviceReplicas
+	serviceProfiles["auth_service"].(map[string]any)["replicas"] = serviceReplicas
+
+	serviceProfiles["error_page_server"].(map[string]any)["proxy"] = map[string]any{
+		"replicas": 1,
+		"requests": zeroRequests(),
+	}
 
 	if config.Codesphere.Override == nil {
 		config.Codesphere.Override = map[string]any{}
@@ -254,6 +273,11 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 		"global": map[string]any{
 			"services": serviceProfiles,
 			"frontendGateway": map[string]any{
+				"replicas": 1,
+				"requests": zeroRequests(),
+			},
+			"otel": map[string]any{
+				"replicas": 1,
 				"requests": zeroRequests(),
 			},
 			"underprovisionFactors": map[string]string{
@@ -264,10 +288,12 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	})
 }
 
-func zeroRequests() map[string]int {
-	return map[string]int{
-		"cpu":    0,
-		"memory": 0,
+// zeroRequests keeps zero quantities truthy in conditional Helm templates.
+// Omitting a request lets Kubernetes default it to the corresponding limit.
+func zeroRequests() map[string]string {
+	return map[string]string{
+		"cpu":    "0",
+		"memory": "0",
 	}
 }
 

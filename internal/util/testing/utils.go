@@ -14,7 +14,7 @@ func MustMap[T any](value any) map[string]T {
 }
 
 func AssertZeroRequests(value any) {
-	requests := MustMap[int](value)
-	gomega.Expect(requests).To(gomega.HaveKeyWithValue("cpu", 0))
-	gomega.Expect(requests).To(gomega.HaveKeyWithValue("memory", 0))
+	requests := MustMap[string](value)
+	gomega.Expect(requests).To(gomega.HaveKeyWithValue("cpu", "0"))
+	gomega.Expect(requests).To(gomega.HaveKeyWithValue("memory", "0"))
 }

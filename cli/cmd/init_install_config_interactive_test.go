@@ -5,12 +5,14 @@ package cmd
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
 
+	"github.com/codesphere-cloud/oms/cli/cmd/testutil"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -64,7 +66,8 @@ var _ = Describe("Interactive profile usage", func() {
 
 			// Apply resource profile
 			authService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["auth_service"])
-			AssertZeroRequests(authService["requests"])
+			Expect(authService["requests"]).To(Equal(map[string]string{"cpu": "0", "memory": "0"}))
+			Expect(authService["replicas"]).To(Equal(1))
 			Expect(config.Cluster.Monitoring.Grafana.Enabled).To(BeFalse())
 		})
 
@@ -141,9 +144,11 @@ var _ = Describe("Interactive profile usage", func() {
 	Context("when interactive mode has validation warnings", func() {
 		It("should generate config files despite validation errors", func() {
 			mockIcg := installer.NewMockInstallConfigManager(GinkgoT())
+			config := &files.RootConfig{Registry: &files.RegistryConfig{Server: "mirror.example.com/team"}}
 
 			mockIcg.EXPECT().ApplyProfile("dev").Return(nil)
 			mockIcg.EXPECT().CollectInteractively().Return(nil)
+			mockIcg.EXPECT().GetInstallConfig().Return(config)
 			mockIcg.EXPECT().ValidateInstallConfig().Return([]string{"configuration validation failed"})
 			mockIcg.EXPECT().GenerateSecrets().Return(nil)
 			mockIcg.EXPECT().WriteInstallConfig("config.yaml", false).Return(nil)
@@ -162,6 +167,7 @@ var _ = Describe("Interactive profile usage", func() {
 
 			err := c.InitInstallConfig(mockIcg)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(config.PcApps).To(HaveKeyWithValue("chartsRegistry", "mirror.example.com/team/codesphere-cloud/charts"))
 		})
 
 		It("should still fail in non-interactive mode with validation errors", func() {
@@ -246,6 +252,132 @@ func newTempConfigVaultPair() (configPath, vaultPath string) {
 	return filepath.Join(dir, "config.yaml"), filepath.Join(dir, "prod.vault.yaml")
 }
 
+var _ = Describe("Install-config vault encryption", func() {
+	buildCmd := func(vaultType string) *InitInstallConfigCmd {
+		configPath, vaultPath := newTempConfigVaultPair()
+
+		return &InitInstallConfigCmd{
+			Opts: &InitInstallConfigOpts{
+				GlobalOptions: &util.GlobalOptions{},
+				ConfigFile:    configPath,
+				VaultFile:     vaultPath,
+				VaultType:     vaultType,
+				Profile:       "dev",
+				Interactive:   false,
+			},
+			FileWriter: intutil.NewFilesystemWriter(),
+		}
+	}
+
+	Context("without an age key", func() {
+		BeforeEach(func() {
+			GinkgoT().Setenv("SOPS_AGE_KEY", "")
+			GinkgoT().Setenv("SOPS_AGE_KEY_FILE", "")
+		})
+
+		It("generates an age key and encrypts the vault with it", func() {
+			if !testutil.SopsAndAgeAvailable() {
+				Skip("sops and age-keygen not available")
+			}
+
+			c := buildCmd("sops")
+
+			Expect(c.RunE(nil, nil)).To(Succeed())
+			Expect(c.Opts.VaultType).To(Equal("sops"))
+			Expect(c.generatedAgeKey).To(HavePrefix("AGE-SECRET-KEY-"))
+			Expect(c.generatedAgeRecipient).To(HavePrefix("age1"))
+			Expect(os.Getenv("SOPS_AGE_KEY")).To(Equal(c.generatedAgeKey))
+
+			vaultContent, err := os.ReadFile(c.Opts.VaultFile)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(vaultContent)).To(ContainSubstring("ENC["))
+			Expect(string(vaultContent)).To(ContainSubstring(c.generatedAgeRecipient))
+
+			ageKeyPath := filepath.Join(GinkgoT().TempDir(), "age_key.txt")
+			Expect(os.WriteFile(ageKeyPath, []byte(c.generatedAgeKey+"\n"), 0600)).To(Succeed())
+
+			manager, err := installer.NewInstallConfigManager("sops", ageKeyPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(manager.LoadVaultFromFile(c.Opts.VaultFile)).To(Succeed())
+			Expect(manager.ValidateVault()).To(BeEmpty())
+		})
+
+		It("writes a plain vault only when requested explicitly", func() {
+			c := buildCmd("plain")
+
+			Expect(c.RunE(nil, nil)).To(Succeed())
+			Expect(c.Opts.VaultType).To(Equal("plain"))
+			Expect(c.generatedAgeKey).To(BeEmpty())
+
+			vaultContent, err := os.ReadFile(c.Opts.VaultFile)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(vaultContent)).NotTo(ContainSubstring("ENC["))
+		})
+
+		It("rejects an unsupported vault type", func() {
+			c := buildCmd("auto")
+
+			Expect(c.RunE(nil, nil)).To(MatchError(ContainSubstring("unsupported vault type")))
+		})
+
+		It("fails validation with a hint to pass an age key or use a plain vault", func() {
+			c := buildCmd("sops")
+			c.Opts.ValidateOnly = true
+
+			err := c.RunE(nil, nil)
+			Expect(err).To(MatchError(ContainSubstring("requires an age key")))
+			Expect(err.Error()).To(ContainSubstring("--age-key"))
+			Expect(err.Error()).To(ContainSubstring("--vault-type plain"))
+			Expect(c.generatedAgeKey).To(BeEmpty())
+		})
+
+		It("refuses to replace an existing encrypted vault", func() {
+			c := buildCmd("sops")
+			encryptedVault := "sops:\n    age:\n        - recipient: age1test\n" +
+				"secrets:\n    - name: registryPassword\n      fields:\n        password: keep-me\n"
+			Expect(os.WriteFile(c.Opts.VaultFile, []byte(encryptedVault), 0600)).To(Succeed())
+
+			err := c.RunE(nil, nil)
+			Expect(err).To(MatchError(ContainSubstring("already SOPS-encrypted")))
+			Expect(err.Error()).To(ContainSubstring("--age-key"))
+
+			vaultContent, readErr := os.ReadFile(c.Opts.VaultFile)
+			Expect(readErr).NotTo(HaveOccurred())
+			Expect(string(vaultContent)).To(Equal(encryptedVault))
+
+			_, statErr := os.Stat(c.Opts.ConfigFile)
+			Expect(statErr).To(MatchError(ContainSubstring("no such file")))
+		})
+	})
+
+	Context("with an age key", func() {
+		It("encrypts the vault with SOPS", func() {
+			if !testutil.SopsAndAgeAvailable() {
+				Skip("sops and age-keygen not available")
+			}
+
+			ageKeyPath := filepath.Join(GinkgoT().TempDir(), "age_key.txt")
+			Expect(exec.Command("age-keygen", "-o", ageKeyPath).Run()).To(Succeed())
+			GinkgoT().Setenv("SOPS_AGE_KEY", "")
+			GinkgoT().Setenv("SOPS_AGE_KEY_FILE", ageKeyPath)
+
+			c := buildCmd("sops")
+
+			Expect(c.RunE(nil, nil)).To(Succeed())
+			Expect(c.Opts.VaultType).To(Equal("sops"))
+
+			vaultContent, err := os.ReadFile(c.Opts.VaultFile)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(vaultContent)).To(ContainSubstring("ENC["))
+
+			manager, err := installer.NewInstallConfigManager("sops", ageKeyPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(manager.LoadVaultFromFile(c.Opts.VaultFile)).To(Succeed())
+			Expect(manager.ValidateVault()).To(BeEmpty())
+		})
+	})
+})
+
 var _ = Describe("Non-interactive Kubernetes CIDR flags", func() {
 	// buildCmd returns a command wired to a real cobra.Command registering the
 	// k8s flags (mirroring AddInitInstallConfigCmd), so Flags().Changed works.
@@ -305,5 +437,71 @@ var _ = Describe("Non-interactive Kubernetes CIDR flags", func() {
 		err := c.InitInstallConfig(icg)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("pod CIDR is required"))
+	})
+})
+
+var _ = Describe("init install-config package selection", func() {
+	DescribeTable("writes version and optional hash in either input mode", func(interactive bool, hash string, override bool) {
+		cfg := files.NewRootConfig()
+		cfg.Operations = &files.OperationsConfig{Skip: []string{"ceph"}}
+		manager := installer.NewMockInstallConfigManager(GinkgoT())
+		manager.EXPECT().ApplyProfile("minimal").Return(nil)
+		manager.EXPECT().GetInstallConfig().Return(&cfg)
+
+		expected := files.CodespherePackageConfig{Version: "1.111.0", Hash: hash}
+		if override {
+			expected = files.CodespherePackageConfig{Version: "master", Hash: "otherhash"}
+		}
+
+		if interactive {
+			manager.EXPECT().CollectInteractively().Run(func() {
+				Expect(cfg.Operations.Codesphere).To(Equal(files.CodespherePackageConfig{Version: "1.111.0", Hash: hash}))
+
+				if override {
+					cfg.SetCodespherePackage(expected.Version, expected.Hash)
+				}
+			}).Return(nil)
+		} else {
+			manager.EXPECT().GetVault().Return(&files.InstallVault{})
+		}
+
+		manager.EXPECT().ValidateInstallConfig().Return(nil)
+		manager.EXPECT().GenerateSecrets().Return(nil)
+		manager.EXPECT().WriteInstallConfig("config.yaml", false).Run(func(_ string, _ bool) {
+			Expect(cfg.Operations.Codesphere).To(Equal(expected))
+			Expect(cfg.Operations.Skip).To(Equal([]string{"ceph"}))
+		}).Return(nil)
+		manager.EXPECT().WriteVault("vault.yaml", false).Return(nil)
+
+		command := InitInstallConfigCmd{Opts: &InitInstallConfigOpts{
+			GlobalOptions: &util.GlobalOptions{}, Profile: "minimal", Interactive: interactive,
+			ConfigFile: "config.yaml", VaultFile: "vault.yaml", VaultType: "plain", CodesphereVersion: "1.111.0", CodesphereHash: hash,
+		}}
+		Expect(command.InitInstallConfig(manager)).To(Succeed())
+	},
+		Entry("noninteractive version only", false, "", false),
+		Entry("noninteractive pinned build", false, "abc123", false),
+		Entry("interactive pinned build", true, "abc123", false),
+		Entry("interactive answers override flag defaults", true, "abc123", true),
+	)
+	It("rejects a hash without a version before generating files", func() {
+		command := InitInstallConfigCmd{Opts: &InitInstallConfigOpts{CodesphereHash: "abc123"}}
+		Expect(command.InitInstallConfig(installer.NewMockInstallConfigManager(GinkgoT()))).To(MatchError("--codesphere-hash requires --codesphere-version"))
+	})
+	It("registers optional install version and hash flags", func() {
+		parent := &cobra.Command{Use: "init"}
+		AddInitInstallConfigCmd(parent, &util.GlobalOptions{})
+		child, _, err := parent.Find([]string{"install-config"})
+		Expect(err).NotTo(HaveOccurred())
+
+		child.RunE = func(cmd *cobra.Command, _ []string) error {
+			Expect(cmd.Flags().GetString("codesphere-version")).To(Equal("1.111.0"))
+			Expect(cmd.Flags().GetString("codesphere-hash")).To(Equal("abc123"))
+
+			return nil
+		}
+
+		parent.SetArgs([]string{"install-config", "-c", "config.yaml", "--vault", "vault.yaml", "--codesphere-version", "1.111.0", "--codesphere-hash", "abc123"})
+		Expect(parent.Execute()).To(Succeed())
 	})
 })

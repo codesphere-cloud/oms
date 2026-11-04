@@ -14,6 +14,7 @@ import (
 func (g *InstallConfig) CollectInteractively() error {
 	prompter := prompt.NewPrompter(true)
 
+	g.collectCodespherePackageConfig(prompter)
 	g.collectDatacenterConfig(prompter)
 	g.collectRegistryConfig(prompter)
 	g.collectPostgresConfig(prompter)
@@ -57,6 +58,27 @@ func stringSliceToK8sNodes(ips []string) []files.K8sNode {
 		nodes[i] = files.K8sNode{IPAddress: ip}
 	}
 	return nodes
+}
+
+func (g *InstallConfig) collectCodespherePackageConfig(prompter prompt.Prompter) {
+	log.Println("=== Codesphere Package ===")
+
+	selection := files.CodespherePackageConfig{}
+	if g.Config.Operations != nil {
+		selection = g.Config.Operations.Codesphere
+	}
+
+	version := g.collectString(prompter, "Codesphere version (optional)", selection.Version)
+	if version == "" {
+		return
+	}
+	// A hash from the previous version must not become the default for a new version.
+	if version != selection.Version {
+		selection.Hash = ""
+	}
+
+	hash := g.collectString(prompter, "Codesphere build hash (optional)", selection.Hash)
+	g.Config.SetCodespherePackage(version, hash)
 }
 
 func (g *InstallConfig) collectDatacenterConfig(prompter prompt.Prompter) {
@@ -157,8 +179,8 @@ func (g *InstallConfig) collectK8sConfig(prompter prompt.Prompter) {
 		g.Config.Kubernetes.Workers = stringSliceToK8sNodes(workerIPs)
 		g.Config.Kubernetes.NeedsKubeConfig = false
 	} else {
-		g.Config.Kubernetes.PodCIDR = g.collectString(prompter, "Pod CIDR of external cluster", "100.96.0.0/11")
-		g.Config.Kubernetes.ServiceCIDR = g.collectString(prompter, "Service CIDR of external cluster", "100.64.0.0/13")
+		g.Config.Kubernetes.PodCIDR = g.collectString(prompter, "Pod CIDR of external cluster", files.DefaultKubernetesPodCIDR)
+		g.Config.Kubernetes.ServiceCIDR = g.collectString(prompter, "Service CIDR of external cluster", files.DefaultKubernetesServiceCIDR)
 		g.Config.Kubernetes.NeedsKubeConfig = true
 		log.Println("Note: You'll need to provide kubeconfig in the vault file for external Kubernetes")
 	}

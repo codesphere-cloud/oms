@@ -39,6 +39,16 @@ var _ = Describe("ConfigManagerProfile", func() {
 				Expect(config.Codesphere.Domain).To(Equal("codesphere.local"))
 			})
 
+			It("uses one replica and explicit zero requests for every Codesphere service", func() {
+				Expect(manager.ApplyProfile(installer.PROFILE_DEV)).To(Succeed())
+
+				global := MustMap[any](manager.GetInstallConfig().Codesphere.Override["global"])
+				Expect(global["services"]).To(HaveEach(And(
+					HaveKeyWithValue("replicas", 1),
+					HaveKeyWithValue("requests", map[string]string{"cpu": "0", "memory": "0"}),
+				)))
+			})
+
 			It("should set managed Kubernetes configuration", func() {
 				err := manager.ApplyProfile(installer.PROFILE_DEV)
 				Expect(err).ToNot(HaveOccurred())
@@ -56,6 +66,9 @@ var _ = Describe("ConfigManagerProfile", func() {
 
 				config := manager.GetInstallConfig()
 				Expect(config.Datacenter.Name).To(Equal("dev"))
+				global := MustMap[any](config.Codesphere.Override["global"])
+				Expect(global["services"]).To(HaveEach(HaveKeyWithValue("replicas", 1)))
+				Expect(getAuthServiceRequests(config)).To(Equal(map[string]string{"cpu": "0", "memory": "0"}))
 			})
 		})
 
@@ -158,6 +171,27 @@ var _ = Describe("ConfigManagerProfile", func() {
 			}
 		})
 
+		Context("CloudNativePG operator", func() {
+			for _, profile := range []string{installer.PROFILE_DEV, installer.PROFILE_MINIMAL, installer.PROFILE_PROD} {
+				It("with an empty config, applying the "+profile+" profile enables the pgOperator and barman plugin", func() {
+					Expect(manager.ApplyProfile(profile)).To(Succeed())
+
+					config := manager.GetInstallConfig()
+					Expect(config.Cluster.PgOperator.Enabled).To(BeTrue())
+					Expect(config.Cluster.BarmanCloudPlugin.Enabled).To(BeTrue())
+					Expect(manager.ValidateInstallConfig()).NotTo(ContainElement(ContainSubstring("pgOperator")))
+				})
+			}
+
+			It("with an explicitly disabled pgOperator, applying the dev profile keeps it disabled", func() {
+				manager.GetInstallConfig().Cluster.PgOperator = &files.PgOperatorConfig{Enabled: false}
+
+				Expect(manager.ApplyProfile(installer.PROFILE_DEV)).To(Succeed())
+
+				Expect(manager.GetInstallConfig().Cluster.PgOperator.Enabled).To(BeFalse())
+			})
+		})
+
 		Context("profile-specific differences", func() {
 			It("should have the expected datacenter names", func() {
 				devManager := newPlainInstallConfigManager()
@@ -193,10 +227,10 @@ var _ = Describe("ConfigManagerProfile", func() {
 				Expect(prodManager.GetInstallConfig().Datacenter.Name).To(Equal("production"))
 
 				// DEV
-				AssertZeroRequests(getAuthServiceRequests(devManager.GetInstallConfig()))
+				Expect(getAuthServiceRequests(devManager.GetInstallConfig())).To(Equal(map[string]string{"cpu": "0", "memory": "0"}))
 				Expect(devManager.GetInstallConfig().Cluster.Monitoring.Grafana.Enabled).To(BeFalse())
 				// Minimal
-				AssertZeroRequests(getAuthServiceRequests(minimalManager.GetInstallConfig()))
+				Expect(getAuthServiceRequests(minimalManager.GetInstallConfig())).To(Equal(map[string]string{"cpu": "0", "memory": "0"}))
 				Expect(minimalManager.GetInstallConfig().Cluster.Monitoring.Loki.Enabled).To(BeTrue())
 				Expect(minimalManager.GetInstallConfig().Cluster.Monitoring.Grafana.Enabled).To(BeTrue())
 				Expect(minimalManager.GetInstallConfig().Cluster.Monitoring.GrafanaAlloy.Enabled).To(BeTrue())
@@ -247,7 +281,7 @@ var _ = Describe("ConfigManagerProfile", func() {
 	})
 })
 
-func getAuthServiceRequests(config *files.RootConfig) map[string]int {
+func getAuthServiceRequests(config *files.RootConfig) map[string]string {
 	authService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["auth_service"])
-	return MustMap[int](authService["requests"])
+	return MustMap[string](authService["requests"])
 }

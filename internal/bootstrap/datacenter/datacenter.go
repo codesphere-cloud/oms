@@ -94,6 +94,12 @@ func (dc *DataCenter) K0sConfigScriptPath() string {
 	return fmt.Sprintf("configure-k0s%s.sh", dc.Suffix)
 }
 
+// RemoteK0sctlConfigPath returns the path on the jumpbox where an airgapped bootstrap generates
+// this data center's k0sctl config, next to its install config.
+func (dc *DataCenter) RemoteK0sctlConfigPath() string {
+	return SuffixedPath(filepath.Join(filepath.Dir(dc.RemoteConfigPath), "k0sctl-config.yaml"), dc.Suffix)
+}
+
 // StepName qualifies a bootstrap step name with the data center it applies to. Single-DC
 // bootstraps keep their unqualified step names.
 func (dc *DataCenter) StepName(name string) string {

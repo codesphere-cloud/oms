@@ -10,6 +10,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/utils/ptr"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -196,6 +197,13 @@ var _ = Describe("ConfigManager", func() {
 				configManager.Config.Datacenter.Name = ""
 				errors := configManager.ValidateInstallConfig()
 				Expect(errors).To(ContainElement(ContainSubstring("datacenter name is required")))
+			})
+
+			It("should reject a default data center that is not configured", func() {
+				configManager.Config.Datacenter = files.DatacenterConfig{ID: 1, Name: "primary"}
+				configManager.Config.DefaultDataCenterID = 2
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring(".defaultDataCenterId 2 is not one")))
 			})
 		})
 
@@ -418,6 +426,45 @@ var _ = Describe("ConfigManager", func() {
 			})
 		})
 
+		Context("pgOperator validation", func() {
+			It("with OpenFGA deployed by default and pgOperator disabled, validating reports the disabled operator", func() {
+				configManager.Config.Codesphere.OpenFga = nil
+				configManager.Config.Cluster.PgOperator = &files.PgOperatorConfig{Enabled: false}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring("cluster.pgOperator.enabled must be true when this data center deploys OpenFGA")))
+			})
+
+			It("with OpenFGA deploy true and pgOperator disabled, validating reports the disabled operator", func() {
+				deploy := true
+				configManager.Config.Codesphere.OpenFga = &files.OpenFgaConfig{Deploy: &deploy}
+				configManager.Config.Cluster.PgOperator = &files.PgOperatorConfig{Enabled: false}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring("cluster.pgOperator.enabled must be true")))
+			})
+
+			It("with OpenFGA not deployed and pgOperator disabled, validating accepts the operator setting", func() {
+				deploy := false
+				configManager.Config.Codesphere.OpenFga = &files.OpenFgaConfig{Deploy: &deploy, APIURL: "https://openfga.1.cs.example.com"}
+				configManager.Config.Cluster.PgOperator = &files.PgOperatorConfig{Enabled: false}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).NotTo(ContainElement(ContainSubstring("pgOperator")))
+			})
+
+			It("with OpenFGA deployed and pgOperator disabled but managed externally, validating accepts the operator setting", func() {
+				configManager.Config.Codesphere.OpenFga = nil
+				configManager.Config.Cluster.PgOperator = &files.PgOperatorConfig{Enabled: false, ManagedExternally: true}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).NotTo(ContainElement(ContainSubstring("pgOperator")))
+			})
+
+			It("with OpenFGA deployed and pgOperator unset, validating accepts the operator setting", func() {
+				configManager.Config.Codesphere.OpenFga = nil
+				configManager.Config.Cluster.PgOperator = nil
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).NotTo(ContainElement(ContainSubstring("pgOperator")))
+			})
+		})
+
 		Context("ceph validation", func() {
 			It("should require at least one Ceph host", func() {
 				configManager.Config.Ceph.Hosts = []files.CephHost{}
@@ -471,6 +518,81 @@ var _ = Describe("ConfigManager", func() {
 				configManager.Config.Codesphere.Domain = ""
 				errors := configManager.ValidateInstallConfig()
 				Expect(errors).To(ContainElement(ContainSubstring("Codesphere domain is required")))
+			})
+		})
+
+		Context("deploy config validation", func() {
+			deployConfig := files.DeployConfig{Images: map[string]files.ImageConfig{"ubuntu-24.04": {}}}
+
+			It("deploy config and nonzero pooled instances -> ambiguity error", func() {
+				configManager.Config.Codesphere.DeployConfig = deployConfig
+				configManager.Config.Codesphere.Plans.HostingPlans = map[int]files.HostingPlan{1: {PooledInstances: ptr.To(1)}}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).To(ContainElement(ContainSubstring(".pooledInstances is ambiguous")))
+			})
+
+			It("deploy config and zero pooled instances -> no ambiguity error", func() {
+				configManager.Config.Codesphere.DeployConfig = deployConfig
+				configManager.Config.Codesphere.Plans.HostingPlans = map[int]files.HostingPlan{1: {PooledInstances: ptr.To(0)}, 2: {}}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).NotTo(ContainElement(ContainSubstring(".pooledInstances is ambiguous")))
+			})
+
+			It("pooled instances without a deploy config -> no ambiguity error", func() {
+				configManager.Config.Codesphere.DeployConfig = files.DeployConfig{}
+				configManager.Config.Codesphere.Plans.HostingPlans = map[int]files.HostingPlan{1: {PooledInstances: ptr.To(1)}}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).NotTo(ContainElement(ContainSubstring(".pooledInstances is ambiguous")))
+			})
+		})
+
+		Context("workspace image build validation", func() {
+			agentWithDockerfile := &files.ImageRef{BomRef: "workspace-agent-24.04", Dockerfile: "Dockerfile.agent"}
+
+			It("agent Dockerfile without a registry -> registry error", func() {
+				configManager.Config.Registry = nil
+				configManager.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{Agent: agentWithDockerfile}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).To(ContainElement(ContainSubstring("Dockerfile.agent requires registry.server")))
+			})
+
+			It("deploy config flavor Dockerfile with an empty registry server -> registry error", func() {
+				configManager.Config.Registry = &files.RegistryConfig{}
+				configManager.Config.Codesphere.DeployConfig = files.DeployConfig{Images: map[string]files.ImageConfig{
+					"ubuntu-24.04": {Flavors: map[string]files.FlavorConfig{"gpu": {Image: files.ImageRef{Dockerfile: "Dockerfile.gpu"}}}},
+				}}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).To(ContainElement(ContainSubstring("Dockerfile.gpu requires registry.server")))
+			})
+
+			It("agent Dockerfile with a registry -> no registry error", func() {
+				configManager.Config.Registry = &files.RegistryConfig{Server: "registry.example.com"}
+				configManager.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{Agent: agentWithDockerfile}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).NotTo(ContainElement(ContainSubstring("requires registry.server")))
+			})
+
+			It("Dockerfile next to an explicit image name -> no registry error", func() {
+				configManager.Config.Registry = nil
+				configManager.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{
+					Agent: &files.ImageRef{ImageName: "registry.example.com/agent", Dockerfile: "Dockerfile.agent"},
+				}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).NotTo(ContainElement(ContainSubstring("requires registry.server")))
 			})
 		})
 

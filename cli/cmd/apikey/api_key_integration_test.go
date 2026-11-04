@@ -22,13 +22,11 @@ import (
 
 var _ = Describe("API Key Integration Tests", func() {
 	var (
-		portalClient     portal.Portal
-		testOwner        string
-		testOrg          string
-		testRole         string
-		registeredKey    *portal.ApiKey
-		originalAdminKey string
-		extendDays       int
+		portalClient portal.Portal
+		testOwner    string
+		testOrg      string
+		testRole     string
+		extendDays   int
 	)
 
 	BeforeEach(func() {
@@ -37,8 +35,6 @@ var _ = Describe("API Key Integration Tests", func() {
 		if apiKey == "" || apiURL == "" {
 			Fail("Integration tests require OMS_PORTAL_API_KEY and OMS_PORTAL_API environment variables")
 		}
-
-		originalAdminKey = apiKey
 
 		portalClient = portal.NewPortalClient()
 		// test env wrapper
@@ -69,18 +65,9 @@ var _ = Describe("API Key Integration Tests", func() {
 			}
 			Expect(err).To(BeNil(), "API key registration should succeed")
 			Expect(newKey).NotTo(BeNil(), "Register should return the created API key")
-
-			keys, err := portalClient.ListAPIKeys()
-			Expect(err).To(BeNil(), "Listing API keys should succeed")
-
-			var created *portal.ApiKey
-			for i := range keys {
-				if keys[i].Owner == registerCmd.Opts.Owner {
-					created = &keys[i]
-					break
-				}
-			}
-			Expect(created).NotTo(BeNil(), "Should find the created API key")
+			Expect(newKey.Owner).To(Equal(registerCmd.Opts.Owner))
+			Expect(newKey.Organization).To(Equal(registerCmd.Opts.Organization))
+			Expect(newKey.Role).To(Equal(registerCmd.Opts.Role))
 			Expect(newKey.ApiKey).NotTo(BeEmpty(), "Created API key must include secret value")
 
 			client := portal.NewPortalClient()
@@ -112,23 +99,9 @@ var _ = Describe("API Key Integration Tests", func() {
 			}
 			Expect(err).To(BeNil(), "API key registration should succeed")
 			Expect(newKey).NotTo(BeNil(), "Register should return the created API key")
-
-			By("Listing API keys to get the newly registered key")
-			keys, err := portalClient.ListAPIKeys()
-			Expect(err).To(BeNil(), "Listing API keys should succeed")
-			Expect(keys).NotTo(BeEmpty(), "Should have at least one API key")
-
-			// Find the new key
-			for i := range keys {
-				if keys[i].Owner == testOwner {
-					registeredKey = &keys[i]
-					break
-				}
-			}
-			Expect(registeredKey).NotTo(BeNil(), "Should find the registered API key")
-			Expect(registeredKey.Owner).To(Equal(testOwner))
-			Expect(registeredKey.Organization).To(Equal(testOrg))
-			Expect(registeredKey.Role).To(Equal(testRole))
+			Expect(newKey.Owner).To(Equal(testOwner))
+			Expect(newKey.Organization).To(Equal(testOrg))
+			Expect(newKey.Role).To(Equal(testRole))
 
 			By("Ensuring the customer can see builds")
 			Expect(newKey.ApiKey).NotTo(BeEmpty(), "Registered key must include the API key value")
@@ -141,30 +114,27 @@ var _ = Describe("API Key Integration Tests", func() {
 			Expect(err).To(BeNil(), "Listing builds with new key should succeed")
 			Expect(builds.Builds).NotTo(BeEmpty(), "Should have at least one build available")
 
-			// restore admin key
-			portalClient.(*portal.PortalClient).Env = NewTestEnv(originalAdminKey, os.Getenv("OMS_PORTAL_API"), "")
-
 			By("Extending the API Key to a future date")
 			beforeUpdate := time.Now()
 			updateCmd := apikey.UpdateAPIKeyCmd{
 				Opts: apikey.UpdateAPIKeyOpts{
-					APIKeyID: registeredKey.KeyID,
+					APIKeyID: newKey.KeyID,
 					ValidFor: fmt.Sprintf("%dd", extendDays),
 				},
 			}
 
-			err = updateCmd.UpdateAPIKey(portalClient)
+			err = updateCmd.UpdateAPIKey(p)
 			Expect(err).To(BeNil(), "API key update should succeed")
 			afterUpdate := time.Now()
 
 			By("Verifying the API key was updated")
-			keys, err = portalClient.ListAPIKeys()
+			keys, err := p.ListAPIKeys()
 			Expect(err).To(BeNil(), "Listing API keys should succeed")
 
 			// Find the updated key
 			var updatedKey *portal.ApiKey
 			for i := range keys {
-				if keys[i].KeyID == registeredKey.KeyID {
+				if keys[i].KeyID == newKey.KeyID {
 					updatedKey = &keys[i]
 					break
 				}
@@ -178,7 +148,7 @@ var _ = Describe("API Key Integration Tests", func() {
 			By("Revoking the API Key")
 			revokeCmd := apikey.RevokeAPIKeyCmd{
 				Opts: apikey.RevokeAPIKeyOpts{
-					ID: registeredKey.KeyID,
+					ID: newKey.KeyID,
 				},
 			}
 
@@ -186,39 +156,8 @@ var _ = Describe("API Key Integration Tests", func() {
 			Expect(err).To(BeNil(), "API key revocation should succeed")
 
 			By("Ensuring the API Key is not valid anymore")
-
-			keyFound := true
-			for attempt := 0; attempt < 5; attempt++ {
-				keys, err = portalClient.ListAPIKeys()
-				if err != nil {
-					GinkgoWriter.Printf("[WARN] ListAPIKeys attempt %d failed: %v\n", attempt+1, err)
-					time.Sleep(1 * time.Second)
-					continue
-				}
-
-				keyFound = false
-				for i := range keys {
-					if keys[i].KeyID == registeredKey.KeyID {
-						keyFound = true
-						break
-					}
-				}
-
-				if !keyFound {
-					break
-				}
-				time.Sleep(1 * time.Second)
-			}
-			Expect(err).To(BeNil(), "Listing API keys should succeed after retries")
-
-			if keyFound {
-				revokedClient := portal.NewPortalClient()
-				revokedClient.Env = NewTestEnv(newKey.ApiKey, os.Getenv("OMS_PORTAL_API"), "")
-				_, useErr := revokedClient.ListBuilds(portal.CodesphereProduct, portal.SortSemver)
-				Expect(useErr).NotTo(BeNil(), "Using a revoked API key should fail")
-			} else {
-				Expect(keyFound).To(BeFalse(), "Revoked API key should not be in the list")
-			}
+			_, useErr := p.ListBuilds(portal.CodesphereProduct, portal.SortSemver)
+			Expect(useErr).NotTo(BeNil(), "Using a revoked API key should fail")
 		})
 	})
 
