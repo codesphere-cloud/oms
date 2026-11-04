@@ -131,16 +131,9 @@ func mutateRegistryPod(policy *admissionv1.MutatingAdmissionPolicy, pod *corev1.
 }
 
 func mutateRegistryObject(policy *admissionv1.MutatingAdmissionPolicy, obj runtime.Object, gvk schema.GroupVersionKind, gvr schema.GroupVersionResource) runtime.Object {
-	expression := policy.Spec.Mutations[0].JSONPatch.Expression
-	for _, variable := range policy.Spec.Variables {
-		expression = strings.ReplaceAll(expression, "variables."+variable.Name, variable.Expression)
-	}
-
 	compiler, err := plugincel.NewCompositedCompiler(environment.MustBaseEnvSet(environment.DefaultCompatibilityVersion()))
 	Expect(err).NotTo(HaveOccurred())
 
-	evaluator := compiler.CompileMutatingEvaluator(&patch.JSONPatchCondition{Expression: expression},
-		plugincel.OptionalVariableDeclarations{HasPatchTypes: true}, environment.StoredExpressions)
 	scheme := runtime.NewScheme()
 	Expect(corev1.AddToScheme(scheme)).To(Succeed())
 
@@ -148,15 +141,24 @@ func mutateRegistryObject(policy *admissionv1.MutatingAdmissionPolicy, obj runti
 		scheme.AddKnownTypeWithName(gvk, &unstructured.Unstructured{})
 	}
 
-	attrs := admission.NewAttributesRecord(obj, nil, gvk, "default", "test", gvr, "", admission.Create, &metav1.CreateOptions{}, false, nil)
-	result, err := patch.NewJSONPatcher(evaluator).Patch(context.Background(), patch.Request{
-		MatchedResource:     gvr,
-		VersionedAttributes: &admission.VersionedAttributes{Attributes: attrs, VersionedKind: gvk, VersionedObject: obj},
-		ObjectInterfaces:    admission.NewObjectInterfacesFromScheme(scheme),
-	}, celconfig.RuntimeCELCostBudget)
-	Expect(err).NotTo(HaveOccurred())
+	for _, mutation := range policy.Spec.Mutations {
+		expression := mutation.JSONPatch.Expression
+		for _, variable := range policy.Spec.Variables {
+			expression = strings.ReplaceAll(expression, "variables."+variable.Name, variable.Expression)
+		}
 
-	return result
+		evaluator := compiler.CompileMutatingEvaluator(&patch.JSONPatchCondition{Expression: expression},
+			plugincel.OptionalVariableDeclarations{HasPatchTypes: true}, environment.StoredExpressions)
+		attrs := admission.NewAttributesRecord(obj, nil, gvk, "default", "test", gvr, "", admission.Create, &metav1.CreateOptions{}, false, nil)
+		obj, err = patch.NewJSONPatcher(evaluator).Patch(context.Background(), patch.Request{
+			MatchedResource:     gvr,
+			VersionedAttributes: &admission.VersionedAttributes{Attributes: attrs, VersionedKind: gvk, VersionedObject: obj},
+			ObjectInterfaces:    admission.NewObjectInterfacesFromScheme(scheme),
+		}, celconfig.RuntimeCELCostBudget)
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	return obj
 }
 
 var _ = Describe("Registry admission policy", func() {
@@ -353,9 +355,11 @@ func mutateRegistryCR(policy *admissionv1.MutatingAdmissionPolicy, obj *unstruct
 	return mutateRegistryObject(policy, obj, gvk, gvk.GroupVersion().WithResource(resource)).(*unstructured.Unstructured)
 }
 
-var _ = Describe("Registry admission for operator resources and ArgoCD", func() {
+var _ = Describe("Registry admission for CNPG resources", func() {
 	It("rewrites CNPG desired images and preserves versions and other cluster settings", func() {
 		policy := installRegistryPolicy("registry.example.com/team")
+		Expect(policy.Spec.MatchConstraints.ResourceRules).To(HaveLen(2))
+		Expect(policy.Spec.Mutations).To(HaveLen(2))
 		rule := policy.Spec.MatchConstraints.ResourceRules[1]
 		Expect(rule.APIGroups).To(Equal([]string{"postgresql.cnpg.io"}))
 		Expect(rule.Resources).To(Equal([]string{"clusters"}))
@@ -380,32 +384,5 @@ var _ = Describe("Registry admission for operator resources and ArgoCD", func() 
 		Expect(mutateRegistryCR(policy, cluster, "clusters")).To(Equal(cluster))
 		cluster.Object["spec"].(map[string]any)["imageName"] = "ghcr.io/other/postgresql:16"
 		Expect(mutateRegistryCR(policy, cluster, "clusters")).To(Equal(cluster))
-	})
-
-	It("enables mutation-aware server-side diff on new ArgoCD applications", func() {
-		policy := installRegistryPolicy("registry.example.com")
-		rule := policy.Spec.MatchConstraints.ResourceRules[2]
-		Expect(rule.APIGroups).To(Equal([]string{"argoproj.io"}))
-		Expect(rule.Resources).To(Equal([]string{"applications"}))
-		Expect(rule.Operations).To(Equal([]admissionv1.OperationType{admissionv1.Create, admissionv1.Update}))
-
-		app := &unstructured.Unstructured{Object: map[string]any{
-			"apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
-			"metadata": map[string]any{"name": "openfga-in-cluster"},
-		}}
-		result := mutateRegistryCR(policy, app, "applications")
-		Expect(result.GetAnnotations()).To(HaveKeyWithValue("argocd.argoproj.io/compare-options", "ServerSideDiff=true,IncludeMutationWebhook=true"))
-		Expect(mutateRegistryCR(policy, result, "applications")).To(Equal(result))
-	})
-
-	It("preserves existing ArgoCD annotations and unrelated comparison options", func() {
-		policy := installRegistryPolicy("registry.example.com")
-		app := &unstructured.Unstructured{Object: map[string]any{
-			"apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
-			"metadata": map[string]any{"name": "openfga-in-cluster"},
-		}}
-		app.SetAnnotations(map[string]string{"argocd.argoproj.io/sync-wave": "-1", "argocd.argoproj.io/compare-options": "IgnoreExtraneous=true, ServerSideDiff=false,IncludeMutationWebhook=false"})
-		result := mutateRegistryCR(policy, app, "applications")
-		Expect(result.GetAnnotations()).To(Equal(map[string]string{"argocd.argoproj.io/sync-wave": "-1", "argocd.argoproj.io/compare-options": "IgnoreExtraneous=true,ServerSideDiff=true,IncludeMutationWebhook=true"}))
 	})
 })

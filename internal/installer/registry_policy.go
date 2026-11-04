@@ -47,8 +47,8 @@ type ClusterVersionClient interface {
 }
 
 // EnsureRegistryPolicy installs the policy and binding before dependency workloads.
-// It also rewrites CNPG Cluster imageName on create/update and enables mutation-aware
-// server-side diff on ArgoCD Applications so desired image versions remain tracked.
+// It also rewrites CNPG Cluster imageName on create/update so operators use the
+// same mirrored image as their Pods.
 // It requires Kubernetes 1.34 or newer and uses the beta API before 1.36,
 // where the MutatingAdmissionPolicy feature and v1beta1 API must be enabled.
 // After applying both resources, it verifies container and init-container mutation
@@ -87,11 +87,6 @@ func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base
 					Operations: []admissionv1.OperationType{admissionv1.Create, admissionv1.Update},
 					Rule:       admissionv1.Rule{APIGroups: []string{"postgresql.cnpg.io"}, APIVersions: []string{"v1"}, Resources: []string{"clusters"}},
 				},
-			}, {
-				RuleWithOperations: admissionv1.RuleWithOperations{
-					Operations: []admissionv1.OperationType{admissionv1.Create, admissionv1.Update},
-					Rule:       admissionv1.Rule{APIGroups: []string{"argoproj.io"}, APIVersions: []string{"v1alpha1"}, Resources: []string{"applications"}},
-				},
 			}}},
 			FailurePolicy:      &failurePolicy,
 			ReinvocationPolicy: admissionv1.IfNeededReinvocationPolicy,
@@ -102,8 +97,10 @@ func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base
 			Mutations: []admissionv1.Mutation{{
 				PatchType: admissionv1.PatchTypeJSONPatch,
 				JSONPatch: &admissionv1.JSONPatch{Expression: `request.resource.group == "" ? (` + registryImagePatches("containers") + " + " +
-					"(has(object.spec.initContainers) ? " + registryImagePatches("initContainers") + " : [])) : " +
-					`request.resource.group == "postgresql.cnpg.io" ? (` + registryClusterImagePatch + ") : (" + registryArgoDiffPatch + ")"},
+					"(has(object.spec.initContainers) ? " + registryImagePatches("initContainers") + " : [])) : []"},
+			}, {
+				PatchType: admissionv1.PatchTypeJSONPatch,
+				JSONPatch: &admissionv1.JSONPatch{Expression: `request.resource.group == "postgresql.cnpg.io" ? (` + registryClusterImagePatch + ") : []"},
 			}},
 		},
 	}
@@ -255,20 +252,3 @@ const registryClusterImagePatch = `
 		op: "replace", path: "/spec/imageName",
 		value: variables.newRegistry + object.spec.imageName.substring(size(variables.oldRegistry))
 	}] : []`
-
-// ArgoCD must compare the admitted desired image, rather than ignore imageName:
-// ignoring that field would also hide requested PostgreSQL version changes.
-// Preserve unrelated compare options and replace any explicit disabling of these
-// two options. Matching Applications on updates also covers retained installations.
-const registryArgoDiffPatch = `
-	!has(object.metadata.annotations) ?
-	[JSONPatch{op: "add", path: "/metadata/annotations", value: {
-		"argocd.argoproj.io/compare-options": "ServerSideDiff=true,IncludeMutationWebhook=true"
-	}}] :
-	[JSONPatch{
-		op: "add", path: "/metadata/annotations/argocd.argoproj.io~1compare-options",
-		value: (("argocd.argoproj.io/compare-options" in object.metadata.annotations ?
-			object.metadata.annotations["argocd.argoproj.io/compare-options"].split(",")
-			.filter(o, !o.trim().startsWith("ServerSideDiff=") && !o.trim().startsWith("IncludeMutationWebhook=") && o.trim() != "")
-			: [] ) + ["ServerSideDiff=true", "IncludeMutationWebhook=true"]).join(",")
-	}]`
