@@ -167,14 +167,14 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 
 	fw := intutil.NewFilesystemWriter()
 
-	_, ageKey, err := resolveVaultAccess(fw, c.CodesphereEnv.SecretsFilePath, c.CodesphereEnv.AgeKey, false)
+	var err error
+
+	_, c.CodesphereEnv.AgeKey, err = resolveVaultAccess(fw, c.CodesphereEnv.SecretsFilePath, c.CodesphereEnv.AgeKey, false)
 	if err != nil {
 		return err
 	}
 
-	c.CodesphereEnv.AgeKey = ageKey
-
-	icg, err := installer.NewAutoInstallConfigManager(ageKey)
+	icg, err := installer.NewAutoInstallConfigManager(c.CodesphereEnv.AgeKey)
 	if err != nil {
 		return fmt.Errorf("failed to initialize config manager: %w", err)
 	}

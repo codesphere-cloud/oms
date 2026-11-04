@@ -604,6 +604,7 @@ func (b *LocalBootstrapper) ResolveAgeKey() error {
 		return fmt.Errorf("failed to resolve age key: %w", err)
 	}
 
+	// An empty path means the key came from SOPS_AGE_KEY, but the installer needs a key file.
 	if keyPath == "" {
 		keyPath, err = sops.MaterializeEnvAgeKey(b.fw, dir)
 		if err != nil {
@@ -621,11 +622,11 @@ func (b *LocalBootstrapper) ResolveAgeKey() error {
 }
 
 func (b *LocalBootstrapper) removeEnvAgeKeyFile() error {
-	if b.envAgeKeyFile == "" {
+	keyPath := b.envAgeKeyFile
+	if keyPath == "" {
 		return nil
 	}
 
-	keyPath := b.envAgeKeyFile
 	b.envAgeKeyFile = ""
 
 	if err := b.fw.Remove(keyPath); err != nil {

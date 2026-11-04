@@ -123,7 +123,6 @@ func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
 }
 
 // LoadVaultFromFile loads vault content using the manager's configured backend.
-// An empty type selects the default SOPS backend.
 func (g *InstallConfig) LoadVaultFromFile(vaultPath string) error {
 	return g.loadVault(vaultPath, vault.Vault.Load)
 }

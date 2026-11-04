@@ -21,10 +21,7 @@ import (
 
 var xdgConfigHome = "XDG_CONFIG_HOME"
 
-const (
-	defaultAgeKeyFileName = "age_key.txt"
-	envAgeKeyFilePattern  = "oms-env-age-key-*"
-)
+var errNoConfiguredAgeKey = errors.New("SOPS vault requires an age key")
 
 // ResolveAgeKey resolves an existing age key or generates one in fallbackDir.
 func ResolveAgeKey(explicitKeyFile, fallbackDir string) (recipient string, keyPath string, err error) {
@@ -45,7 +42,7 @@ func ResolveExistingAgeKey(explicitKeyFile, fallbackDir string) (string, error) 
 func MaterializeEnvAgeKey(fileIO util.FileIO, dir string) (string, error) {
 	raw := strings.TrimSpace(os.Getenv(sopsage.SopsAgeKeyEnv))
 	if raw == "" {
-		return "", fmt.Errorf("SOPS_AGE_KEY is not set")
+		return "", errors.New(sopsage.SopsAgeKeyEnv + " is not set")
 	}
 
 	if _, err := parseEnvAgeKey(raw); err != nil {
@@ -56,7 +53,7 @@ func MaterializeEnvAgeKey(fileIO util.FileIO, dir string) (string, error) {
 		return "", fmt.Errorf("failed to create directory for age key: %w", err)
 	}
 
-	keyPath, err := fileIO.CreateTemp(dir, envAgeKeyFilePattern)
+	keyPath, err := fileIO.CreateTemp(dir, "oms-env-age-key-*")
 	if err != nil {
 		return "", fmt.Errorf("failed to create age key file: %w", err)
 	}
@@ -70,6 +67,49 @@ func MaterializeEnvAgeKey(fileIO util.FileIO, dir string) (string, error) {
 }
 
 func resolveAgeKey(fileIO util.FileIO, explicitKeyFile, fallbackDir string, generateIfMissing bool) (recipient string, keyPath string, err error) {
+	recipient, keyPath, err = resolveConfiguredAgeKey(fileIO, explicitKeyFile)
+	if !errors.Is(err, errNoConfiguredAgeKey) {
+		return recipient, keyPath, err
+	}
+
+	defaultPath, configErr := getUserConfigDir()
+	if configErr == nil {
+		defaultPath = filepath.Join(defaultPath, sopsage.SopsAgeKeyUserConfigPath)
+
+		recipient, err = readRecipientFromFile(fileIO, defaultPath)
+		if err == nil {
+			return recipient, defaultPath, nil
+		}
+
+		if !errors.Is(err, fs.ErrNotExist) {
+			return "", "", fmt.Errorf("failed to read age key from default location %s: %w", defaultPath, err)
+		}
+	}
+
+	keyPath = filepath.Join(fallbackDir, "age_key.txt")
+
+	recipient, err = readRecipientFromFile(fileIO, keyPath)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return "", "", fmt.Errorf("failed to read age key from fallback location %s: %w", keyPath, err)
+		}
+
+		if !generateIfMissing {
+			return "", "", fmt.Errorf("no existing age key found for the SOPS vault; set an age key argument or provide a key at %s", keyPath)
+		}
+
+		recipient, err = generateAgeKey(fileIO, keyPath)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to generate age key: %w", err)
+		}
+	}
+
+	return recipient, keyPath, nil
+}
+
+// resolveConfiguredAgeKey resolves the key from the explicit key file, SOPS_AGE_KEY or
+// SOPS_AGE_KEY_FILE, in that order, and returns errNoConfiguredAgeKey when none is set.
+func resolveConfiguredAgeKey(fileIO util.FileIO, explicitKeyFile string) (recipient, keyPath string, err error) {
 	if explicitKeyFile != "" {
 		recipient, err = readRecipientFromFile(fileIO, explicitKeyFile)
 		if err != nil {
@@ -97,39 +137,7 @@ func resolveAgeKey(fileIO util.FileIO, explicitKeyFile, fallbackDir string, gene
 		return recipient, keyFile, nil
 	}
 
-	defaultPath, configErr := getUserConfigDir()
-	if configErr == nil {
-		defaultPath = filepath.Join(defaultPath, sopsage.SopsAgeKeyUserConfigPath)
-
-		recipient, err = readRecipientFromFile(fileIO, defaultPath)
-		if err == nil {
-			return recipient, defaultPath, nil
-		}
-
-		if !errors.Is(err, fs.ErrNotExist) {
-			return "", "", fmt.Errorf("failed to read age key from default location %s: %w", defaultPath, err)
-		}
-	}
-
-	keyPath = filepath.Join(fallbackDir, defaultAgeKeyFileName)
-
-	recipient, err = readRecipientFromFile(fileIO, keyPath)
-	if err != nil {
-		if !errors.Is(err, fs.ErrNotExist) {
-			return "", "", fmt.Errorf("failed to read age key from fallback location %s: %w", keyPath, err)
-		}
-
-		if !generateIfMissing {
-			return "", "", fmt.Errorf("no existing age key found for the SOPS vault; set an age key argument or provide a key at %s", keyPath)
-		}
-
-		recipient, err = generateAgeKey(fileIO, keyPath)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to generate age key: %w", err)
-		}
-	}
-
-	return recipient, keyPath, nil
+	return "", "", errNoConfiguredAgeKey
 }
 
 // parseEnvAgeKey validates the identity passed through SOPS_AGE_KEY and returns its recipient.

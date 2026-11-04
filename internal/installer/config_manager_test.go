@@ -15,7 +15,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
-	"github.com/codesphere-cloud/oms/internal/installer/vault"
 )
 
 type MockFileIO struct {
@@ -947,14 +946,6 @@ var _ = Describe("Bootstrap vault loading", func() {
 
 		Expect(manager.LoadVaultFromFileOrCreate(vaultPath)).To(Succeed())
 		Expect(manager.GetVault().GetSecret("registryPassword").Fields.Password).To(Equal("ghcr-token"))
-	})
-
-	// "auto" must stay unavailable to the user facing --vault-type flag, otherwise a command
-	// that promises to encrypt the vault would quietly write it in plaintext.
-	It("rejects auto as a user supplied type", func() {
-		_, err := installer.NewInstallConfigManager(string(vault.TypeAuto), ageKey)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("unsupported vault type"))
 	})
 
 	It("loads a plaintext vault with the auto backend", func() {

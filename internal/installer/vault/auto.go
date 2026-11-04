@@ -4,12 +4,9 @@
 package vault
 
 import (
-	"errors"
 	"fmt"
-	"io/fs"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
-	"github.com/codesphere-cloud/oms/internal/installer/vault/internal/filebackend"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
@@ -24,18 +21,9 @@ func DetectType(fileIO util.FileIO, path string) (Type, error) {
 		fileIO = util.NewFilesystemWriter()
 	}
 
-	data, err := fileIO.ReadFile(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return TypePlain, nil
-	}
-
+	encrypted, err := IsEncryptedFile(fileIO, path)
 	if err != nil {
-		return "", fmt.Errorf("failed to read vault file %s: %w", path, err)
-	}
-
-	encrypted, err := filebackend.IsSOPSEncryptedYAML(data)
-	if err != nil {
-		return "", fmt.Errorf("failed to inspect vault file %s: %w", path, err)
+		return "", err
 	}
 
 	if encrypted {

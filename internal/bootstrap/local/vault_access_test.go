@@ -68,12 +68,18 @@ var _ = Describe("ResolveAgeKey", func() {
 		Expect(string(existing)).To(Equal("AGE-SECRET-KEY-1EXISTING\n"))
 	})
 
-	It("keeps the path of an explicitly provided key file", func() {
+	writeIdentity := func(name string) (string, *age.X25519Identity) {
 		identity, err := age.GenerateX25519Identity()
 		Expect(err).NotTo(HaveOccurred())
 
-		keyPath := filepath.Join(dir, "provided.txt")
+		keyPath := filepath.Join(dir, name)
 		Expect(os.WriteFile(keyPath, []byte(identity.String()), 0600)).To(Succeed())
+
+		return keyPath, identity
+	}
+
+	It("keeps the path of an explicitly provided key file", func() {
+		keyPath, identity := writeIdentity("provided.txt")
 		bs.Env.AgeKey = keyPath
 
 		Expect(bs.ResolveAgeKey()).To(Succeed())
@@ -83,11 +89,7 @@ var _ = Describe("ResolveAgeKey", func() {
 	})
 
 	It("keeps the path of SOPS_AGE_KEY_FILE", func() {
-		identity, err := age.GenerateX25519Identity()
-		Expect(err).NotTo(HaveOccurred())
-
-		keyPath := filepath.Join(dir, "keys.txt")
-		Expect(os.WriteFile(keyPath, []byte(identity.String()), 0600)).To(Succeed())
+		keyPath, _ := writeIdentity("keys.txt")
 		GinkgoT().Setenv("SOPS_AGE_KEY_FILE", keyPath)
 
 		Expect(bs.ResolveAgeKey()).To(Succeed())

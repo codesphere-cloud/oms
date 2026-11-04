@@ -136,15 +136,14 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 
 	fw := intutil.NewFilesystemWriter()
 
-	vaultType, ageKey, err := resolveVaultAccess(fw, c.CodesphereEnv.SecretsFilePath, c.CodesphereEnv.AgeKey, c.CodesphereEnv.RecoverConfig)
+	var err error
+
+	c.CodesphereEnv.VaultType, c.CodesphereEnv.AgeKey, err = resolveVaultAccess(fw, c.CodesphereEnv.SecretsFilePath, c.CodesphereEnv.AgeKey, c.CodesphereEnv.RecoverConfig)
 	if err != nil {
 		return err
 	}
 
-	c.CodesphereEnv.VaultType = vaultType
-	c.CodesphereEnv.AgeKey = ageKey
-
-	icg, err := installer.NewAutoInstallConfigManager(ageKey)
+	icg, err := installer.NewAutoInstallConfigManager(c.CodesphereEnv.AgeKey)
 	if err != nil {
 		return fmt.Errorf("failed to initialize config manager: %w", err)
 	}

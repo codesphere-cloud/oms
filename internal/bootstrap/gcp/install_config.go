@@ -20,10 +20,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-const (
-	remoteInstallConfigPath string = "/etc/codesphere/config.yaml"
-	vaultTransferSuffix     string = ".plain"
-)
+const remoteInstallConfigPath string = "/etc/codesphere/config.yaml"
 
 // errRemoteConfigMissing reports that the jumpbox holds no config for a data center. Recovering
 // a secondary data center tolerates this, since --multi-dc can add one to an existing project.
@@ -541,21 +538,14 @@ func (b *GCPBootstrapper) copyConfigAndVaultToJumpbox(dc *datacenter.DataCenter)
 }
 
 // vaultTransferPath returns the local vault file to upload to the jumpbox. An encrypted vault is
-// uploaded as a plaintext copy, which the jumpbox re-encrypts with its own key.
+// uploaded as a plaintext copy, which the jumpbox re-encrypts with its own key; the copy is
+// recorded for removeVaultTransferCopy.
 func (b *GCPBootstrapper) vaultTransferPath(dc *datacenter.DataCenter) (string, error) {
 	if b.Env.VaultType != vault.TypeSOPS {
 		return dc.SecretsFilePath, nil
 	}
 
-	return b.writePlaintextVaultCopy(dc)
-}
-
-// writePlaintextVaultCopy writes the vault as plaintext to a unique file next to it and records
-// it for removeVaultTransferCopy.
-func (b *GCPBootstrapper) writePlaintextVaultCopy(dc *datacenter.DataCenter) (string, error) {
-	pattern := filepath.Base(dc.SecretsFilePath) + vaultTransferSuffix + "*"
-
-	transferPath, err := b.fw.CreateTemp(filepath.Dir(dc.SecretsFilePath), pattern)
+	transferPath, err := b.fw.CreateTemp(filepath.Dir(dc.SecretsFilePath), filepath.Base(dc.SecretsFilePath)+".plain*")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temporary vault transfer file: %w", err)
 	}
