@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	synccommon "github.com/argoproj/argo-cd/gitops-engine/pkg/sync/common"
@@ -32,18 +33,11 @@ const (
 	pcAppsName = "pc-applications"
 )
 
-// LogFunc records formatted application readiness messages.
-type LogFunc func(format string, args ...interface{})
-
 // WaitForAppFreshlySyncedAndHealthy waits until Argo CD has synced the Application's current
 // source, values included, and reports it as healthy. A sync of an earlier source does not count.
 // Resources that drift after a successful sync do not keep it waiting.
-func WaitForAppFreshlySyncedAndHealthy(ctx context.Context, kubeClient client.Client, name string, logf LogFunc) error {
-	if logf == nil {
-		logf = func(string, ...interface{}) {}
-	}
-
-	logf(
+func WaitForAppFreshlySyncedAndHealthy(ctx context.Context, kubeClient client.Client, name string) error {
+	log.Printf(
 		"Waiting for ArgoCD Application %q to become freshly synced and healthy (timeout %s)",
 		name,
 		applicationReadyTimeout,
@@ -63,7 +57,7 @@ func WaitForAppFreshlySyncedAndHealthy(ctx context.Context, kubeClient client.Cl
 					return false, fmt.Errorf("failed to read ArgoCD Application %q: %w", name, err)
 				}
 
-				logf("Waiting for ArgoCD Application %q to be created", name)
+				log.Printf("Waiting for ArgoCD Application %q to be created", name)
 
 				return false, nil
 			}
@@ -81,11 +75,11 @@ func WaitForAppFreshlySyncedAndHealthy(ctx context.Context, kubeClient client.Cl
 			)
 
 			if synced && app.Status.Health.Status == "Healthy" {
-				logf("ArgoCD Application %q is freshly synced and healthy", name)
+				log.Printf("ArgoCD Application %q is freshly synced and healthy", name)
 				return true, nil
 			}
 
-			logf("Waiting for ArgoCD Application %q (%s)", name, lastState)
+			log.Printf("Waiting for ArgoCD Application %q (%s)", name, lastState)
 
 			return false, nil
 		},

@@ -53,7 +53,7 @@ var _ = Describe("WaitForAppFreshlySyncedAndHealthy", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		defer cancel()
 
-		return argocd.WaitForAppFreshlySyncedAndHealthy(ctx, kubeClient, "pr-1-codesphere", nil)
+		return argocd.WaitForAppFreshlySyncedAndHealthy(ctx, kubeClient, "pr-1-codesphere")
 	}
 
 	It("healthy and synced to the current source -> done", func() {
