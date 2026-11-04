@@ -63,6 +63,10 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		if err := vault.WriteVaultValuesToConfig(opts.ConfigPath, opts.VaultSecretName, rand.Text()); err != nil {
 			return fmt.Errorf("failed to pass the vault Secret to the chart: %w", err)
 		}
+
+		if err := installer.OrphanCodesphereExternalSecrets(ctx, opts.Vault, opts.PrivKey, opts.VaultType, cfg); err != nil {
+			return fmt.Errorf("failed to hand the Codesphere Secrets over to Helm: %w", err)
+		}
 	}
 
 	workdir := env.GetOmsWorkdir()
