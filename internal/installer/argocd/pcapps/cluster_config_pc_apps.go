@@ -5,23 +5,21 @@ package pcapps
 
 import (
 	"fmt"
-	"golang.org/x/mod/semver"
 
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-// ClusterConfigPcAppsValues supplies the chart-based bootstrap on packages whose
-// pc-applications chart supports cluster-config (first released in 0.374.0).
-// Older packages keep their legacy TS installation.
+// ClusterConfigPcAppsValues hands cluster configuration to ArgoCD after the
+// package removes the legacy TS component. Older package BOMs retain that
+// component, so their TS installation remains in charge.
 func ClusterConfigPcAppsValues(config *files.RootConfig, vault *files.InstallVault, packageBOM *bom.Config) (files.ChartValues, error) {
 	if packageBOM == nil {
 		return nil, nil
 	}
 
-	pcApps, ok := packageBOM.GetPCApps()
-	if !ok || semver.Compare("v"+pcApps.Tag(), "v0.374.0") < 0 {
+	if _, legacy := packageBOM.Components["cluster-config"]; legacy {
 		return nil, nil
 	}
 

@@ -28,7 +28,7 @@ var _ = Describe("ClusterConfigPcAppsValues", func() {
 		packageBOM = &bom.Config{Components: map[string]bom.ComponentConfig{"pc-applications": {Files: map[string]bom.FileRef{"chart": {OciRef: "ghcr.io/codesphere-cloud/charts/pc-applications:0.374.0"}}}}}
 	})
 	It("keeps the TS installer in charge for older packages", func() {
-		packageBOM.Components["pc-applications"] = bom.ComponentConfig{Files: map[string]bom.FileRef{"chart": {OciRef: "ghcr.io/codesphere-cloud/charts/pc-applications:0.373.0"}}}
+		packageBOM.Components["cluster-config"] = bom.ComponentConfig{}
 		values, err := pcapps.ClusterConfigPcAppsValues(&config, nil, packageBOM)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(values).To(BeNil())
