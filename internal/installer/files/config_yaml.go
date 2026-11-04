@@ -386,6 +386,7 @@ type K8sNode struct {
 }
 
 type ClusterConfig struct {
+	ClusterConfig       *ChartOverrideConfig       `yaml:"clusterConfig,omitempty"`
 	Certificates        ClusterCertificates        `yaml:"certificates"`
 	CertManager         *CertManagerConfig         `yaml:"certManager,omitempty"`
 	TrustManager        *TrustManagerConfig        `yaml:"trustManager,omitempty"`
@@ -446,6 +447,11 @@ type GatewayConfig struct {
 type GatewayAPIConfig struct {
 	Enabled bool  `yaml:"enabled"`
 	Use     *bool `yaml:"use,omitempty"`
+}
+
+// ChartOverrideConfig preserves Helm values supplied through legacy component settings.
+type ChartOverrideConfig struct {
+	Override ChartOverride `yaml:"override,omitempty"`
 }
 
 type CertManagerConfig struct {

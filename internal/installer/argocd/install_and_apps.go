@@ -15,13 +15,10 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 const (
@@ -132,21 +129,19 @@ func (i *AppInstaller) SyncVaultSecret(ctx context.Context) error {
 // InstallPCApps creates or updates the pc-applications app-of-apps ArgoCD
 // Application using the chart version from the supplied installer BOM.
 func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config) error {
+	values, err := i.getPcAppsValues(bomConfig)
+	if err != nil {
+		return err
+	}
 	pcApps, err := installer.NewPcAppsFromBom(
 		i.cfg.KubeClient,
 		bomConfig,
 		DefaultNamespace,
 		i.cfg.PCAppsValues,
-		i.getPcAppsValues(),
+		values,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize pc-apps installer: %w", err)
-	}
-
-	// Gateway Helm hooks and the SSH proxy pull images before the legacy cluster
-	// setup chart creates registry credentials and starts the reflector.
-	if err := i.SyncDependencyImagePullSecret(ctx); err != nil {
-		return err
 	}
 
 	if err := pcApps.Install(ctx); err != nil {
@@ -160,63 +155,17 @@ func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config)
 // explicit pcApps block in the config.yaml.
 // The pcApps block in the config.yaml and --pc-apps-values always win over derived values from the config.yaml.
 // Returns a ChartValues map
-func (i *AppInstaller) getPcAppsValues() files.ChartValues {
+func (i *AppInstaller) getPcAppsValues(bomConfig *bom.Config) (files.ChartValues, error) {
+	clusterConfigValues, err := pcapps.ClusterConfigPcAppsValues(&i.cfg.Config, i.cfg.Vault, bomConfig)
+	if err != nil {
+		return nil, fmt.Errorf("configuring cluster-config application: %w", err)
+	}
 	openFGAppValues := pcapps.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault)
 	rookCephAppValues := pcapps.RookCephPcAppsValues(&i.cfg.Config)
 
 	values := util.DeepMergeMaps(openFGAppValues, rookCephAppValues)
+	values = util.DeepMergeMaps(values, clusterConfigValues)
 	values = util.DeepMergeMaps(values, i.cfg.Config.PcApps)
 
-	return values
-}
-
-// SyncDependencyImagePullSecret makes the dependency chart hooks independent of
-// the later cluster-config install. New secrets carry that chart's Helm ownership
-// so Helm can adopt them. Existing ownership and reflector metadata are preserved.
-func (i *AppInstaller) SyncDependencyImagePullSecret(ctx context.Context) error {
-	if i.cfg.Vault == nil {
-		return fmt.Errorf("vault is required to provision dependency image pull credentials")
-	}
-
-	password := i.cfg.Vault.GetSecret(files.SecretRegistryPassword)
-	if password == nil || password.Fields == nil || password.Fields.Password == "" {
-		return fmt.Errorf("registry password is missing from the install vault")
-	}
-
-	username := ""
-	if secret := i.cfg.Vault.GetSecret(files.SecretRegistryUsername); secret != nil && secret.Fields != nil {
-		username = secret.Fields.Password
-	}
-
-	registry := ""
-	if i.cfg.Config.Registry != nil {
-		registry = i.cfg.Config.Registry.Server
-	}
-
-	desired, err := registryImagePullSecret(vault.VaultSecretNamespace, registry, username, password.Fields.Password)
-	if err != nil {
-		return fmt.Errorf("building dependency image pull secret: %w", err)
-	}
-
-	target := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace}}
-
-	_, err = controllerutil.CreateOrUpdate(ctx, i.cfg.KubeClient, target, func() error {
-		if target.ResourceVersion == "" {
-			target.Labels = map[string]string{"app.kubernetes.io/managed-by": "Helm"}
-			target.Annotations = map[string]string{
-				"meta.helm.sh/release-name":      "cluster-config",
-				"meta.helm.sh/release-namespace": vault.VaultSecretNamespace,
-			}
-		}
-
-		target.Type = desired.Type
-		target.Data = desired.Data
-
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("applying dependency image pull secret: %w", err)
-	}
-
-	return nil
+	return values, nil
 }

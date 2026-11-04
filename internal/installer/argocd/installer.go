@@ -334,27 +334,23 @@ func (a *Installer) provisionImagePullSecret(ctx context.Context, desired *corev
 
 // imagePullSecret supplies credentials before the chart's Redis pre-install job runs.
 func (a *Installer) imagePullSecret() (*corev1.Secret, error) {
-	return registryImagePullSecret(DefaultNamespace, a.OciRegistryURL, a.OciUsername, a.OciPassword)
-}
-
-func registryImagePullSecret(namespace, registryURL, registryUsername, registryPassword string) (*corev1.Secret, error) {
-	if registryPassword == "" {
+	if a.OciPassword == "" {
 		return nil, nil
 	}
 
-	host := installer.RegistryHost(registryURL)
+	host := installer.RegistryHost(a.OciRegistryURL)
 	if host == "" {
 		host = "ghcr.io"
 	}
 
-	username := ociUsernameOrDefault(registryUsername)
+	username := ociUsernameOrDefault(a.OciUsername)
 
 	config, err := json.Marshal(map[string]any{
 		"auths": map[string]any{
 			host: map[string]string{
 				"username": username,
-				"password": registryPassword,
-				"auth":     base64.StdEncoding.EncodeToString([]byte(username + ":" + registryPassword)),
+				"password": a.OciPassword,
+				"auth":     base64.StdEncoding.EncodeToString([]byte(username + ":" + a.OciPassword)),
 			},
 		},
 	})
@@ -363,7 +359,7 @@ func registryImagePullSecret(namespace, registryURL, registryUsername, registryP
 	}
 
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: imagePullSecretName, Namespace: namespace},
+		ObjectMeta: metav1.ObjectMeta{Name: imagePullSecretName, Namespace: DefaultNamespace},
 		Type:       corev1.SecretTypeDockerConfigJson,
 		Data:       map[string][]byte{corev1.DockerConfigJsonKey: config},
 	}, nil
