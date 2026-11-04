@@ -77,6 +77,7 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		ConfigPath:        opts.ConfigPath,
 		VaultPath:         opts.Vault,
 		PrivKey:           opts.PrivKey,
+		VaultType:         opts.VaultType,
 		Force:             opts.Force,
 		Verbose:           opts.Verbose,
 		SkipSteps:         opts.SkipSteps,
@@ -88,16 +89,6 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		LocalConfigDir:    opts.LocalConfigDir,
 		SkipImageBuilding: opts.LocalComponents,
 		Context:           ctx,
-	}
-	if !installer.IsStepSkipped(cfg, opts.SkipSteps, installer.CodesphereStep) {
-		// TODO(nate): remove once ESO is persisted, i.e. no release without external secrets is left to roll back to.
-		ci.BeforeRun = func() error {
-			if err := installer.OrphanCodesphereExternalSecrets(ctx, opts.Vault, opts.PrivKey, opts.VaultType, cfg); err != nil {
-				return fmt.Errorf("failed to hand the Codesphere Secrets over to Helm: %w", err)
-			}
-
-			return nil
-		}
 	}
 	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install platform: %w", err)

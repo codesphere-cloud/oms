@@ -4,7 +4,6 @@
 package installer
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,37 +75,28 @@ func newLocalComponentsInstaller(t *testing.T) (*CodesphereInstaller, PackageMan
 	return ci, NewPackage(dir, bundle), logPath
 }
 
-func TestBeforeRunRunsBeforeTheInstaller(t *testing.T) {
+func TestExternalSecretHandoverFailureSkipsTheInstaller(t *testing.T) {
 	ci, pm, logPath := newLocalComponentsInstaller(t)
-	ci.BeforeRun = func() error {
-		return os.WriteFile(logPath, []byte("before-run\n"), 0600)
+
+	err := ci.runInstaller(pm, files.RootConfig{})
+	if err == nil || !strings.Contains(err.Error(), "failed to hand the Codesphere Secrets over to Helm") {
+		t.Fatalf("expected the handover error, got %v", err)
 	}
+
+	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+		t.Fatalf("installer ran despite the handover failure: %v", err)
+	}
+}
+
+func TestExternalSecretHandoverSkippedWithoutCodesphereStep(t *testing.T) {
+	ci, pm, logPath := newLocalComponentsInstaller(t)
+	ci.AllowedSteps = []string{"ms-backends"}
 
 	if err := ci.runInstaller(pm, files.RootConfig{}); err != nil {
 		t.Fatal(err)
 	}
 
-	data, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if got := string(data); got != "before-run\ninstaller\n" {
-		t.Fatalf("unexpected order: %q", got)
-	}
-}
-
-func TestBeforeRunFailureSkipsTheInstaller(t *testing.T) {
-	ci, pm, logPath := newLocalComponentsInstaller(t)
-	ci.BeforeRun = func() error {
-		return errors.New("handover failed")
-	}
-
-	if err := ci.runInstaller(pm, files.RootConfig{}); err == nil || err.Error() != "handover failed" {
-		t.Fatalf("expected the BeforeRun error, got %v", err)
-	}
-
-	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
-		t.Fatalf("installer ran despite the BeforeRun failure: %v", err)
+	if _, err := os.Stat(logPath); err != nil {
+		t.Fatalf("installer did not run: %v", err)
 	}
 }

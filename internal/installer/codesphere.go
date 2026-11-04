@@ -73,6 +73,8 @@ type CodesphereInstaller struct {
 	VaultPath string
 	// PrivKey is the path to the age/GPG private key used to decrypt the vault.
 	PrivKey string
+	// VaultType selects the vault backend that holds the kubeconfig.
+	VaultType string
 	// Force re-extracts the package even if the work directory already exists.
 	Force bool
 	// Verbose enables detailed package extraction output.
@@ -96,8 +98,6 @@ type CodesphereInstaller struct {
 	// LocalComponents runs install-components.js on this host for the selected steps.
 	LocalComponents bool
 	LocalConfigDir  string
-	// BeforeRun runs after validation and confirmation, right before the installer script.
-	BeforeRun func() error
 }
 
 // Install validates the platform, extracts the package, builds any custom workspace images,
@@ -371,7 +371,8 @@ func workspaceImageBuildTag(registryServer, imageKey, flavorKey, version string)
 
 func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.RootConfig) error {
 	if ci.LocalComponents {
-		if err := ci.runBeforeRun(); err != nil {
+		// TODO(nate): remove once ESO is persisted, i.e. no release without external secrets is left to roll back to.
+		if err := ci.orphanExternalSecretsForCodesphereStep(config); err != nil {
 			return err
 		}
 
@@ -390,7 +391,8 @@ func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.Root
 		return err
 	}
 
-	if err := ci.runBeforeRun(); err != nil {
+	// TODO(nate): remove once ESO is persisted, i.e. no release without external secrets is left to roll back to.
+	if err := ci.orphanExternalSecretsForCodesphereStep(config); err != nil {
 		return err
 	}
 
@@ -414,12 +416,25 @@ func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.Root
 	return nil
 }
 
-func (ci *CodesphereInstaller) runBeforeRun() error {
-	if ci.BeforeRun == nil {
+// orphanExternalSecretsForCodesphereStep runs after validation and confirmation, so an aborted
+// install leaves the ExternalSecrets in place.
+//
+// TODO(nate): remove once ESO is persisted, i.e. no release without external secrets is left to roll back to.
+func (ci *CodesphereInstaller) orphanExternalSecretsForCodesphereStep(config files.RootConfig) error {
+	if !ci.executableInstallerSteps(config)[CodesphereStep] {
 		return nil
 	}
 
-	return ci.BeforeRun()
+	ctx := ci.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	if err := OrphanCodesphereExternalSecrets(ctx, ci.VaultPath, ci.PrivKey, ci.VaultType, config); err != nil {
+		return fmt.Errorf("failed to hand the Codesphere Secrets over to Helm: %w", err)
+	}
+
+	return nil
 }
 
 func (ci *CodesphereInstaller) runLocalComponents(pm PackageManager, config files.RootConfig) error {
