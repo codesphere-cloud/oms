@@ -97,7 +97,7 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 		kubeClient := newExternalSecretsClient(recordDeletePropagation(policies),
 			newExternalSecret("codesphere"), newESOSecret("codesphere"))
 
-		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)).To(Succeed())
+		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "")).To(Succeed())
 
 		Expect(policies).To(HaveKeyWithValue("codesphere", metav1.DeletePropagationOrphan))
 		Expect(externalSecretExists(kubeClient, "codesphere")).To(BeFalse())
@@ -108,7 +108,7 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 		kubeClient := newExternalSecretsClient(interceptor.Funcs{},
 			newExternalSecret("codesphere"), newESOSecret("codesphere"))
 
-		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)).To(Succeed())
+		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "")).To(Succeed())
 
 		secret := getSecret(kubeClient, "codesphere")
 		Expect(secret.Labels).To(HaveKeyWithValue("app.kubernetes.io/managed-by", "Helm"))
@@ -132,7 +132,7 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 			},
 		}, newExternalSecret("codesphere"), newESOSecret("codesphere"))
 
-		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)).To(Succeed())
+		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "")).To(Succeed())
 
 		Expect(calls).To(Equal([]string{"delete codesphere", "patch codesphere", "delete cd-codesphere-eab-hmac-key"}))
 	})
@@ -142,7 +142,7 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 		kubeClient := newExternalSecretsClient(recordDeletePropagation(policies),
 			newExternalSecret("cd-codesphere-eab-hmac-key"), newESOSecret("cd-codesphere-eab-hmac-key"))
 
-		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)).To(Succeed())
+		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "")).To(Succeed())
 
 		Expect(policies).To(HaveKeyWithValue("cd-codesphere-eab-hmac-key", metav1.DeletePropagationOrphan))
 		Expect(getSecret(kubeClient, "cd-codesphere-eab-hmac-key").Annotations).To(HaveKeyWithValue("meta.helm.sh/release-name", "codesphere"))
@@ -152,9 +152,34 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 		kubeClient := newExternalSecretsClient(interceptor.Funcs{},
 			newExternalSecret("codesphere-openfga-token"))
 
-		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)).To(Succeed())
+		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "")).To(Succeed())
 
 		Expect(externalSecretExists(kubeClient, "codesphere-openfga-token")).To(BeTrue())
+	})
+
+	It("finishes the handover on a retry after the ownership patch failed", func() {
+		kubeClient := newExternalSecretsClient(interceptor.Funcs{}, newESOSecret("codesphere"))
+
+		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "")).To(Succeed())
+
+		Expect(getSecret(kubeClient, "codesphere").Annotations).To(HaveKeyWithValue("meta.helm.sh/release-name", "codesphere"))
+	})
+
+	It("leaves the default release alone when installing a release with its own name", func() {
+		kubeClient := newExternalSecretsClient(interceptor.Funcs{}, newExternalSecret("codesphere"), newESOSecret("codesphere"))
+
+		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "codesphere-preview")).To(Succeed())
+
+		Expect(externalSecretExists(kubeClient, "codesphere")).To(BeTrue())
+		Expect(getSecret(kubeClient, "codesphere").Labels).NotTo(HaveKey("app.kubernetes.io/managed-by"))
+	})
+
+	It("handles the default release named explicitly", func() {
+		kubeClient := newExternalSecretsClient(interceptor.Funcs{}, newExternalSecret("codesphere"), newESOSecret("codesphere"))
+
+		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "codesphere")).To(Succeed())
+
+		Expect(externalSecretExists(kubeClient, "codesphere")).To(BeFalse())
 	})
 
 	It("leaves the Secret alone when the release renders plain Secrets", func() {
@@ -165,7 +190,7 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 			},
 		}, plainSecret)
 
-		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)).To(Succeed())
+		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "")).To(Succeed())
 	})
 
 	It("reports a failed ExternalSecret deletion", func() {
@@ -175,7 +200,7 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 			},
 		}, newExternalSecret("codesphere"), newESOSecret("codesphere"))
 
-		err := installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)
+		err := installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "")
 
 		Expect(err).To(MatchError(ContainSubstring("failed to delete ExternalSecret codesphere/codesphere: forbidden")))
 		Expect(getSecret(kubeClient, "codesphere").Labels).NotTo(HaveKey("app.kubernetes.io/managed-by"))
@@ -188,7 +213,7 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 			},
 		}, newExternalSecret("codesphere"), newESOSecret("codesphere"))
 
-		err := installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)
+		err := installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "")
 
 		Expect(err).To(MatchError(ContainSubstring("failed to mark Secret codesphere/codesphere as owned by Helm release codesphere: forbidden")))
 	})

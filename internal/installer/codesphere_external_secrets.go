@@ -26,6 +26,8 @@ const (
 	helmReleaseNameAnnotation      = "meta.helm.sh/release-name"
 	helmReleaseNamespaceAnnotation = "meta.helm.sh/release-namespace"
 
+	esoManagedLabel = "reconcile.external-secrets.io/managed"
+
 	externalSecretDeletionTimeout      = 2 * time.Minute
 	externalSecretDeletionPollInterval = time.Second
 )
@@ -45,7 +47,7 @@ func OrphanCodesphereExternalSecrets(ctx context.Context, vaultPath, privKey, va
 		return fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
 
-	return orphanCodesphereExternalSecrets(ctx, kubeClient)
+	return orphanCodesphereExternalSecrets(ctx, kubeClient, cfg.Codesphere.ReleaseName)
 }
 
 // orphanCodesphereExternalSecrets deletes the release's ExternalSecrets without their Secrets.
@@ -54,8 +56,15 @@ func OrphanCodesphereExternalSecrets(ctx context.Context, vaultPath, privKey, va
 // Helm deletes the ExternalSecret. A target release that renders the ExternalSecrets again
 // recreates them, and ESO takes the existing Secrets back.
 //
+// Releases with their own name (master-dev, previews) are skipped: they set externalSecrets
+// explicitly, and the names below belong to the default release, which may share the cluster.
+//
 // TODO(nate): remove once ESO is persisted, i.e. no release without external secrets is left to roll back to.
-func orphanCodesphereExternalSecrets(ctx context.Context, kubeClient ctrlclient.Client) error {
+func orphanCodesphereExternalSecrets(ctx context.Context, kubeClient ctrlclient.Client, releaseName string) error {
+	if releaseName != "" && releaseName != codesphereReleaseName {
+		return nil
+	}
+
 	for _, name := range codesphereExternalSecretNames {
 		if err := orphanExternalSecret(ctx, kubeClient, name); err != nil {
 			return err
@@ -77,23 +86,22 @@ func orphanExternalSecret(ctx context.Context, kubeClient ctrlclient.Client, nam
 	externalSecret.SetNamespace(key.Namespace)
 	externalSecret.SetName(key.Name)
 
-	if err := kubeClient.Delete(ctx, externalSecret, ctrlclient.PropagationPolicy(metav1.DeletePropagationOrphan)); err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil
+	err := kubeClient.Delete(ctx, externalSecret, ctrlclient.PropagationPolicy(metav1.DeletePropagationOrphan))
+	switch {
+	case err == nil:
+		if err := waitForExternalSecretDeletion(ctx, kubeClient, key); err != nil {
+			return err
 		}
-
+	case !apierrors.IsNotFound(err):
 		return fmt.Errorf("failed to delete ExternalSecret %s: %w", key, err)
-	}
-
-	if err := waitForExternalSecretDeletion(ctx, kubeClient, key); err != nil {
-		return err
 	}
 
 	return ensureHelmOwnership(ctx, kubeClient, key)
 }
 
-// ensureHelmOwnership marks the Secret as owned by the release, so Helm can adopt it. It runs
-// after the ExternalSecret is gone, so ESO can't sync the Secret again and drop the metadata.
+// ensureHelmOwnership marks a Secret ESO wrote as owned by the release, so Helm can adopt it.
+// It runs after the ExternalSecret is gone, so ESO can't sync the metadata away, and also when
+// it was already gone, so a retry finishes a handover whose patch failed.
 func ensureHelmOwnership(ctx context.Context, kubeClient ctrlclient.Client, key ctrlclient.ObjectKey) error {
 	secret := &corev1.Secret{}
 	if err := kubeClient.Get(ctx, key, secret); err != nil {
@@ -102,6 +110,10 @@ func ensureHelmOwnership(ctx context.Context, kubeClient ctrlclient.Client, key 
 		}
 
 		return fmt.Errorf("failed to get Secret %s: %w", key, err)
+	}
+
+	if secret.Labels[esoManagedLabel] != "true" {
+		return nil
 	}
 
 	patch := ctrlclient.MergeFrom(secret.DeepCopy())

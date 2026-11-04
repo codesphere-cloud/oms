@@ -96,6 +96,8 @@ type CodesphereInstaller struct {
 	// LocalComponents runs install-components.js on this host for the selected steps.
 	LocalComponents bool
 	LocalConfigDir  string
+	// BeforeRun runs after validation and confirmation, right before the installer script.
+	BeforeRun func() error
 }
 
 // Install validates the platform, extracts the package, builds any custom workspace images,
@@ -369,6 +371,10 @@ func workspaceImageBuildTag(registryServer, imageKey, flavorKey, version string)
 
 func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.RootConfig) error {
 	if ci.LocalComponents {
+		if err := ci.runBeforeRun(); err != nil {
+			return err
+		}
+
 		return ci.runLocalComponents(pm, config)
 	}
 	nodePath := filepath.Join(pm.GetWorkDir(), "node")
@@ -381,6 +387,10 @@ func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.Root
 
 	cmdArgs, err := ci.installerCommandArgs(pm, config)
 	if err != nil {
+		return err
+	}
+
+	if err := ci.runBeforeRun(); err != nil {
 		return err
 	}
 
@@ -402,6 +412,14 @@ func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.Root
 
 	log.Println("Private cloud installer script finished.")
 	return nil
+}
+
+func (ci *CodesphereInstaller) runBeforeRun() error {
+	if ci.BeforeRun == nil {
+		return nil
+	}
+
+	return ci.BeforeRun()
 }
 
 func (ci *CodesphereInstaller) runLocalComponents(pm PackageManager, config files.RootConfig) error {
