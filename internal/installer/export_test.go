@@ -66,5 +66,3 @@ func (o *OpenBaoInstaller) ReadinessTimeout() time.Duration {
 }
 
 var OrphanCodesphereExternalSecretsWithClient = orphanCodesphereExternalSecrets
-
-var CodesphereReleaseName = codesphereReleaseName

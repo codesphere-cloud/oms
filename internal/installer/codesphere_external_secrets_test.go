@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/installer/files"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -25,12 +24,11 @@ import (
 
 var externalSecretGVK = schema.GroupVersionKind{Group: "external-secrets.io", Version: "v1", Kind: "ExternalSecret"}
 
-func newExternalSecret(name, releaseName string) *unstructured.Unstructured {
+func newExternalSecret(name string) *unstructured.Unstructured {
 	externalSecret := &unstructured.Unstructured{}
 	externalSecret.SetGroupVersionKind(externalSecretGVK)
 	externalSecret.SetNamespace("codesphere")
 	externalSecret.SetName(name)
-	externalSecret.SetAnnotations(map[string]string{"meta.helm.sh/release-name": releaseName})
 
 	return externalSecret
 }
@@ -98,9 +96,9 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 	It("deletes the release ExternalSecret with orphan propagation, so its Secret is not garbage-collected", func() {
 		policies := map[string]metav1.DeletionPropagation{}
 		kubeClient := newExternalSecretsClient(recordDeletePropagation(policies),
-			newExternalSecret("codesphere", "codesphere"), newESOSecret("codesphere"))
+			newExternalSecret("codesphere"), newESOSecret("codesphere"))
 
-		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "codesphere")).To(Succeed())
+		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)).To(Succeed())
 
 		Expect(policies).To(HaveKeyWithValue("codesphere", metav1.DeletePropagationOrphan))
 		Expect(externalSecretExists(kubeClient, "codesphere")).To(BeFalse())
@@ -109,9 +107,9 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 
 	It("marks the Secret as owned by the release, so Helm can adopt it", func() {
 		kubeClient := newExternalSecretsClient(interceptor.Funcs{},
-			newExternalSecret("codesphere", "codesphere"), newESOSecret("codesphere"))
+			newExternalSecret("codesphere"), newESOSecret("codesphere"))
 
-		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "codesphere")).To(Succeed())
+		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)).To(Succeed())
 
 		secret := getSecret(kubeClient, "codesphere")
 		Expect(secret.Labels).To(HaveKeyWithValue("app.kubernetes.io/managed-by", "Helm"))
@@ -120,34 +118,44 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 		Expect(secret.Annotations).To(HaveKeyWithValue("meta.helm.sh/release-namespace", "codesphere"))
 	})
 
+	It("marks the Secret only after the ExternalSecret is gone, so ESO can't sync the metadata away", func() {
+		calls := []string{}
+		kubeClient := newExternalSecretsClient(interceptor.Funcs{
+			Delete: func(ctx context.Context, client ctrlclient.WithWatch, obj ctrlclient.Object, opts ...ctrlclient.DeleteOption) error {
+				calls = append(calls, "delete "+obj.GetName())
+
+				return client.Delete(ctx, obj, opts...)
+			},
+			Patch: func(ctx context.Context, client ctrlclient.WithWatch, obj ctrlclient.Object, patch ctrlclient.Patch, opts ...ctrlclient.PatchOption) error {
+				calls = append(calls, "patch "+obj.GetName())
+
+				return client.Patch(ctx, obj, patch, opts...)
+			},
+		}, newExternalSecret("codesphere"), newESOSecret("codesphere"))
+
+		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)).To(Succeed())
+
+		Expect(calls).To(Equal([]string{"delete codesphere", "patch codesphere"}))
+	})
+
 	It("orphans the EAB HMAC key ExternalSecret of the release", func() {
 		policies := map[string]metav1.DeletionPropagation{}
 		kubeClient := newExternalSecretsClient(recordDeletePropagation(policies),
-			newExternalSecret("cd-preview-eab-hmac-key", "preview"), newESOSecret("cd-preview-eab-hmac-key"))
+			newExternalSecret("cd-codesphere-eab-hmac-key"), newESOSecret("cd-codesphere-eab-hmac-key"))
 
-		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "preview")).To(Succeed())
+		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)).To(Succeed())
 
-		Expect(policies).To(HaveKeyWithValue("cd-preview-eab-hmac-key", metav1.DeletePropagationOrphan))
-		Expect(getSecret(kubeClient, "cd-preview-eab-hmac-key").Annotations).To(HaveKeyWithValue("meta.helm.sh/release-name", "preview"))
+		Expect(policies).To(HaveKeyWithValue("cd-codesphere-eab-hmac-key", metav1.DeletePropagationOrphan))
+		Expect(getSecret(kubeClient, "cd-codesphere-eab-hmac-key").Annotations).To(HaveKeyWithValue("meta.helm.sh/release-name", "codesphere"))
 	})
 
 	It("leaves the OpenFGA token ExternalSecret alone, because every chart renders it as ExternalSecret", func() {
 		kubeClient := newExternalSecretsClient(interceptor.Funcs{},
-			newExternalSecret("codesphere-openfga-token", "codesphere"))
+			newExternalSecret("codesphere-openfga-token"))
 
-		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "codesphere")).To(Succeed())
+		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)).To(Succeed())
 
 		Expect(externalSecretExists(kubeClient, "codesphere-openfga-token")).To(BeTrue())
-	})
-
-	It("leaves an ExternalSecret of another release alone", func() {
-		kubeClient := newExternalSecretsClient(interceptor.Funcs{},
-			newExternalSecret("codesphere", "other-release"), newESOSecret("codesphere"))
-
-		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "codesphere")).To(Succeed())
-
-		Expect(externalSecretExists(kubeClient, "codesphere")).To(BeTrue())
-		Expect(getSecret(kubeClient, "codesphere").Labels).NotTo(HaveKey("app.kubernetes.io/managed-by"))
 	})
 
 	It("succeeds without ExternalSecrets, e.g. when the release renders plain Secrets", func() {
@@ -157,7 +165,7 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 			},
 		})
 
-		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "codesphere")).To(Succeed())
+		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)).To(Succeed())
 	})
 
 	It("succeeds when the ExternalSecret CRD is not installed", func() {
@@ -167,7 +175,7 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 			},
 		})
 
-		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "codesphere")).To(Succeed())
+		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)).To(Succeed())
 	})
 
 	It("reports a failed ExternalSecret deletion", func() {
@@ -175,35 +183,23 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 			Delete: func(context.Context, ctrlclient.WithWatch, ctrlclient.Object, ...ctrlclient.DeleteOption) error {
 				return fmt.Errorf("forbidden")
 			},
-		}, newExternalSecret("codesphere", "codesphere"), newESOSecret("codesphere"))
+		}, newExternalSecret("codesphere"), newESOSecret("codesphere"))
 
-		err := installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "codesphere")
+		err := installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)
 
 		Expect(err).To(MatchError(ContainSubstring("failed to delete ExternalSecret codesphere/codesphere: forbidden")))
+		Expect(getSecret(kubeClient, "codesphere").Labels).NotTo(HaveKey("app.kubernetes.io/managed-by"))
 	})
 
-	It("reports a failed Secret update and keeps the ExternalSecret", func() {
+	It("reports a failed Secret update", func() {
 		kubeClient := newExternalSecretsClient(interceptor.Funcs{
 			Patch: func(context.Context, ctrlclient.WithWatch, ctrlclient.Object, ctrlclient.Patch, ...ctrlclient.PatchOption) error {
 				return fmt.Errorf("forbidden")
 			},
-		}, newExternalSecret("codesphere", "codesphere"), newESOSecret("codesphere"))
+		}, newExternalSecret("codesphere"), newESOSecret("codesphere"))
 
-		err := installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "codesphere")
+		err := installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)
 
 		Expect(err).To(MatchError(ContainSubstring("failed to mark Secret codesphere/codesphere as owned by Helm release codesphere: forbidden")))
-		Expect(externalSecretExists(kubeClient, "codesphere")).To(BeTrue())
-	})
-})
-
-var _ = Describe("CodesphereReleaseName", func() {
-	It("defaults to codesphere like the installer", func() {
-		Expect(installer.CodesphereReleaseName(files.RootConfig{})).To(Equal("codesphere"))
-	})
-
-	It("uses codesphere.releaseName from the config", func() {
-		cfg := files.RootConfig{Codesphere: files.CodesphereConfig{ReleaseName: "preview"}}
-
-		Expect(installer.CodesphereReleaseName(cfg)).To(Equal("preview"))
 	})
 })
