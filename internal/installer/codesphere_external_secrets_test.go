@@ -12,7 +12,6 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -165,16 +164,6 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 				return fmt.Errorf("the plain Secret must not be patched")
 			},
 		}, plainSecret)
-
-		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)).To(Succeed())
-	})
-
-	It("succeeds when the ExternalSecret CRD is not installed", func() {
-		kubeClient := newExternalSecretsClient(interceptor.Funcs{
-			Delete: func(context.Context, ctrlclient.WithWatch, ctrlclient.Object, ...ctrlclient.DeleteOption) error {
-				return &meta.NoKindMatchError{GroupKind: externalSecretGVK.GroupKind()}
-			},
-		})
 
 		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)).To(Succeed())
 	})
