@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"filippo.io/age"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -212,22 +213,9 @@ var _ = Describe("VaultEncryption", func() {
 		})
 
 		It("returns an empty path when the key comes from SOPS_AGE_KEY", func() {
-			keyFile := ageKeyFile("source.txt")
-
-			data, err := os.ReadFile(keyFile)
+			identity, err := age.GenerateX25519Identity()
 			Expect(err).ToNot(HaveOccurred())
-
-			var privKeyLine string
-
-			for _, line := range splitLines(string(data)) {
-				if len(line) > 0 && line[0] != '#' {
-					privKeyLine = line
-					break
-				}
-			}
-
-			Expect(privKeyLine).ToNot(BeEmpty())
-			GinkgoT().Setenv("SOPS_AGE_KEY", privKeyLine)
+			GinkgoT().Setenv("SOPS_AGE_KEY", identity.String())
 
 			keyPath, err := sops.ResolveExistingAgeKey("", tmpDir)
 			Expect(err).ToNot(HaveOccurred())

@@ -19,7 +19,6 @@ func InstallVersionAtLeast(installVersion, minimum string) bool {
 	for _, prefix := range []string{"codesphere-"} {
 		v = strings.TrimPrefix(installVersion, prefix)
 	}
-
 	v = releaseBranchVersion.ReplaceAllString(v, "v$1.$2.$3")
 
 	parsedVersion := semver.Canonical(v)

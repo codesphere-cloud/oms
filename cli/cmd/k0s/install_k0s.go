@@ -260,7 +260,6 @@ func (c *InstallK0sCmd) vaultStore() (vault.Vault, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load vault: %w", err)
 	}
-
 	return vault, nil
 }
 

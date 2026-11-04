@@ -560,16 +560,13 @@ func disableLokiMonitoring(config *files.RootConfig) {
 	if config.Cluster.Monitoring == nil {
 		config.Cluster.Monitoring = &files.MonitoringConfig{}
 	}
-
 	monitoring := config.Cluster.Monitoring
 	if monitoring.Loki == nil {
 		monitoring.Loki = &files.LokiConfig{Enabled: false}
 	}
-
 	if monitoring.Grafana == nil {
 		monitoring.Grafana = &files.GrafanaConfig{Enabled: false}
 	}
-
 	if monitoring.GrafanaAlloy == nil {
 		monitoring.GrafanaAlloy = &files.GrafanaAlloyConfig{Enabled: false}
 	}
@@ -600,13 +597,15 @@ func (b *LocalBootstrapper) EnsureSecrets() error {
 }
 
 func (b *LocalBootstrapper) ResolveAgeKey() error {
-	recipient, keyPath, err := sops.ResolveAgeKey(b.Env.AgeKey, filepath.Dir(b.Env.SecretsFilePath))
+	dir := filepath.Dir(b.Env.SecretsFilePath)
+
+	recipient, keyPath, err := sops.ResolveAgeKey(b.Env.AgeKey, dir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve age key: %w", err)
 	}
 
 	if keyPath == "" {
-		keyPath, err = sops.MaterializeEnvAgeKey(b.fw, filepath.Dir(b.Env.SecretsFilePath))
+		keyPath, err = sops.MaterializeEnvAgeKey(b.fw, dir)
 		if err != nil {
 			return fmt.Errorf("failed to write the age key for the installer: %w", err)
 		}

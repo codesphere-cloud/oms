@@ -64,7 +64,6 @@ func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts
 	if opts.LocalComponents {
 		pm = installer.NewPackage(filepath.Dir(opts.Package), opts.Package)
 	}
-
 	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(opts.StepTimer))
 	defer stlog.PrintSummary()
 	cm := installer.NewConfig()

@@ -22,27 +22,20 @@ func TestBootstrap(t *testing.T) {
 
 func captureStepOutput(run func()) string {
 	GinkgoHelper()
-
 	reader, writer, err := os.Pipe()
 	Expect(err).NotTo(HaveOccurred())
 	DeferCleanup(reader.Close)
 	DeferCleanup(func() { _ = writer.Close() })
-
 	oldStdout := os.Stdout
 
 	DeferCleanup(func() { os.Stdout = oldStdout })
-
 	os.Stdout = writer
-
 	run()
-
 	os.Stdout = oldStdout
 
 	Expect(writer.Close()).To(Succeed())
-
 	output, err := io.ReadAll(reader)
 	Expect(err).NotTo(HaveOccurred())
-
 	return string(output)
 }
 

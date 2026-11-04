@@ -951,14 +951,10 @@ var _ = Describe("Bootstrap vault loading", func() {
 
 	// "auto" must stay unavailable to the user facing --vault-type flag, otherwise a command
 	// that promises to encrypt the vault would quietly write it in plaintext.
-	It("rejects auto as a user supplied type but accepts it for the bootstrap flows", func() {
+	It("rejects auto as a user supplied type", func() {
 		_, err := installer.NewInstallConfigManager(string(vault.TypeAuto), ageKey)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("unsupported vault type"))
-
-		manager, err := installer.NewAutoInstallConfigManager(ageKey)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(manager).NotTo(BeNil())
 	})
 
 	It("loads a plaintext vault with the auto backend", func() {

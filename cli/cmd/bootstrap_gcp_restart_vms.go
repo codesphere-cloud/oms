@@ -78,7 +78,6 @@ func (c *BootstrapGcpRestartVMsCmd) resolveEnvironment(fw intutil.FileIO) (*gcp.
 
 func (c *BootstrapGcpRestartVMsCmd) RunE(_ *cobra.Command, _ []string) error {
 	ctx := c.cmd.Context()
-
 	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.Opts.StepTimer))
 	defer stlog.PrintSummary()
 	fw := intutil.NewFilesystemWriter()

@@ -80,19 +80,22 @@ var _ = Describe("Vault stores", func() {
 		Expect(vaultType).To(Equal(vault.TypeSOPS))
 	})
 
-	It("accepts the user selectable vault types", func() {
-		for _, tc := range []struct {
-			value string
-			want  vault.Type
-		}{
-			{"sops", vault.TypeSOPS},
-			{"plain", vault.TypePlain},
-			{"  PLAIN  ", vault.TypePlain},
-		} {
-			vaultType, err := vault.ParseType(tc.value)
-			Expect(err).NotTo(HaveOccurred(), tc.value)
-			Expect(vaultType).To(Equal(tc.want), tc.value)
-		}
+	It("accepts sops as a user selectable vault type", func() {
+		vaultType, err := vault.ParseType("sops")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(vaultType).To(Equal(vault.TypeSOPS))
+	})
+
+	It("accepts plain as a user selectable vault type", func() {
+		vaultType, err := vault.ParseType("plain")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(vaultType).To(Equal(vault.TypePlain))
+	})
+
+	It("normalizes case and surrounding whitespace of the vault type", func() {
+		vaultType, err := vault.ParseType("  PLAIN  ")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(vaultType).To(Equal(vault.TypePlain))
 	})
 
 	// TypeAuto follows whatever format is already on disk, so a command that promises

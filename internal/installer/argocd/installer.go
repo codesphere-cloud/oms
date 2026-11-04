@@ -303,7 +303,6 @@ func (a *Installer) refreshRetainedPullSecret(ctx context.Context, existing *ins
 	if err := a.provisionImagePullSecret(ctx, pullSecret); err != nil {
 		return fmt.Errorf("refreshing retained ArgoCD image pull secret: %w", err)
 	}
-
 	return nil
 }
 

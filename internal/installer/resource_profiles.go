@@ -253,7 +253,6 @@ func applyNoRequestsProfile(config *files.RootConfig, serviceReplicas int) {
 			"requests": zeroRequests(),
 		}
 	}
-
 	serviceProfiles["deployment_service"].(map[string]any)["replicas"] = serviceReplicas
 	serviceProfiles["public_api_service"].(map[string]any)["replicas"] = serviceReplicas
 	serviceProfiles["team_service"].(map[string]any)["replicas"] = serviceReplicas

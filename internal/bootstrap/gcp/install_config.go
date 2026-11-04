@@ -242,7 +242,6 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 		if err != nil {
 			return fmt.Errorf("resolving pc-apps chart registry: %w", err)
 		}
-
 		if existing, _ := dc.InstallConfig.PcApps["chartsRegistry"].(string); existing != "" && existing != chartsRegistry {
 			b.stlog.Logf("Replacing pcApps.chartsRegistry %s from the install config with the local registry at %s", existing, chartsRegistry)
 		}
@@ -523,16 +522,9 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 }
 
 func (b *GCPBootstrapper) copyConfigAndVaultToJumpbox(dc *datacenter.DataCenter) error {
-	vaultTransferPath := dc.SecretsFilePath
-
-	if b.Env.VaultType == vault.TypeSOPS {
-		copied, err := b.writePlaintextVaultCopy(dc)
-		if err != nil {
-			return err
-		}
-
-		vaultTransferPath = copied
-		b.vaultTransferCopy = copied
+	vaultTransferPath, err := b.vaultTransferPath(dc)
+	if err != nil {
+		return err
 	}
 
 	// CopyFile creates the destination directory, so a secondary data center's secrets
@@ -548,55 +540,52 @@ func (b *GCPBootstrapper) copyConfigAndVaultToJumpbox(dc *datacenter.DataCenter)
 	return nil
 }
 
-// writePlaintextVaultCopy writes the vault as plaintext to a unique file next to it, for the
-// jumpbox to re-encrypt with its own key.
+// vaultTransferPath returns the local vault file to upload to the jumpbox. An encrypted vault is
+// uploaded as a plaintext copy, which the jumpbox re-encrypts with its own key.
+func (b *GCPBootstrapper) vaultTransferPath(dc *datacenter.DataCenter) (string, error) {
+	if b.Env.VaultType != vault.TypeSOPS {
+		return dc.SecretsFilePath, nil
+	}
+
+	return b.writePlaintextVaultCopy(dc)
+}
+
+// writePlaintextVaultCopy writes the vault as plaintext to a unique file next to it and records
+// it for removeVaultTransferCopy.
 func (b *GCPBootstrapper) writePlaintextVaultCopy(dc *datacenter.DataCenter) (string, error) {
-	dir := filepath.Dir(dc.SecretsFilePath)
 	pattern := filepath.Base(dc.SecretsFilePath) + vaultTransferSuffix + "*"
 
-	transferPath, err := b.fw.CreateTemp(dir, pattern)
+	transferPath, err := b.fw.CreateTemp(filepath.Dir(dc.SecretsFilePath), pattern)
 	if err != nil {
 		return "", fmt.Errorf("failed to create temporary vault transfer file: %w", err)
 	}
 
+	b.vaultTransferCopy = transferPath
+
 	if err := dc.ConfigManager.WriteUnencryptedVault(transferPath, true); err != nil {
 		return "", errors.Join(
 			fmt.Errorf("failed to write unencrypted vault for jumpbox transfer: %w", err),
-			b.removeVaultTransfer(transferPath),
+			b.removeVaultTransferCopy(),
 		)
 	}
 
 	return transferPath, nil
 }
 
-// removeVaultTransfer reports a failed removal because the file holds every secret in the clear.
-func (b *GCPBootstrapper) removeVaultTransfer(transferPath string) error {
+// removeVaultTransferCopy reports a failed removal because the file holds every secret in the clear.
+func (b *GCPBootstrapper) removeVaultTransferCopy() error {
+	transferPath := b.vaultTransferCopy
+	if transferPath == "" {
+		return nil
+	}
+
+	b.vaultTransferCopy = ""
+
 	if err := b.fw.Remove(transferPath); err != nil {
 		return fmt.Errorf("failed to remove unencrypted vault transfer file %s: %w", transferPath, err)
 	}
 
 	return nil
-}
-
-// WriteAndEncryptVault writes the primary data center's install config and vault and encrypts
-// the vault on the jumpbox.
-func (b *GCPBootstrapper) WriteAndEncryptVault() error {
-	if err := b.ensureDataCenters(); err != nil {
-		return err
-	}
-
-	return b.writeDataCenterConfig(b.primaryDC())
-}
-
-func (b *GCPBootstrapper) removeVaultTransferCopy() error {
-	if b.vaultTransferCopy == "" {
-		return nil
-	}
-
-	transferCopy := b.vaultTransferCopy
-	b.vaultTransferCopy = ""
-
-	return b.removeVaultTransfer(transferCopy)
 }
 
 // applyACMEConfig configures the ACME certificate issuer, including the DNS-01

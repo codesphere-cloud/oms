@@ -34,15 +34,15 @@ func ResolveAgeKey(explicitKeyFile, fallbackDir string) (recipient string, keyPa
 // ResolveExistingAgeKey resolves an existing age key without generating one, returning the key
 // file path or an empty path when the key comes from SOPS_AGE_KEY. Callers use it for vaults
 // they did not create, since a freshly generated key cannot decrypt those.
-func ResolveExistingAgeKey(explicitKeyFile, fallbackDir string) (keyPath string, err error) {
-	_, keyPath, err = resolveAgeKey(util.NewFilesystemWriter(), explicitKeyFile, fallbackDir, false)
+func ResolveExistingAgeKey(explicitKeyFile, fallbackDir string) (string, error) {
+	_, keyPath, err := resolveAgeKey(util.NewFilesystemWriter(), explicitKeyFile, fallbackDir, false)
 
 	return keyPath, err
 }
 
 // MaterializeEnvAgeKey writes the SOPS_AGE_KEY identity to a new owner-only file in dir, for
 // subprocesses that need a key file. A fresh file never overwrites a key already next to the vault.
-func MaterializeEnvAgeKey(fileIO util.FileIO, dir string) (keyPath string, err error) {
+func MaterializeEnvAgeKey(fileIO util.FileIO, dir string) (string, error) {
 	raw := strings.TrimSpace(os.Getenv(sopsage.SopsAgeKeyEnv))
 	if raw == "" {
 		return "", fmt.Errorf("SOPS_AGE_KEY is not set")
@@ -56,7 +56,7 @@ func MaterializeEnvAgeKey(fileIO util.FileIO, dir string) (keyPath string, err e
 		return "", fmt.Errorf("failed to create directory for age key: %w", err)
 	}
 
-	keyPath, err = fileIO.CreateTemp(dir, envAgeKeyFilePattern)
+	keyPath, err := fileIO.CreateTemp(dir, envAgeKeyFilePattern)
 	if err != nil {
 		return "", fmt.Errorf("failed to create age key file: %w", err)
 	}

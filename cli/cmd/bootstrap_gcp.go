@@ -131,7 +131,6 @@ func (c *BootstrapGcpCmd) prepareBootstrapOptions() error {
 // BootstrapGcp initializes external clients and starts the selected bootstrap workflow.
 func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	ctx := c.cmd.Context()
-
 	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.StepTimer))
 	defer stlog.PrintSummary()
 

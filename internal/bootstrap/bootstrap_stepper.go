@@ -59,7 +59,6 @@ func NewStepLogger(silent bool, options ...StepLoggerOption) *StepLogger {
 	for _, option := range options {
 		option(&config)
 	}
-
 	return &StepLogger{config: config}
 }
 
@@ -67,7 +66,6 @@ func (b *StepLogger) elapsed(start time.Time) string {
 	if !b.config.Timer {
 		return ""
 	}
-
 	return fmt.Sprintf(" (%s)", time.Since(start).Round(time.Millisecond))
 }
 
@@ -127,7 +125,6 @@ func (b *StepLogger) Step(name string, fn func() error) error {
 	b.currentStep = name
 
 	fmt.Printf("%s%s%s...", LINE_RESET, RESET_TEXT, name)
-
 	start := time.Now()
 
 	err := b.runTimed(name, fn)
@@ -137,7 +134,6 @@ func (b *StepLogger) Step(name string, fn func() error) error {
 		for i := 0; i < b.subSteps; i++ {
 			fmt.Printf("%s", MOVE_UP_CLEAR_LINE)
 		}
-
 		fmt.Printf("%s%s%s %s✓%s%s\n", LINE_RESET, RESET_TEXT, name, GREEN_TEXT, b.elapsed(start), RESET_TEXT)
 	}
 	return err
@@ -152,7 +148,6 @@ func (b *StepLogger) Substep(name string, fn func() error) error {
 	b.currentStep = name
 
 	fmt.Printf("%s%s   %s...", LINE_RESET, RESET_TEXT, name)
-
 	start := time.Now()
 
 	err := b.runTimed(name, fn)
