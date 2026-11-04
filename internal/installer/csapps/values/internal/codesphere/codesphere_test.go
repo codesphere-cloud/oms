@@ -52,7 +52,11 @@ var _ = Describe("Values", func() {
 				InsecureSkipDomainControlVerify: ptr.To(true),
 				Cert:                            &files.CustomDomainsCertConfig{Algorithm: "ECDSA", Size: 256},
 			},
-			IPService: &files.IPServiceConfig{LoadBalancerKind: "metallb", AddressPools: []string{"public"}},
+			IPService:   &files.IPServiceConfig{LoadBalancerKind: "metallb", AddressPools: []string{"public"}},
+			Experiments: []string{"legacy"}, //nolint:staticcheck
+			Internal:    []string{"internal-flag"},
+			Preview:     map[string]bool{"preview-on": true},
+			Features:    map[string]bool{"feature-on": true, "billing": false},
 		}
 		gateways := cluster.Gateways{
 			Codesphere: cluster.GatewayAPI{Enabled: true},
@@ -82,6 +86,21 @@ var _ = Describe("Values", func() {
 			DNSServers:                 []string{"1.1.1.1", "9.9.9.9"},
 			Hosts:                      []string{"codesphere.example.com"},
 			PrePullImages:              false,
+			Experiments: codesphere.Flags{
+				"hermetic":        {codesphere.FlagEnvProd},
+				"persistent-nix":  {codesphere.FlagEnvProd},
+				"gateway-domains": {codesphere.FlagEnvProd},
+				"legacy":          {codesphere.FlagEnvProd},
+				"internal-flag":   {codesphere.FlagEnvProd},
+				"preview-on":      {codesphere.FlagEnvProd},
+			},
+			Features: codesphere.Flags{
+				"email-signup":     {codesphere.FlagEnvProd},
+				"email-signin":     {codesphere.FlagEnvProd},
+				"standalone-teams": {codesphere.FlagEnvProd},
+				"billing":          {},
+				"feature-on":       {codesphere.FlagEnvProd},
+			},
 			CustomDomains: codesphere.CustomDomains{
 				CNameBaseDomain:                 "custom.example.com",
 				GatewayAPI:                      codesphere.CustomDomainsGatewayAPI{UseGateway: true},
@@ -126,6 +145,17 @@ var _ = Describe("Values", func() {
 			DNSServers:    []string{"8.8.8.8"},
 			Hosts:         []string{""},
 			PrePullImages: true,
+			Experiments: codesphere.Flags{
+				"hermetic":        {"prod"},
+				"persistent-nix":  {"prod"},
+				"gateway-domains": {"prod"},
+			},
+			Features: codesphere.Flags{
+				"email-signup":     {"prod"},
+				"email-signin":     {"prod"},
+				"standalone-teams": {"prod"},
+				"billing":          {},
+			},
 			CustomDomains: codesphere.CustomDomains{GatewayAPI: codesphere.CustomDomainsGatewayAPI{UseGateway: true}},
 			DeployConfig: codesphere.DeployConfig{Images: map[string]codesphere.DeployImage{
 				"ubuntu-24.04": {

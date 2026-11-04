@@ -22,6 +22,8 @@ type Codesphere struct {
 	DNSServers                 []string        `yaml:"dnsServers"`
 	Hosts                      []string        `yaml:"hosts"`
 	PrePullImages              bool            `yaml:"prePullImages"`
+	Experiments                Flags           `yaml:"experiments"`
+	Features                   Flags           `yaml:"features"`
 	CustomDomains              CustomDomains   `yaml:"customDomains"`
 	DeployConfig               DeployConfig    `yaml:"deployConfig"`
 	WorkspaceImages            WorkspaceImages `yaml:"workspaceImages"`
@@ -90,6 +92,8 @@ func Values(conf files.CodesphereConfig, in Inputs) (Codesphere, error) {
 		DNSServers:                 dnsServers(conf.DNSServers),
 		Hosts:                      []string{conf.Domain},
 		PrePullImages:              ptr.Deref(conf.PrePullImages, true),
+		Experiments:                experimentsValues(conf, in.Gateways.Workspaces.Enabled),
+		Features:                   featuresValues(conf.Features),
 		CustomDomains:              customDomainsValues(conf.CustomDomains, in.Gateways.Workspaces.Use),
 		DeployConfig:               deployConfig,
 		WorkspaceImages:            workspaceImages,

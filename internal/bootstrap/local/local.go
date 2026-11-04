@@ -803,8 +803,8 @@ func (b *LocalBootstrapper) configureStorageValues() {
 	b.Env.InstallConfig.Codesphere.ManagedServices = slices.DeleteFunc(b.Env.InstallConfig.Codesphere.ManagedServices, func(service files.ManagedServiceConfig) bool {
 		return service.Name == "s3"
 	})
-	if !slices.Contains(b.Env.InstallConfig.Codesphere.Internal, "workspace-pvc-storage") {
-		b.Env.InstallConfig.Codesphere.Internal = append(b.Env.InstallConfig.Codesphere.Internal, "workspace-pvc-storage")
+	if !slices.Contains(b.Env.InstallConfig.Codesphere.Internal, files.WorkspacePVCStorageFlag) {
+		b.Env.InstallConfig.Codesphere.Internal = append(b.Env.InstallConfig.Codesphere.Internal, files.WorkspacePVCStorageFlag)
 	}
 
 	b.Env.InstallConfig.Codesphere.Override = util.DeepMergeMaps(b.Env.InstallConfig.Codesphere.Override, map[string]any{
