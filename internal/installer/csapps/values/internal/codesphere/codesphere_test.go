@@ -104,6 +104,8 @@ var _ = Describe("Values", func() {
 				Versions:      map[string]any{"1.0.0": map[string]any{"appVersion": "8.1"}},
 			}},
 			ManagedServiceWorkspacePlanID: ptr.To(21),
+			OpenBao:                       &files.OpenBaoConfig{Engine: "kv", URI: "https://bao.example.com", User: "codesphere"},
+			OpenFga:                       &files.OpenFgaConfig{Deploy: ptr.To(false), APIURL: "https://fga.example.com"},
 			TelemetryExport: &files.TelemetryExport{
 				RemoteExport:   true,
 				RemoteEndpoint: "https://otel.example.com",
@@ -253,6 +255,8 @@ var _ = Describe("Values", func() {
 			UnderprovisionFactors: &files.UnderprovisionFactors{CPU: 0.5, Memory: 0.75},
 			ExtraWorkspaceFiles:   []files.ExtraWorkspaceFile{{Name: ".npmrc", Content: "cmVnaXN0cnk=", Encoded: true}},
 			SMTP:                  &files.SMTPConfig{Host: "smtp.example.com", Port: 587, Secure: true, Username: "codesphere"},
+			OpenBao:               &files.OpenBaoConfig{Engine: "kv", URI: "https://bao.example.com", User: "codesphere"},
+			OpenFGA:               &codesphere.OpenFGA{APIURL: "https://fga.example.com"},
 			ExtraCAPem:            "ca-pem",
 			ExtraWorkspaceEnvVars: map[string]string{"FOO": "bar"},
 		}))
