@@ -24,6 +24,9 @@ import (
 const (
 	applicationReadyTimeout      = 30 * time.Minute
 	applicationReadyPollInterval = 5 * time.Second
+	// pcAppsName is the name of the pc-applications chart, its BOM component, its Application and
+	// its Helm release.
+	pcAppsName = "pc-applications"
 )
 
 // LogFunc records formatted application readiness messages.
@@ -129,13 +132,14 @@ func (i *AppInstaller) SyncVaultSecret(ctx context.Context) error {
 // InstallPCApps creates or updates the pc-applications app-of-apps ArgoCD
 // Application using the chart version from the supplied installer BOM.
 func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config) error {
-	pcApps, err := installer.NewPcAppsFromBom(
-		i.cfg.KubeClient,
-		bomConfig,
-		DefaultNamespace,
-		i.cfg.PCAppsValues,
-		i.getPcAppsValues(),
-	)
+	pcApps, err := installer.NewAppOfAppsFromBom(i.cfg.KubeClient, bomConfig, installer.AppOfAppsConfig{
+		Component:      pcAppsName,
+		Name:           pcAppsName,
+		ReleaseName:    pcAppsName,
+		Namespace:      DefaultNamespace,
+		ValuesFiles:    i.cfg.PCAppsValues,
+		ValuesOverride: i.getPcAppsValues(),
+	})
 	if err != nil {
 		return fmt.Errorf("failed to initialize pc-apps installer: %w", err)
 	}
