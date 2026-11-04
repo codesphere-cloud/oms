@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"log"
 	"path/filepath"
 	"runtime"
 
@@ -173,7 +172,7 @@ func deployCodesphereViaArgoCD(ctx context.Context, kubeClient client.Client, cf
 		return fmt.Errorf("failed to read the package BOM: %w", err)
 	}
 
-	if err := csapps.Install(ctx, kubeClient, &cfg, installerBOM, log.Printf); err != nil {
+	if err := csapps.Install(ctx, kubeClient, &cfg, installerBOM); err != nil {
 		return fmt.Errorf("failed to deploy the cs-applications: %w", err)
 	}
 
