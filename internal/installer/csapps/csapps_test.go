@@ -198,7 +198,7 @@ var _ = Describe("Install", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		defer cancel()
 
-		return csapps.Install(ctx, kubeClient, fullConfig("pr-1"), bomWithCharts(), nil)
+		return csapps.Install(ctx, kubeClient, fullConfig("pr-1"), bomWithCharts())
 	}
 
 	It("release pr-1 -> applies pr-1-cs-applications and waits for it to sync", func() {
@@ -225,7 +225,7 @@ var _ = Describe("Install", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		defer cancel()
 
-		Expect(csapps.Install(ctx, kubeClient, fullConfig(""), bomWithCharts(), nil)).To(HaveOccurred())
+		Expect(csapps.Install(ctx, kubeClient, fullConfig(""), bomWithCharts())).To(HaveOccurred())
 
 		app := &argov1alpha1.Application{}
 		Expect(kubeClient.Get(context.Background(), client.ObjectKey{Name: "codesphere-cs-applications", Namespace: "argocd"}, app)).
@@ -237,7 +237,7 @@ var _ = Describe("Install", func() {
 	It("invalid release name -> error before applying anything", func() {
 		cfg := fullConfig("PR_1")
 
-		Expect(csapps.Install(context.Background(), kubeClient, cfg, bomWithCharts(), nil)).
+		Expect(csapps.Install(context.Background(), kubeClient, cfg, bomWithCharts())).
 			To(MatchError(ContainSubstring("codesphere.releaseName")))
 
 		apps := &argov1alpha1.ApplicationList{}

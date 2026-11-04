@@ -58,7 +58,7 @@ func validateReleaseName(cfg *files.RootConfig) error {
 
 // Install applies the cs-applications Application of the release cfg configures and waits until
 // ArgoCD has deployed Codesphere with the values built from cfg.
-func Install(ctx context.Context, kubeClient client.Client, cfg *files.RootConfig, b *bom.Config, logf argocd.LogFunc) error {
+func Install(ctx context.Context, kubeClient client.Client, cfg *files.RootConfig, b *bom.Config) error {
 	if err := ValidateConfig(cfg); err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func Install(ctx context.Context, kubeClient client.Client, cfg *files.RootConfi
 	// The cs-applications Application must sync first: that sync writes the new values into the
 	// Codesphere Application.
 	for _, name := range []string{appName, release + codesphereAppSuffix} {
-		if err := argocd.WaitForAppFreshlySyncedAndHealthy(ctx, kubeClient, name, logf); err != nil {
+		if err := argocd.WaitForAppFreshlySyncedAndHealthy(ctx, kubeClient, name); err != nil {
 			return fmt.Errorf("failed to wait for ArgoCD to deploy Codesphere: %w", err)
 		}
 	}
