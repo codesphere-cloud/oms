@@ -62,19 +62,19 @@ func WaitForAppFreshlySyncedAndHealthy(ctx context.Context, kubeClient client.Cl
 				return false, nil
 			}
 
-			synced, err := freshlySynced(app)
+			deployed, err := currentSourceDeployed(app)
 			if err != nil {
 				return false, fmt.Errorf("failed to compare the sources of ArgoCD Application %q: %w", name, err)
 			}
 
 			lastState = fmt.Sprintf(
-				"synced current source: %t, health=%q, sync=%q",
-				synced,
+				"current source deployed: %t, health=%q, sync=%q",
+				deployed,
 				app.Status.Health.Status,
 				app.Status.Sync.Status,
 			)
 
-			if synced && app.Status.Health.Status == "Healthy" {
+			if deployed && app.Status.Health.Status == "Healthy" {
 				log.Printf("ArgoCD Application %q is freshly synced and healthy", name)
 				return true, nil
 			}
@@ -96,36 +96,24 @@ func WaitForAppFreshlySyncedAndHealthy(ctx context.Context, kubeClient client.Cl
 	return nil
 }
 
-// freshlySynced reports whether Argo CD has synced the Application's current source.
-func freshlySynced(app *argov1alpha1.Application) (bool, error) {
-	inSync, err := comparedSourceInSync(app)
-	if err != nil || inSync {
-		return inSync, err
+// currentSourceDeployed reports whether Argo CD has deployed the Application's current source.
+// Spec.Source is what OMS writes: the chart, its version and all values, for an app of apps also its
+// children's versions and values.
+func currentSourceDeployed(app *argov1alpha1.Application) (bool, error) {
+	// Argo CD copies Spec.Source to Status.Sync.ComparedTo.Source on every comparison with the
+	// cluster. Once they match, the sync status describes the current source, not an earlier one.
+	// This also covers a source that renders the same manifests, for which no sync runs.
+	if app.Status.Sync.Status == argov1alpha1.SyncStatusCodeSynced {
+		compared, err := sameSource(app.Spec.Source, &app.Status.Sync.ComparedTo.Source)
+		if err != nil || compared {
+			return compared, err
+		}
 	}
 
-	return lastSyncSucceededFor(app)
-}
-
-// comparedSourceInSync reports whether the last comparison used the current source and found the
-// cluster in sync. Spec.Source is what OMS writes: the chart, its version and all values, for an
-// app of apps also its children's versions and values. Argo CD copies it to
-// Status.Sync.ComparedTo.Source on every comparison with the cluster, so once the two match, the
-// sync status describes the current source and not an earlier one. This also covers a source that
-// renders the same manifests, for which Argo CD runs no sync operation.
-func comparedSourceInSync(app *argov1alpha1.Application) (bool, error) {
-	if app.Status.Sync.Status != argov1alpha1.SyncStatusCodeSynced {
-		return false, nil
-	}
-
-	return sameSource(app.Spec.Source, &app.Status.Sync.ComparedTo.Source)
-}
-
-// lastSyncSucceededFor reports whether the last sync operation applied the current source and
-// succeeded. A resource that changes right after the sync, e.g. replicas an autoscaler sets, turns
-// the Application OutOfSync again, and without selfHeal Argo CD leaves it so. The deploy still
-// worked, so this counts. A running or failed sync does not, although Argo CD may already record
-// its source.
-func lastSyncSucceededFor(app *argov1alpha1.Application) (bool, error) {
+	// A resource that changes right after the sync, e.g. replicas an autoscaler sets, turns the
+	// Application OutOfSync again, and without selfHeal Argo CD leaves it so. The deploy still
+	// worked, so a succeeded sync of the current source counts too. A running or failed one does
+	// not, although Argo CD may already record its source.
 	operation := app.Status.OperationState
 	if operation == nil || operation.Phase != synccommon.OperationSucceeded || operation.SyncResult == nil {
 		return false, nil
