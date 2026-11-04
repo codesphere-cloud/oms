@@ -14,6 +14,7 @@ import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,12 +32,13 @@ const (
 	registryPolicyPollInterval = time.Second
 )
 
-// RegistryPolicyClient is the Kubernetes API surface needed to apply admission resources.
+// RegistryPolicyClient is the Kubernetes API surface needed to apply and remove admission resources.
 //
 //mockery:generate: true
 type RegistryPolicyClient interface {
 	Apply(context.Context, runtime.ApplyConfiguration, ...ctrlclient.ApplyOption) error
 	Create(context.Context, ctrlclient.Object, ...ctrlclient.CreateOption) error
+	Delete(context.Context, ctrlclient.Object, ...ctrlclient.DeleteOption) error
 }
 
 // ClusterVersionClient reads the configured Kubernetes API server version.
@@ -53,7 +55,8 @@ type ClusterVersionClient interface {
 // where the MutatingAdmissionPolicy feature and v1beta1 API must be enabled.
 // After applying both resources, it verifies container and init-container mutation
 // through dry-run Pod admission, waiting at most 30 seconds before returning an error.
-// The default registry needs no rewriting and causes no Kubernetes API writes.
+// The default registry needs no rewriting: it removes an existing Codesphere policy
+// and binding left by a previous custom registry and otherwise changes nothing.
 func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base string, versions ClusterVersionClient) error {
 	registry, err := NormalizeRegistry(base)
 	if err != nil {
@@ -61,9 +64,7 @@ func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base
 	}
 
 	if registry == DefaultRegistryURL {
-		// TODO: Clean up an existing policy and binding when reverting from a custom registry.
-		// https://app.clickup.com/t/1an123k8zcb
-		return nil
+		return removeRegistryPolicy(ctx, client)
 	}
 
 	apiVersion, err := registryPolicyAPIVersion(versions)
@@ -118,6 +119,59 @@ func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base
 	}
 
 	return waitForRegistryPolicy(ctx, client, registry)
+}
+
+// removeRegistryPolicy deletes the binding before its policy so admission stops rewriting
+// images first. Version discovery is skipped so clusters without the policy API succeed.
+// When anything was removed, it waits until dry-run Pods keep their default images.
+func removeRegistryPolicy(ctx context.Context, client RegistryPolicyClient) error {
+	removedBinding, err := deleteRegistryResource(ctx, client, "MutatingAdmissionPolicyBinding")
+	if err != nil {
+		return fmt.Errorf("failed to remove image registry policy binding: %w", err)
+	}
+
+	removedPolicy, err := deleteRegistryResource(ctx, client, "MutatingAdmissionPolicy")
+	if err != nil {
+		return fmt.Errorf("failed to remove image registry policy: %w", err)
+	}
+
+	if !removedBinding && !removedPolicy {
+		return nil
+	}
+
+	if err := waitForRegistryPolicy(ctx, client, DefaultRegistryURL); err != nil {
+		return fmt.Errorf("failed to verify image registry policy removal: %w", err)
+	}
+
+	return nil
+}
+
+// deleteRegistryResource deletes the named admission resource through the first served
+// policy API version. It reports false when the API or the resource does not exist.
+func deleteRegistryResource(ctx context.Context, client RegistryPolicyClient, kind string) (bool, error) {
+	for _, apiVersion := range []string{admissionv1.SchemeGroupVersion.String(), "admissionregistration.k8s.io/v1beta1"} {
+		resource := &unstructured.Unstructured{}
+		resource.SetAPIVersion(apiVersion)
+		resource.SetKind(kind)
+		resource.SetName(registryPolicyName)
+
+		err := client.Delete(ctx, resource)
+		if meta.IsNoMatchError(err) {
+			continue
+		}
+
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+
+		if err != nil {
+			return false, fmt.Errorf("failed to delete %s %s: %w", apiVersion, kind, err)
+		}
+
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // waitForRegistryPolicy verifies admission has observed the policy and binding before
