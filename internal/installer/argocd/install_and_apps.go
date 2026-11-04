@@ -53,6 +53,11 @@ func WaitForAppFreshlySyncedAndHealthy(ctx context.Context, kubeClient client.Cl
 		func(ctx context.Context) (bool, error) {
 			app := &argov1alpha1.Application{}
 			if err := kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: DefaultNamespace}, app); err != nil {
+				// The deadline can run out during the read, which the client reports as its own error.
+				if ctx.Err() != nil {
+					return false, ctx.Err()
+				}
+
 				if !apierrors.IsNotFound(err) {
 					return false, fmt.Errorf("failed to read ArgoCD Application %q: %w", name, err)
 				}
@@ -84,13 +89,17 @@ func WaitForAppFreshlySyncedAndHealthy(ctx context.Context, kubeClient client.Cl
 			return false, nil
 		},
 	)
-	if err != nil {
+	if wait.Interrupted(err) {
 		return fmt.Errorf(
 			"timed out waiting for ArgoCD Application %q to become freshly synced and healthy (%s): %w",
 			name,
 			lastState,
 			err,
 		)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed waiting for ArgoCD Application %q: %w", name, err)
 	}
 
 	return nil
@@ -137,9 +146,10 @@ func currentSourceDeployed(app *argov1alpha1.Application) (bool, error) {
 	return false, nil
 }
 
-// sameSource compares two sources the way Argo CD records them in the status. Argo CD writes the
+// sameSource compares two sources the way Argo CD may record them in the status. Argo CD writes the
 // status as a JSON merge patch, in which null deletes a key, so spec values {"metrics": null} come
-// back as {}. Applying the same merge patch to both sides drops those keys before comparing. That
+// back as {} in Status.Sync.ComparedTo. OperationState.SyncResult keeps them. Applying the same
+// merge patch to both sides drops those keys before comparing, whichever copy it is. That
 // misses a change in which a key only switches between null and missing. Callers that need it
 // detected must change another value with it, as cs-applications does with its sync trigger on
 // every deploy.

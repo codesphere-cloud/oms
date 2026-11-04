@@ -5,6 +5,7 @@ package argocd_test
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/argoproj/argo-cd/gitops-engine/pkg/health"
@@ -12,10 +13,13 @@ import (
 	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 )
@@ -158,5 +162,39 @@ var _ = Describe("WaitForAppFreshlySyncedAndHealthy", func() {
 
 	It("Application not created yet -> keeps waiting", func() {
 		Expect(wait()).To(MatchError(ContainSubstring("timed out")))
+	})
+
+	waitWithGet := func(get func(ctx context.Context) error) error {
+		scheme := runtime.NewScheme()
+		Expect(argov1alpha1.AddToScheme(scheme)).To(Succeed())
+		kubeClient := fake.NewClientBuilder().WithScheme(scheme).WithInterceptorFuncs(interceptor.Funcs{
+			Get: func(ctx context.Context, _ client.WithWatch, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
+				return get(ctx)
+			},
+		}).Build()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+
+		return argocd.WaitForAppFreshlySyncedAndHealthy(ctx, kubeClient, "pr-1-codesphere")
+	}
+
+	It("deadline runs out during a read -> timeout error, not a read error", func() {
+		err := waitWithGet(func(ctx context.Context) error {
+			<-ctx.Done()
+			return errors.New("client rate limiter Wait returned an error: rate: Wait(n=1) would exceed context deadline")
+		})
+
+		Expect(err).To(MatchError(ContainSubstring(`timed out waiting for ArgoCD Application "pr-1-codesphere"`)))
+		Expect(err).NotTo(MatchError(ContainSubstring("failed to read")))
+	})
+
+	It("read fails for another reason -> that error, not a timeout", func() {
+		err := waitWithGet(func(context.Context) error {
+			return apierrors.NewForbidden(schema.GroupResource{Group: "argoproj.io", Resource: "applications"}, "pr-1-codesphere", errors.New("denied"))
+		})
+
+		Expect(err).To(MatchError(ContainSubstring(`failed to read ArgoCD Application "pr-1-codesphere"`)))
+		Expect(err).NotTo(MatchError(ContainSubstring("timed out")))
 	})
 })
