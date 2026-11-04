@@ -54,6 +54,8 @@ func OrphanCodesphereExternalSecrets(ctx context.Context, vaultPath, privKey, va
 // instead of failing, because ESO's ownerReference would otherwise garbage-collect them once
 // Helm deletes the ExternalSecret. A target release that renders the ExternalSecrets again
 // recreates them, and ESO takes the existing Secrets back.
+//
+// TODO(nate): remove once ESO is persisted, i.e. no release without external secrets is left to roll back to.
 func orphanCodesphereExternalSecrets(ctx context.Context, kubeClient ctrlclient.Client, releaseName string) error {
 	for _, name := range codesphereExternalSecretNames(releaseName) {
 		if err := orphanExternalSecret(ctx, kubeClient, releaseName, name); err != nil {
