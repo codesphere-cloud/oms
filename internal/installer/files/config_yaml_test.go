@@ -199,6 +199,31 @@ codesphere:
 			Expect(rootConfig.Registry.Server).To(Equal("minimal.registry.com"))
 			Expect(rootConfig.Codesphere.DeployConfig.Images).To(BeEmpty())
 		})
+
+		It("parses the codesphere registry independently of the registry config", func() {
+			var cfg files.RootConfig
+			Expect(cfg.Unmarshal([]byte(`registry:
+  server: ghcr.io
+registries:
+  codesphere:
+    registry: registry.codesphere.com
+    username: oms
+`))).To(Succeed())
+
+			Expect(cfg.Registry.Server).To(Equal("ghcr.io"))
+			Expect(cfg.Registries.Codesphere).To(Equal(&files.RegistryAccessConfig{
+				Registry: "registry.codesphere.com",
+				Username: "oms",
+			}))
+		})
+
+		It("omits registries when they are not configured", func() {
+			cfg := files.RootConfig{}
+
+			data, err := cfg.Marshal()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(data)).NotTo(ContainSubstring("registries"))
+		})
 	})
 
 	Describe("ExtractBomRefs", func() {

@@ -220,6 +220,11 @@ type CodesphereEnvironment struct {
 	CentralOtelSpanMetrics bool   `json:"-"`
 	LocalTraceEndpoint     string `json:"-"`
 
+	// Codesphere registry, written to registries.codesphere independently of the registry the
+	// images are served from. The password is the OMS portal API key.
+	CodesphereRegistry         string `json:"-"`
+	CodesphereRegistryPassword string `json:"-"`
+
 	// Config
 	InstallConfigPath         string              `json:"-"`
 	InstallConfigTemplatePath string              `json:"-"`

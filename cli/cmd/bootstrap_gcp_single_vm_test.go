@@ -4,7 +4,10 @@
 package cmd
 
 import (
+	"errors"
+
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
+	"github.com/codesphere-cloud/oms/internal/env"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -35,6 +38,8 @@ var _ = Describe("Single VM bootstrap command", func() {
 	})
 
 	It("validates single-node credentials before creating clients", func() {
+		GinkgoT().Setenv("OMS_PORTAL_API_KEY", "portal-api-key")
+
 		command, _, err := GetRootCmd().Find([]string{"beta", "bootstrap-gcp", "single-node"})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(command.RunE(command, nil)).To(MatchError(ContainSubstring("--registry-user is required for single-node")))
@@ -119,6 +124,7 @@ var _ = Describe("Multi-node GCP bootstrap options", func() {
 
 	BeforeEach(func() {
 		GinkgoT().Setenv("OMS_REGISTRY_PASSWORD", "password")
+		GinkgoT().Setenv("OMS_PORTAL_API_KEY", "portal-api-key")
 
 		command = newBootstrapGcpMultiNodeCmd(nil)
 		command.CodesphereEnv.RemoteOmsBinaryPath = "/oms"
@@ -178,6 +184,35 @@ var _ = Describe("Multi-node GCP bootstrap options", func() {
 		Expect(command.cmd.Flags().Set("priv-key", "age-key")).To(Succeed())
 		Expect(command.prepareBootstrapOptions()).To(MatchError("--priv-key requires --vault"))
 	})
+
+	It("enables the codesphere registry by default with the OMS portal API key as its password", func() {
+		mockEnv := env.NewMockEnv(GinkgoT())
+		mockEnv.EXPECT().GetOmsPortalApiKey().Return("portal-api-key", nil)
+		command.Env = mockEnv
+
+		Expect(command.prepareBootstrapOptions()).To(Succeed())
+		Expect(command.CodesphereEnv.CodesphereRegistry).To(Equal("registry.codesphere.com"))
+		Expect(command.CodesphereEnv.CodesphereRegistryPassword).To(Equal("portal-api-key"))
+	})
+
+	It("accepts another codesphere registry for development", func() {
+		Expect(command.cmd.Flags().Set("codesphere-registry", "registry.dev.codesphere.com")).To(Succeed())
+		Expect(command.prepareBootstrapOptions()).To(Succeed())
+		Expect(command.CodesphereEnv.CodesphereRegistry).To(Equal("registry.dev.codesphere.com"))
+	})
+
+	It("requires the OMS portal API key for the codesphere registry", func() {
+		mockEnv := env.NewMockEnv(GinkgoT())
+		mockEnv.EXPECT().GetOmsPortalApiKey().Return("", errors.New("OMS_PORTAL_API_KEY env var required, but not set"))
+		command.Env = mockEnv
+
+		Expect(command.prepareBootstrapOptions()).To(MatchError(ContainSubstring("the codesphere registry requires the OMS portal API key")))
+	})
+
+	It("rejects an empty codesphere registry", func() {
+		Expect(command.cmd.Flags().Set("codesphere-registry", "")).To(Succeed())
+		Expect(command.prepareBootstrapOptions()).To(MatchError("--codesphere-registry must not be empty"))
+	})
 })
 
 var _ = Describe("Single-node GCP bootstrap options", func() {
@@ -185,6 +220,7 @@ var _ = Describe("Single-node GCP bootstrap options", func() {
 
 	BeforeEach(func() {
 		GinkgoT().Setenv("OMS_REGISTRY_PASSWORD", "password")
+		GinkgoT().Setenv("OMS_PORTAL_API_KEY", "portal-api-key")
 
 		command = newBootstrapGcpSingleNodeCmd(nil)
 		command.CodesphereEnv.RemoteOmsBinaryPath = "/oms"
@@ -347,6 +383,8 @@ var _ = Describe("Root GCP bootstrap command", func() {
 	})
 
 	It("defaults the original command to the multi-node installer without single-node credentials", func() {
+		GinkgoT().Setenv("OMS_PORTAL_API_KEY", "portal-api-key")
+
 		command := newBootstrapGcpCmd(nil)
 		Expect(command.cmd.ParseFlags([]string{"--multi-dc", "--airgapped"})).To(Succeed())
 		Expect(command.CodesphereEnv.SingleVM).To(BeFalse())

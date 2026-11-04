@@ -38,6 +38,9 @@ const (
 	SecretRegistryUsername = "registryUsername"
 	SecretRegistryPassword = "registryPassword"
 
+	// Codesphere registry
+	SecretCodesphereRegistryPassword = "codesphereRegistryPassword"
+
 	// ACME
 	SecretAcmeEabMacKey              = "acmeEabMacKey"
 	SecretAcmeCustomDomainsEabMacKey = "acmeCustomDomainsEabMacKey"

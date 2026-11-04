@@ -106,6 +106,7 @@ type RootConfig struct {
 	DefaultDataCenterID    int                           `yaml:"defaultDataCenterId,omitempty"`
 	Secrets                SecretsConfig                 `yaml:"secrets"`
 	Registry               *RegistryConfig               `yaml:"registry,omitempty"`
+	Registries             *RegistriesConfig             `yaml:"registries,omitempty"`
 	Postgres               PostgresConfig                `yaml:"postgres"`
 	Ceph                   CephConfig                    `yaml:"ceph"`
 	Kubernetes             KubernetesConfig              `yaml:"kubernetes"`
@@ -269,6 +270,18 @@ type RegistryConfig struct {
 	Server              string `yaml:"server"`
 	ReplaceImagesInBom  bool   `yaml:"replaceImagesInBom"`
 	LoadContainerImages bool   `yaml:"loadContainerImages"`
+}
+
+// RegistriesConfig lists named registries the installation pulls from. It is independent of
+// RegistryConfig, which describes the registry the installation's images are served from.
+type RegistriesConfig struct {
+	Codesphere *RegistryAccessConfig `yaml:"codesphere,omitempty"`
+}
+
+// RegistryAccessConfig is the address of a registry and the user to log in to it with.
+type RegistryAccessConfig struct {
+	Registry string `yaml:"registry"`
+	Username string `yaml:"username"`
 }
 
 // PostgresPort is the port the Postgres installed by OMS listens on.

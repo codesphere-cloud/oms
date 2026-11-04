@@ -201,6 +201,42 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	return b.updateInstallConfig(b.primaryDC())
 }
 
+// DefaultCodesphereRegistry is the Codesphere registry installations log in to unless development
+// overrides it.
+const DefaultCodesphereRegistry = "registry.codesphere.com"
+
+// CodesphereRegistryUsername is the user every installation logs in to the Codesphere registry
+// with; the OMS portal API key is its password.
+const CodesphereRegistryUsername = "oms@codesphere.com"
+
+// applyCodesphereRegistry sets registries.codesphere and its password in the vault. Every
+// installation logs in to the Codesphere registry, so both must be given.
+func (b *GCPBootstrapper) applyCodesphereRegistry(dc *datacenter.DataCenter) error {
+	if b.Env.CodesphereRegistry == "" {
+		return fmt.Errorf("codesphere registry is not set")
+	}
+
+	if b.Env.CodesphereRegistryPassword == "" {
+		return fmt.Errorf("codesphere registry password is not set")
+	}
+
+	if dc.InstallConfig.Registries == nil {
+		dc.InstallConfig.Registries = &files.RegistriesConfig{}
+	}
+
+	dc.InstallConfig.Registries.Codesphere = &files.RegistryAccessConfig{
+		Registry: b.Env.CodesphereRegistry,
+		Username: CodesphereRegistryUsername,
+	}
+
+	dc.ConfigManager.GetVault().SetSecret(files.SecretEntry{
+		Name:   files.SecretCodesphereRegistryPassword,
+		Fields: &files.SecretFields{Password: b.Env.CodesphereRegistryPassword},
+	})
+
+	return nil
+}
+
 func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	if b.Env.InstallVersion != "" {
 		dc.InstallConfig.SetCodespherePackage(b.Env.InstallVersion, b.Env.InstallHash)
@@ -222,6 +258,9 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 
 	dc.InstallConfig.Registry.LoadContainerImages = false
 	dc.InstallConfig.Registry.ReplaceImagesInBom = b.Env.RegistryType != RegistryTypeGitHub
+	if err := b.applyCodesphereRegistry(dc); err != nil {
+		return fmt.Errorf("failed to apply codesphere registry: %w", err)
+	}
 
 	// The pc-applications chart pulls the chart of every application it creates from
 	// chartsRegistry and defaults it to GHCR. Only a local container registry is filled with the
