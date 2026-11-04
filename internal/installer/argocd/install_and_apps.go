@@ -117,9 +117,9 @@ func currentSourceDeployed(app *argov1alpha1.Application) (bool, error) {
 	}
 
 	// Drift case: Argo CD compared and synced, but the resources in the cluster changed afterwards
-	// (example: an autoscaler changes replicas). The deploy still worked, so this is fine. The sync
-	// must be of the current source: until the new sync starts, OperationState still holds the
-	// previous deploy's succeeded sync.
+	// (so app.Status.Sync.Status is not "Synced"). Example: an autoscaler changes replicas. The
+	// deploy still worked, so this is fine. The sync must be of the current source: until the new
+	// sync starts, OperationState still holds the previous deploy's succeeded sync.
 	operation := app.Status.OperationState
 	if operation == nil || operation.SyncResult == nil {
 		return false, nil
