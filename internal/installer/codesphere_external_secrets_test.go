@@ -117,13 +117,27 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 		Expect(secret.Annotations).To(HaveKeyWithValue("meta.helm.sh/release-namespace", "codesphere"))
 	})
 
-	It("marks the Secret only after the ExternalSecret is gone, so ESO can't sync the metadata away", func() {
+	It("marks the Secret only after the garbage collector removed the ExternalSecret", func() {
 		calls := []string{}
+		terminatingPolls := 1
 		kubeClient := newExternalSecretsClient(interceptor.Funcs{
 			Delete: func(ctx context.Context, client ctrlclient.WithWatch, obj ctrlclient.Object, opts ...ctrlclient.DeleteOption) error {
 				calls = append(calls, "delete "+obj.GetName())
 
 				return client.Delete(ctx, obj, opts...)
+			},
+			Get: func(ctx context.Context, client ctrlclient.WithWatch, key ctrlclient.ObjectKey, obj ctrlclient.Object, opts ...ctrlclient.GetOption) error {
+				if _, isExternalSecret := obj.(*unstructured.Unstructured); isExternalSecret {
+					calls = append(calls, "get "+key.Name)
+					// The API server keeps an orphan-deleted object until the garbage collector removed its finalizer.
+					if terminatingPolls > 0 {
+						terminatingPolls--
+
+						return nil
+					}
+				}
+
+				return client.Get(ctx, key, obj, opts...)
 			},
 			Patch: func(ctx context.Context, client ctrlclient.WithWatch, obj ctrlclient.Object, patch ctrlclient.Patch, opts ...ctrlclient.PatchOption) error {
 				calls = append(calls, "patch "+obj.GetName())
@@ -134,7 +148,28 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 
 		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "")).To(Succeed())
 
-		Expect(calls).To(Equal([]string{"delete codesphere", "patch codesphere", "delete cd-codesphere-eab-hmac-key"}))
+		Expect(calls).To(Equal([]string{
+			"delete codesphere", "get codesphere", "get codesphere", "patch codesphere",
+			"delete cd-codesphere-eab-hmac-key",
+		}))
+	})
+
+	It("reports a failed wait for the ExternalSecret deletion and leaves the Secret unmarked", func() {
+		kubeClient := newExternalSecretsClient(interceptor.Funcs{
+			Get: func(ctx context.Context, client ctrlclient.WithWatch, key ctrlclient.ObjectKey, obj ctrlclient.Object, opts ...ctrlclient.GetOption) error {
+				if _, isExternalSecret := obj.(*unstructured.Unstructured); isExternalSecret {
+					return fmt.Errorf("connection refused")
+				}
+
+				return client.Get(ctx, key, obj, opts...)
+			},
+		}, newExternalSecret("codesphere"), newESOSecret("codesphere"))
+
+		err := installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "")
+
+		Expect(err).To(MatchError(ContainSubstring("failed to wait for deletion of ExternalSecret codesphere/codesphere")))
+		Expect(err).To(MatchError(ContainSubstring("connection refused")))
+		Expect(getSecret(kubeClient, "codesphere").Labels).NotTo(HaveKey("app.kubernetes.io/managed-by"))
 	})
 
 	It("orphans the EAB HMAC key ExternalSecret of the release", func() {
