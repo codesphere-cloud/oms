@@ -28,12 +28,13 @@ var _ = Describe("ClusterConfigPcAppsValues", func() {
 		packageBOM = &bom.Config{Components: map[string]bom.ComponentConfig{"pc-applications": {Files: map[string]bom.FileRef{"chart": {OciRef: "ghcr.io/codesphere-cloud/charts/pc-applications:0.374.0"}}}}}
 	})
 	It("keeps the TS installer in charge for older packages", func() {
-		packageBOM.Components["cluster-config"] = bom.ComponentConfig{}
+		packageBOM.Components["cluster-config"] = bom.ComponentConfig{Files: map[string]bom.FileRef{"chart": {OciRef: "ghcr.io/codesphere-cloud/charts/cluster-config:1.9.0"}}}
 		values, err := pcapps.ClusterConfigPcAppsValues(&config, nil, packageBOM)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(values).To(BeNil())
 	})
-	It("passes registry credentials to the Argo-managed chart", func() {
+	It("enables Argo when the packaged BOM retains only cluster-config images", func() {
+		packageBOM.Components["cluster-config"] = bom.ComponentConfig{ContainerImages: map[string]string{"reflector": "ghcr.io/codesphere-cloud/docker/emberstack/kubernetes-reflector:10.0.60"}}
 		values, err := pcapps.ClusterConfigPcAppsValues(&config, vault, packageBOM)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(values).To(Equal(files.ChartValues{"applications": files.ChartValues{"cluster-config": files.ChartValues{

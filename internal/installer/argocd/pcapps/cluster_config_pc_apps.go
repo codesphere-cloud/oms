@@ -12,14 +12,14 @@ import (
 )
 
 // ClusterConfigPcAppsValues hands cluster configuration to ArgoCD after the
-// package removes the legacy TS component. Older package BOMs retain that
-// component, so their TS installation remains in charge.
+// package removes the legacy TS chart. Older package BOMs retain that chart file,
+// while new BOMs can still contain an image-only entry from chart dependencies.
 func ClusterConfigPcAppsValues(config *files.RootConfig, vault *files.InstallVault, packageBOM *bom.Config) (files.ChartValues, error) {
 	if packageBOM == nil {
 		return nil, nil
 	}
 
-	if _, legacy := packageBOM.Components["cluster-config"]; legacy {
+	if _, legacy := packageBOM.Components["cluster-config"].Files["chart"]; legacy {
 		return nil, nil
 	}
 
