@@ -104,6 +104,13 @@ var _ = Describe("Values", func() {
 				Versions:      map[string]any{"1.0.0": map[string]any{"appVersion": "8.1"}},
 			}},
 			ManagedServiceWorkspacePlanID: ptr.To(21),
+			TelemetryExport: &files.TelemetryExport{
+				RemoteExport:   true,
+				RemoteEndpoint: "https://otel.example.com",
+				SpanMetrics:    true,
+				Traces:         true,
+				TraceEndpoint:  "tempo.example.com:4317",
+			},
 		}
 		gateways := cluster.Gateways{
 			Codesphere: cluster.GatewayAPI{Enabled: true},
@@ -195,6 +202,17 @@ var _ = Describe("Values", func() {
 			},
 			SignUp:                        codesphere.SignUp{Email: files.SignUpEmailConfig{AllowedDomains: []string{"example.com"}}},
 			ManagedServiceWorkspacePlanID: 21,
+			Otel: codesphere.Otel{
+				CentralOtelExport: codesphere.CentralOtelExport{
+					Enabled:              true,
+					TelemetryCredentials: codesphere.TelemetryCredentials{SecretName: "otel-collector-central-creds"},
+					OTLPHTTPEndpoint:     "https://otel.example.com",
+				},
+				TelemetryExport: codesphere.TelemetryExport{
+					SpanMetrics: codesphere.SpanMetrics{Enabled: true},
+					Traces:      codesphere.Traces{Enabled: true, Endpoint: "tempo.example.com:4317"},
+				},
+			},
 			DeployConfig: codesphere.DeployConfig{Images: map[string]codesphere.DeployImage{
 				"ubuntu-24.04": {
 					Name:           "Ubuntu 24.04",
@@ -271,6 +289,12 @@ var _ = Describe("Values", func() {
 				AdditionalProviders: map[string]codesphere.OIDCProvider{},
 			},
 			ManagedServiceWorkspacePlanID: 20,
+			Otel: codesphere.Otel{
+				CentralOtelExport: codesphere.CentralOtelExport{
+					TelemetryCredentials: codesphere.TelemetryCredentials{SecretName: "otel-collector-central-creds"},
+					OTLPHTTPEndpoint:     "https://otel.tools.codesphere.com",
+				},
+			},
 			DeployConfig: codesphere.DeployConfig{Images: map[string]codesphere.DeployImage{
 				"ubuntu-24.04": {
 					Name:           "Ubuntu 24.04",

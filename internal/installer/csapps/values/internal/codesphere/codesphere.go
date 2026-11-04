@@ -29,6 +29,7 @@ type Codesphere struct {
 	OAuth                         OAuth           `yaml:"oauth"`
 	SignUp                        SignUp          `yaml:"signUp"`
 	ManagedServiceWorkspacePlanID int             `yaml:"managedServiceWorkspacePlanId"`
+	Otel                          Otel            `yaml:"otel"`
 	DeployConfig                  DeployConfig    `yaml:"deployConfig"`
 	WorkspaceImages               WorkspaceImages `yaml:"workspaceImages"`
 	FrontendGateway               FrontendGateway `yaml:"frontendGateway"`
@@ -66,6 +67,10 @@ type Inputs struct {
 
 // Values builds the values of the codesphere key.
 func Values(conf files.CodesphereConfig, in Inputs) (Codesphere, error) {
+	if err := validateTelemetryExport(conf.TelemetryExport); err != nil {
+		return Codesphere{}, err
+	}
+
 	deployConfig, err := deployConfigValues(conf, in.Images, in.Registry)
 	if err != nil {
 		return Codesphere{}, err
@@ -111,6 +116,7 @@ func Values(conf files.CodesphereConfig, in Inputs) (Codesphere, error) {
 		OAuth:                         oauthValues(conf.OAuth),
 		SignUp:                        signUpValues(conf.SignUp),
 		ManagedServiceWorkspacePlanID: ptr.Deref(conf.ManagedServiceWorkspacePlanID, defaultManagedServicePlanID),
+		Otel:                          otelValues(conf.TelemetryExport),
 		DeployConfig:                  deployConfig,
 		WorkspaceImages:               workspaceImages,
 		FrontendGateway:               frontendGateway,
