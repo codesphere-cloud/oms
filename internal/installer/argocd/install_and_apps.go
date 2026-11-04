@@ -140,9 +140,12 @@ func currentSourceDeployed(app *argov1alpha1.Application) (bool, error) {
 // sameSource compares two sources the way Argo CD records them in the status. Argo CD writes the
 // status as a JSON merge patch, in which null deletes a key, so spec values {"metrics": null} come
 // back as {}. Applying the same merge patch to both sides drops those keys before comparing. That
-// misses only a key that switches between null and missing, which cs-applications never does
-// alone: every deploy also changes its sync trigger. Passing the values as a YAML string
-// (helm.values) would keep the nulls, but makes them hard to read and diff in the Argo CD UI.
+// misses a change in which a key only switches between null and missing. Callers that need it
+// detected must change another value with it, as cs-applications does with its sync trigger on
+// every deploy.
+//
+// Possible alternative: passing the values as a YAML string (helm.values) would keep the nulls,
+// but makes them hard to read and diff in the Argo CD UI.
 func sameSource(a, b *argov1alpha1.ApplicationSource) (bool, error) {
 	a, err := asStoredInStatus(a)
 	if err != nil {
