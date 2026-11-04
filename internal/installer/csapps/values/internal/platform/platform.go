@@ -55,14 +55,8 @@ type ServiceImage struct {
 
 // WorkspaceRouter is the workspace router's image and replica count.
 type WorkspaceRouter struct {
-	Image      Image `yaml:"image"`
-	HAReplicas int   `yaml:"haReplicas"`
-}
-
-// Image is an image reference split into name and tag.
-type Image struct {
-	Name string `yaml:"name"`
-	Tag  string `yaml:"tag"`
+	Image      images.Image `yaml:"image"`
+	HAReplicas int          `yaml:"haReplicas"`
 }
 
 // WorkspaceObservability are the images of the workspace observability stack.
@@ -116,12 +110,12 @@ func servicesValues(imgs images.Images) (Services, error) {
 }
 
 func workspaceRouterValues(imgs images.Images) (WorkspaceRouter, error) {
-	name, tag, err := imgs.NameAndTag("nginx")
+	image, err := imgs.Image("nginx")
 	if err != nil {
 		return WorkspaceRouter{}, fmt.Errorf("failed to resolve the workspace router image: %w", err)
 	}
 
-	return WorkspaceRouter{Image: Image{Name: name, Tag: tag}, HAReplicas: workspaceRouterHAReplicas}, nil
+	return WorkspaceRouter{Image: image, HAReplicas: workspaceRouterHAReplicas}, nil
 }
 
 func workspaceObservabilityValues(imgs images.Images) (WorkspaceObservability, error) {

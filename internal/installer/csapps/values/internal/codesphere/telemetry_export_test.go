@@ -1,0 +1,68 @@
+// Copyright (c) Codesphere Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+package codesphere_test
+
+import (
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/codesphere"
+	"github.com/codesphere-cloud/oms/internal/installer/files"
+)
+
+var _ = Describe("Telemetry export", func() {
+	It("traces without an endpoint -> error", func() {
+		conf := files.CodesphereConfig{TelemetryExport: &files.TelemetryExport{Traces: true}}
+
+		_, err := codesphere.Values(conf, defaultTestInputs())
+
+		Expect(err).To(MatchError(ContainSubstring("traceEndpoint must be set")))
+	})
+
+	It("traces with a whitespace-only endpoint -> error", func() {
+		conf := files.CodesphereConfig{TelemetryExport: &files.TelemetryExport{Traces: true, TraceEndpoint: "  "}}
+
+		_, err := codesphere.Values(conf, defaultTestInputs())
+
+		Expect(err).To(MatchError(ContainSubstring("traceEndpoint must be set")))
+	})
+
+	It("traces with an endpoint -> traces exported to it", func() {
+		conf := files.CodesphereConfig{TelemetryExport: &files.TelemetryExport{
+			Traces:        true,
+			TraceEndpoint: "https://collector.example.com",
+		}}
+
+		values, err := codesphere.Values(conf, defaultTestInputs())
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(values.Otel.TelemetryExport.Traces).To(Equal(codesphere.Traces{
+			Enabled:  true,
+			Endpoint: "https://collector.example.com",
+		}))
+	})
+
+	It("no telemetry config -> disabled exports and default central collector", func() {
+		values, err := codesphere.Values(files.CodesphereConfig{}, defaultTestInputs())
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(values.Otel).To(Equal(codesphere.Otel{
+			CentralOtelExport: codesphere.CentralOtelExport{
+				Enabled:              false,
+				TelemetryCredentials: codesphere.TelemetryCredentials{SecretName: "otel-collector-central-creds"},
+				OTLPHTTPEndpoint:     "https://otel.tools.codesphere.com",
+			},
+		}))
+	})
+
+	It("remote export without an endpoint -> default central endpoint", func() {
+		conf := files.CodesphereConfig{TelemetryExport: &files.TelemetryExport{RemoteExport: true}}
+
+		values, err := codesphere.Values(conf, defaultTestInputs())
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(values.Otel.CentralOtelExport.Enabled).To(BeTrue())
+		Expect(values.Otel.CentralOtelExport.OTLPHTTPEndpoint).To(Equal("https://otel.tools.codesphere.com"))
+	})
+})

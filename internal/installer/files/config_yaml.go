@@ -271,6 +271,11 @@ type RegistryConfig struct {
 	LoadContainerImages bool   `yaml:"loadContainerImages"`
 }
 
+// WorkspaceImage is the name, without tag, that a flavor built from a Dockerfile is pushed under.
+func (r RegistryConfig) WorkspaceImage(imageKey, flavorKey string) string {
+	return fmt.Sprintf("%s/%s-%s", strings.TrimRight(r.Server, "/"), imageKey, flavorKey)
+}
+
 // PostgresPort is the port the Postgres installed by OMS listens on.
 const PostgresPort = 5432
 
@@ -520,6 +525,9 @@ type MetalLBBGPConfig struct {
 	BFDProfile  string `yaml:"bfdProfile,omitempty"`
 }
 
+// WorkspacePVCStorageFlag stores workspaces on PVCs instead of CephFS.
+const WorkspacePVCStorageFlag = "workspace-pvc-storage"
+
 type CodesphereConfig struct {
 	Domain                     string                   `yaml:"domain"`
 	WorkspaceHostingBaseDomain string                   `yaml:"workspaceHostingBaseDomain"`
@@ -537,6 +545,7 @@ type CodesphereConfig struct {
 	Preview                       map[string]bool        `yaml:"preview"`
 	Features                      map[string]bool        `yaml:"features"`
 	ClusterAdminEmail             string                 `yaml:"clusterAdminEmail,omitempty"`
+	ReleaseName                   string                 `yaml:"releaseName,omitempty"`
 	ExtraCAPem                    string                 `yaml:"extraCaPem,omitempty"`
 	ExtraWorkspaceEnvVars         map[string]string      `yaml:"extraWorkspaceEnvVars,omitempty"`
 	ExtraWorkspaceFiles           []ExtraWorkspaceFile   `yaml:"extraWorkspaceFiles,omitempty"`
@@ -679,6 +688,9 @@ func (c *OpenFgaConfig) ExposesOpenFga() bool {
 type OAuthProvidersConfig struct {
 	Oidc *OidcOAuthProvider `yaml:"oidc,omitempty"`
 }
+
+// DefaultOidcProviderName names an OIDC provider the config leaves unnamed.
+const DefaultOidcProviderName = "OIDC"
 
 type OidcOAuthProvider struct {
 	Type      string   `yaml:"type"`

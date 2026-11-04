@@ -26,6 +26,16 @@ func testImages(reference string) images.Images {
 	return imgs
 }
 
+var _ = Describe("Has", func() {
+	It("image in the BOM -> true", func() {
+		Expect(testImages("ghcr.io/codesphere-cloud/api:1.2.3").Has("api")).To(BeTrue())
+	})
+
+	It("image missing from the BOM -> false", func() {
+		Expect(testImages("ghcr.io/codesphere-cloud/api:1.2.3").Has("auth")).To(BeFalse())
+	})
+})
+
 var _ = Describe("Reference", func() {
 	It("image in the BOM -> its reference unchanged", func() {
 		Expect(testImages("localhost:5000/api:1.31.5").Reference("api")).To(Equal("localhost:5000/api:1.31.5"))
@@ -126,5 +136,19 @@ var _ = Describe("NameAndTag", func() {
 
 		_, _, err = imgs.NameAndTag("api")
 		Expect(err).To(MatchError(ContainSubstring("image api not found in BOM")))
+	})
+})
+
+var _ = Describe("Image", func() {
+	It("reference with registry port and tag -> name with port and tag", func() {
+		Expect(testImages("registry.example.com:5000/api:1.2.3").Image("api")).To(Equal(images.Image{
+			Name: "registry.example.com:5000/api",
+			Tag:  "1.2.3",
+		}))
+	})
+
+	It("digest-only reference -> error", func() {
+		_, err := testImages("ghcr.io/codesphere-cloud/api@" + digest).Image("api")
+		Expect(err).To(MatchError(ContainSubstring("missing a tag")))
 	})
 })
