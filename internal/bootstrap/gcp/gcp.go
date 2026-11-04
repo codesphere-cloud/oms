@@ -25,6 +25,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/testuser"
 	"github.com/codesphere-cloud/oms/internal/util"
+	"golang.org/x/crypto/ssh"
 )
 
 // InstallerArchiveName is the package artifact bootstrapping downloads and installs.
@@ -155,6 +156,8 @@ type CodesphereEnvironment struct {
 	MultiDC     bool   `json:"multi_dc"`
 	SingleVM    bool   `json:"single_vm,omitempty"`
 	MachineType string `json:"machine_type,omitempty"`
+	// HostOS is the operating system the VMs boot. Existing VMs keep the one they were created with.
+	HostOS HostOS `json:"host_os,omitempty"`
 	// DataCenters holds the per-data-center state. It always has at least one entry.
 	DataCenters []*datacenter.DataCenter `json:"datacenters"`
 	// DNSRecords records the DNS records the bootstrap created, so cleanup deletes exactly
@@ -393,6 +396,14 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	err = b.stlog.Step("Ensure jumpbox configured", b.EnsureJumpboxConfigured)
 	if err != nil {
 		return fmt.Errorf("failed to ensure jumpbox is configured: %w", err)
+	}
+
+	// Air-gapped nodes install the packages the host OS lacks through the package proxy.
+	if b.Env.Airgapped {
+		err = b.stlog.Step("Ensure package proxy", b.EnsurePackageProxy)
+		if err != nil {
+			return fmt.Errorf("failed to ensure package proxy: %w", err)
+		}
 	}
 
 	err = b.stlog.Step("Ensure hosts are configured", b.EnsureHostsConfigured)
@@ -1110,9 +1121,26 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 		return err
 	}
 
+	hostOSSettings, err := b.Env.HostOS.settings()
+	if err != nil {
+		return fmt.Errorf("failed to get the host OS settings: %w", err)
+	}
+
 	allNodes := append([]*node.Node{b.Env.PostgreSQLNode}, b.clusterNodes()...)
 
 	for _, node := range allNodes {
+		if err := b.ensureNodePackageProxy(node, hostOSSettings); err != nil {
+			return fmt.Errorf("failed to ensure package proxy: %w", err)
+		}
+
+		if err := ensureHostPackages(node, hostOSSettings); err != nil {
+			return fmt.Errorf("failed to ensure host packages: %w", err)
+		}
+
+		if err := b.ensureDocker(node, hostOSSettings); err != nil {
+			return fmt.Errorf("failed to ensure Docker: %w", err)
+		}
+
 		if !node.HasInotifyWatchesConfigured() {
 			err := node.ConfigureInotifyWatches()
 			if err != nil {
@@ -1152,9 +1180,75 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 	return nil
 }
 
+// ensureHostPackages installs the packages the host OS lacks for Codesphere on the node. dnf and
+// apt-get skip packages that are already installed, so this is safe to re-run.
+func ensureHostPackages(n *node.Node, hostOSSettings hostOSSettings) error {
+	if len(hostOSSettings.hostPackages) == 0 {
+		return nil
+	}
+
+	for _, cmd := range hostOSSettings.installCommands(hostOSSettings.hostPackages) {
+		err := n.RunSSHCommand("root", cmd)
+		if err != nil {
+			return fmt.Errorf("failed to install %s on %s: %w", strings.Join(hostOSSettings.hostPackages, ", "), n.GetName(), err)
+		}
+	}
+
+	return nil
+}
+
+// ensureDocker installs and starts Docker on the node where the installer does not provide it.
+// The installer's docker step only checks that Docker runs, so it has to be there before the
+// installation starts. A node that already runs Docker is left alone, so a re-run neither needs the
+// Docker repository to be reachable nor touches healthy hosts.
+func (b *GCPBootstrapper) ensureDocker(n *node.Node, hostOSSettings hostOSSettings) error {
+	if len(hostOSSettings.dockerInstallCommands) == 0 {
+		return nil
+	}
+
+	if n.RunSSHCommand("root", hostOSSettings.dockerInstalledCommand) == nil {
+		return nil
+	}
+
+	for _, cmd := range hostOSSettings.dockerInstallCommands {
+		err := b.runDockerInstallCommand(n, cmd)
+		if err != nil {
+			return fmt.Errorf("failed to install Docker on %s: %w", n.GetName(), err)
+		}
+	}
+
+	return nil
+}
+
+// runDockerInstallCommand retries RPM transaction lock contention caused by background
+// updates. Other package failures and SSH transport errors fail immediately.
+func (b *GCPBootstrapper) runDockerInstallCommand(n *node.Node, command string) error {
+	deadline := b.Time.Now().Add(5 * time.Minute)
+
+	for {
+		err := n.RunSSHCommand("root", command)
+		if err == nil {
+			return nil
+		}
+
+		var exitErr *ssh.ExitError
+		if !strings.HasPrefix(command, "dnf ") || !errors.As(err, &exitErr) ||
+			!strings.Contains(err.Error(), "can't create transaction lock on ") ||
+			!strings.Contains(err.Error(), "Resource temporarily unavailable") {
+			return fmt.Errorf("docker installation command failed: %w", err)
+		}
+
+		if !b.Time.Now().Before(deadline) {
+			return fmt.Errorf("RPM transaction lock remained busy for 5m: %w", err)
+		}
+
+		b.stlog.Logf("RPM transaction lock busy on %s; retrying Docker installation in 10s", n.GetName())
+		b.Time.Sleep(10 * time.Second)
+	}
+}
+
 // InstallK0sAndCodesphere installs k0s and Codesphere into every data center and then runs the
-// k0s config scripts. A Codesphere-only install leaves k0s alone, since the config script restarts
-// the k0s services of a cluster that is already running.
+// k0s config scripts. A Codesphere-only install leaves k0s and its config script alone.
 func (b *GCPBootstrapper) InstallK0sAndCodesphere() error {
 	if b.Env.InstallCodesphereOnly {
 		log.Printf("Warning: installing only Codesphere. k0s, PostgreSQL, Ceph and the database keep their current state, so installing an older version than the running one, e.g. for a rollback, can fail or leave the instance broken.")
@@ -1256,6 +1350,7 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
 	if b.Env.RegistryType != RegistryTypeLocalContainer {
 		return nil
 	}
+
 	if b.Env.InstallHash == "" {
 		return fmt.Errorf("install hash must be set when install version is set")
 	}
@@ -1351,9 +1446,7 @@ func (b *GCPBootstrapper) generateSkipStepsArg() string {
 	skipSteps := []string{"kubernetes"}
 	skipSteps = util.AppendUnique(skipSteps, b.Env.InstallSkipSteps...)
 
-	if b.Env.RegistryType == RegistryTypeGitHub {
-		skipSteps = util.AppendUnique(skipSteps, "load-container-images")
-	}
+	skipSteps = util.AppendUnique(skipSteps, "load-container-images")
 
 	if len(skipSteps) == 0 {
 		return ""

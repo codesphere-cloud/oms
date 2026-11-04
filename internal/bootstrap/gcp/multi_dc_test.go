@@ -268,7 +268,7 @@ var _ = Describe("Multi-DC bootstrap", func() {
 			primary, secondary := bs.Env.DataCenters[0], bs.Env.DataCenters[1]
 			for _, dc := range []*datacenter.DataCenter{primary, secondary} {
 				Expect(dc.InstallConfig.Registry.Server).To(Equal(server), "data center %d", dc.ID)
-				Expect(dc.InstallConfig.Registry.LoadContainerImages).To(BeTrue(), "data center %d", dc.ID)
+				Expect(dc.InstallConfig.Registry.LoadContainerImages).To(BeFalse(), "data center %d", dc.ID)
 				Expect(dc.InstallConfig.Registry.ReplaceImagesInBom).To(BeTrue(), "data center %d", dc.ID)
 				Expect(dc.ConfigManager.GetVault().GetSecret(files.SecretRegistryUsername).Fields.Password).To(Equal("custom-registry"))
 			}
@@ -291,7 +291,7 @@ var _ = Describe("Multi-DC bootstrap", func() {
 			Expect(len(secondary.CephNodes) + len(secondary.ControlPlaneNodes)).To(BeNumerically(">", 0))
 
 			for _, dc := range []*datacenter.DataCenter{primary, secondary} {
-				Expect(bs.InstallCommand(dc, "pkg.tar.gz")).NotTo(ContainSubstring("load-container-images"))
+				Expect(bs.InstallCommand(dc, "pkg.tar.gz")).To(ContainSubstring("load-container-images"))
 			}
 		})
 	})
@@ -320,7 +320,7 @@ var _ = Describe("Multi-DC bootstrap", func() {
 
 			for _, dc := range bs.Env.DataCenters {
 				Expect(dc.InstallConfig.Registry.Server).To(Equal(uri), "data center %d", dc.ID)
-				Expect(dc.InstallConfig.Registry.LoadContainerImages).To(BeTrue(), "data center %d", dc.ID)
+				Expect(dc.InstallConfig.Registry.LoadContainerImages).To(BeFalse(), "data center %d", dc.ID)
 				// Only the primary vault is written when the key is created; the others must inherit it.
 				Expect(dc.ConfigManager.GetVault().GetSecret(files.SecretRegistryPassword)).NotTo(BeNil(), "data center %d", dc.ID)
 				Expect(dc.ConfigManager.GetVault().GetSecret(files.SecretRegistryPassword).Fields.Password).To(Equal("writer-key"), "data center %d", dc.ID)
@@ -471,7 +471,36 @@ var _ = Describe("Multi-DC bootstrap", func() {
 			})).Return(nil).Once()
 		}
 
-		Expect(bs.InstallK0s()).To(Succeed())
+		Expect(bs.InstallK0s(bs.Env.DataCenters)).To(Succeed())
+	})
+
+	It("given k0s configured only in the primary data center, when k0s is ensured, then only the secondary one gets k0s installed", func() {
+		csEnv.Jumpbox = &node.Node{NodeClient: nodeClient, FileIO: fw}
+		csEnv.K0sVersion = "v1.31.14+k0s.0"
+
+		bs.Env.DataCenters[0].ConfigManager = primaryICG
+		for _, dc := range bs.Env.DataCenters {
+			dc.ControlPlaneNodes = []*node.Node{{Name: fmt.Sprintf("k0s-1-dc%d", dc.ID), NodeClient: nodeClient, FileIO: fw}}
+			vault := &files.InstallVault{}
+			addKubeconfig(vault)
+			dc.ConfigManager.(*installer.InstallConfig).Vault = vault
+		}
+
+		var k0sInstalls []string
+
+		fw.EXPECT().WriteFile(mock.Anything, mock.Anything, os.FileMode(0755)).Return(nil).Twice()
+		nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, "/root/configure-k0s.sh").Return(nil).Twice()
+		nodeClient.EXPECT().RunCommand(mock.Anything, "root", "chmod +x /root/configure-k0s.sh").Return(nil).Twice()
+		nodeClient.EXPECT().RunCommand(bs.Env.DataCenters[0].ControlPlaneNodes[0], "root", mock.MatchedBy(isK0sCheck)).Return(nil)
+		nodeClient.EXPECT().RunCommand(bs.Env.DataCenters[1].ControlPlaneNodes[0], "root", mock.MatchedBy(isK0sCheck)).Return(errK0sNotConfigured)
+		nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", "oms download k0s --version v1.31.14+k0s.0").Return(nil).Once()
+		nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.MatchedBy(func(command string) bool {
+			return strings.HasPrefix(command, "oms install k0s ")
+		})).Run(func(_ *node.Node, _ string, command string) { k0sInstalls = append(k0sInstalls, command) }).Return(nil)
+		nodeClient.EXPECT().RunCommand(mock.Anything, "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil).Twice()
+
+		Expect(bs.EnsureK0s()).To(Succeed())
+		Expect(k0sInstalls).To(HaveExactElements(ContainSubstring("--install-config /etc/codesphere/config-dc2.yaml ")))
 	})
 
 	Describe("validateMultiDC", func() {

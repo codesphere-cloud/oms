@@ -37,7 +37,7 @@ var _ = Describe("K0s", func() {
 
 		tempDir = GinkgoT().TempDir()
 		workDir = filepath.Join(tempDir, "oms-workdir")
-		k0sPath = filepath.Join(workDir, "k0s")
+		k0sPath = filepath.Join(workDir, "k0s-v1.29.1+k0s.0-amd64")
 
 		k0s = installer.NewK0s(mockHttp, mockEnv, mockFileWriter)
 		k0sImpl = k0s.(*installer.K0s)
@@ -250,7 +250,7 @@ var _ = Describe("K0s", func() {
 			})
 
 			It("should fail when file creation fails", func() {
-				mockFileWriter.EXPECT().CreateTemp(filepath.Dir(k0sPath), "k0s.*.partial").Return("", errors.New("permission denied"))
+				mockFileWriter.EXPECT().CreateTemp(filepath.Dir(k0sPath), filepath.Base(k0sPath)+".*.partial").Return("", errors.New("permission denied"))
 
 				_, err := k0s.Download("v1.29.1+k0s.0", installer.DownloadOptions{})
 				Expect(err).To(HaveOccurred())

@@ -108,6 +108,16 @@ func (b *GCPBootstrapper) prepareSingleVMDataCenter() error {
 
 func (b *GCPBootstrapper) configureSingleVMHost() error {
 	n := b.Env.Jumpbox
+
+	hostOS, err := b.Env.HostOS.settings()
+	if err != nil {
+		return fmt.Errorf("get host OS settings: %w", err)
+	}
+
+	if err := ensureHostPackages(n, hostOS); err != nil {
+		return fmt.Errorf("ensure host packages: %w", err)
+	}
+
 	if !n.HasInotifyWatchesConfigured() {
 		if err := n.ConfigureInotifyWatches(); err != nil {
 			return fmt.Errorf("configure inotify watches: %w", err)

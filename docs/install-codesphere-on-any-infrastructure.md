@@ -53,7 +53,7 @@ Provision x86-64 machines and choose a topology based on the purpose of the inst
 
 Codesphere requires:
 
-- Ubuntu 22.04 LTS or a newer supported version
+- Ubuntu 22.04 LTS or a newer supported version, or RHEL 9.6 (other RHEL releases and derivatives such as Rocky Linux or AlmaLinux are not supported)
 - Kubernetes 1.31 or newer
 - Ceph 18.2 or newer
 
@@ -101,6 +101,8 @@ Provide unrestricted communication between Codesphere hosts on the private netwo
 
 Hosts without public addresses need outbound access through NAT or an HTTP proxy. They must be able to reach package repositories, the selected container registry, certificate endpoints, and any source URLs referenced by the installer.
 
+On RHEL, an HTTP proxy for package installation is configured with a `proxy=` line in the `[main]` section of `/etc/dnf/dnf.conf`.
+
 Avoid CIDR overlap between the host network, Kubernetes pod network, Kubernetes service network, connected corporate networks, and VPNs.
 
 ## 4. Configure external access and firewalls
@@ -130,7 +132,7 @@ Do not expose SSH or PostgreSQL to `0.0.0.0/0`. PostgreSQL TCP 5432 normally nee
 
 Configure the jumpbox as the only public SSH entry point. The jumpbox must be able to connect as an administrative user to every private host, and the hosts must be able to connect to one another where required by Ceph and k0s installation.
 
-The installation workflow uses direct root SSH and SSH agent forwarding. If organizational policy forbids root SSH, provide an equivalent privileged automation path and verify it with the installer before proceeding. Protect the private key, restrict ingress to trusted source ranges, and use host-key verification in a production workflow.
+The installation workflow uses direct root SSH and SSH agent forwarding. RHEL images commonly restrict root SSH login, so check `PermitRootLogin` in `/etc/ssh/sshd_config` on each host. If organizational policy forbids root SSH, provide an equivalent privileged automation path and verify it with the installer before proceeding. Protect the private key, restrict ingress to trusted source ranges, and use host-key verification in a production workflow.
 
 From the jumpbox, verify every host:
 
@@ -164,9 +166,55 @@ sysctl vm.max_map_count
 
 Keep time synchronized on every host. Confirm that hostnames, private addresses, attached disks, DNS resolution, outbound connectivity, and SSH access survive a reboot before installing Codesphere.
 
+### Additional preparation on RHEL 9
+
+RHEL 9.6 images lack packages that Ubuntu images ship. `oms beta bootstrap-gcp --os rhel-9` installs them automatically; on hosts you provision yourself, complete these steps on the PostgreSQL, Ceph, and k0s hosts before the installation. Use the Extended Update Support (EUS) repositories to stay on RHEL 9.6.
+
+Install the LVM tools that Ceph uses to create its OSDs and the SELinux policy that Docker requires:
+
+```bash
+dnf install -y lvm2 container-selinux
+```
+
+The installer's `docker` step only checks that Docker is running; it does not install Docker on RHEL. Install Docker CE from Docker's RHEL 9 repository. Remove `podman-docker` first, because it provides `/usr/bin/docker` and conflicts with `docker-ce`. Docker publishes one repository per major release, so pin the repository to `9` instead of `$releasever`, which carries the minor release on EUS images:
+
+```bash
+if rpm -q podman-docker >/dev/null 2>&1; then dnf remove -y podman-docker; fi
+
+cat >/etc/yum.repos.d/docker-ce.repo <<'EOF'
+[docker-ce-stable]
+name=Docker CE Stable - $basearch
+baseurl=https://download.docker.com/linux/rhel/9/$basearch/stable
+enabled=1
+gpgcheck=1
+gpgkey=https://download.docker.com/linux/rhel/gpg
+EOF
+
+dnf install -y docker-ce docker-ce-cli containerd.io
+systemctl enable --now docker.service
+```
+
+Leave SELinux in enforcing mode. If you run a container registry on the jumpbox with `podman`, add `:Z` to its bind mounts so that SELinux permits access to the mounted files, and add the registry certificate to the system trust store with `update-ca-trust` instead of `update-ca-certificates`.
+
+In an air-gapped environment, hosts without internet access need a package proxy for these `dnf` commands. `oms beta bootstrap-gcp --airgapped` sets one up on the jumpbox automatically; see the [README](https://github.com/codesphere-cloud/oms#supported-host-operating-systems).
+
 ## 7. Prepare the jumpbox
 
 Install [OMS](https://github.com/codesphere-cloud/oms) on the jumpbox together with `sops` and `age`. Pin and verify approved versions so the environment is repeatable.
+
+The jumpbox needs these tools in `PATH`:
+
+| Tool | Used for |
+|---|---|
+| `oms` | All installation commands. |
+| `sops` | Encrypting and decrypting the installation vault. |
+| `age-keygen` (from `age`) | Generating the vault's age identity and deriving its public key. |
+| `curl`, `tar` | Downloading and unpacking tools, and checking that a registry or proxy answers. |
+| `podman` | Only for a local container registry or package proxy on the jumpbox. |
+| `docker` or `podman` | Only to build workspace images during `oms install codesphere` (`docker` is preferred when both exist). |
+| `openssl`, `htpasswd` (`httpd-tools` or `apache2-utils`) | Only for a local container registry on the jumpbox. |
+
+`oms beta bootstrap-gcp` downloads missing `sops` (v3.11.0, from GitHub) and `age` (the latest release, from `dl.filippo.io`) on its own. In an air-gapped environment, install them yourself before you start; OMS skips the download for tools it finds. See [Dependencies and network requirements](https://github.com/codesphere-cloud/oms#dependencies-and-network-requirements) for everything OMS downloads and which hosts it contacts.
 
 The jumpbox must have enough free space for the installer package and extracted installation dependencies. Create a root-only secrets directory:
 
@@ -254,6 +302,12 @@ registry:
   replaceImagesInBom: false
   loadContainerImages: false
 ```
+
+`oms init install-config` defaults `pcApps.chartsRegistry` to
+`<registry.server>/codesphere-cloud/charts`, preserving an existing override.
+If you change `registry.server` afterwards, update `pcApps.chartsRegistry` too.
+For older configs without this value, installation defaults child chart sources
+to Argo CD's configured OCI repository. `--pc-apps-values` can override it.
 
 As part of install-config generation, set the existing registry entries in `prod.vault.yaml` to the GHCR username and token supplied by Codesphere. The token is the registry password:
 
@@ -463,3 +517,39 @@ Run the Codesphere smoke test when an API key for the environment is available:
 ```bash
 oms smoketest codesphere --help
 ```
+
+### Argo CD chart selection and upgrades
+
+`oms install codesphere` (including its `dependencies` command) installs the
+Codesphere `argocd` chart extracted from the installer package. Its version is
+pinned by `components.argocd.files.chart.ociRef` in the package's merged BOM;
+its upstream chart dependency is bundled and no upstream chart download is needed.
+
+An existing `argocd` Helm release in the `argocd` namespace is upgraded only when
+it uses the Codesphere `argocd` chart and the package contains a newer chart
+version. Equal or newer installed versions are retained. Releases using upstream
+`argo-cd` or an unknown chart are preserved. If the Helm release is absent, OMS
+installs the packaged chart. Repository credentials, vault synchronization, and pc-applications
+setup still run when the chart is retained. Use `--skip-steps argocd` to skip the
+entire Argo CD pre-step instead.
+
+`--argo-values` files target the wrapper chart: put upstream settings beneath
+`argo-cd`, for example:
+
+```yaml
+argo-cd:
+  server:
+    replicas: 2
+```
+
+OMS disables the wrapper's `extraSecrets` by default during bootstrap and nests
+registry certificate trust under `argo-cd.configs`. Explicit values
+files override these defaults. When `registry.replaceImagesInBom` is enabled,
+bootstrap image repositories use the same destination mapping as `oms copy package`.
+
+Supplying `--argo-version` selects the official upstream `argo-cd` chart instead
+of the packaged wrapper. In this mode `--argo-repo` can select a custom HTTP or
+OCI repository, and `--argo-values` files use upstream settings at the root.
+A custom `--argo-repo` requires `--argo-version`; without a version override the
+packaged chart remains the default. Explicit upstream installs retain the
+upstream installer's downgrade protection.

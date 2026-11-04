@@ -17,7 +17,7 @@ import (
 
 const (
 	// DefaultK0sVersion is the k0s version installed unless another one is requested.
-	DefaultK0sVersion = "v1.31.14+k0s.0"
+	DefaultK0sVersion = "v1.36.5+k0s.0"
 	k0sReleaseURL     = "https://github.com/k0sproject/k0s/releases/download"
 	k0sReleaseAPIURL  = "https://api.github.com/repos/k0sproject/k0s/releases/tags"
 	k0sBinaryName     = "k0s"
@@ -75,7 +75,9 @@ func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 		return "", err
 	}
 
-	cachePath := filepath.Join(cacheDir, k0sBinaryName)
+	assetName := fmt.Sprintf("%s-%s-%s", k0sBinaryName, version, k.Goarch)
+
+	cachePath := filepath.Join(cacheDir, assetName)
 	if reuseCachedBinary(k.FileWriter, cachePath, version, k0sBinaryName, opts) {
 		return cachePath, nil
 	}
@@ -84,7 +86,6 @@ func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 		return "", fmt.Errorf("k0s %s not found in OMS cache at '%s', download it first with 'oms download k0s --version %s'", version, cachePath, version)
 	}
 
-	assetName := fmt.Sprintf("%s-%s-%s", k0sBinaryName, version, k.Goarch)
 	downloadURL := fmt.Sprintf("%s/%s/%s", k0sReleaseURL, version, assetName)
 
 	if err := downloadToPath(k.FileWriter, k.Http, cachePath, downloadURL, opts.Quiet, 0755); err != nil {

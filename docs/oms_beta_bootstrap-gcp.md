@@ -4,23 +4,14 @@ Bootstrap GCP infrastructure for Codesphere
 
 ### Synopsis
 
-Bootstraps GCP infrastructure required to run Codesphere clusters on GCP.
-This includes setting up projects, service accounts, and necessary IAM roles.
-Depending on your setup, additional configuration may be required after bootstrapping.
-Ensure you have the necessary permissions to create and manage GCP resources before proceeding.
+Bootstrap GCP projects, service accounts, and VMs for a Codesphere cluster.
+Running again with --install-version repeats every install step. k0s is reinstalled,
+which restarts it, only in data centers where a node does not run --k0s-version with
+its config script applied yet. To replace only Codesphere, add
+--install-codesphere-only and --recover-config.
 Not for production use.
 
-Use --single-vm to install k0s and Codesphere on one VM using the local bootstrap.
-This mode requires --registry-user, either --github-pat or OMS_REGISTRY_PASSWORD,
-and either --install-local or --install-version. Both modes default to a 50 GB root disk.
-Single-VM mode adds a separate 100 GB Ceph disk.
-Both modes accept --install-config-template, --config, --vault and --priv-key.
-
-Running it again against an existing project with --install-version installs that version on top
-and repeats every install step, including the k0s config script, which restarts k0s.
-To replace only Codesphere, e.g. to roll back to an earlier release, add --install-codesphere-only
-and --recover-config: the bootstrap then runs "oms install codesphere --codesphere-only" on the jumpbox and leaves k0s,
-PostgreSQL, Ceph and the other dependencies as they are.
+Uses the multi-node installer. Use single-node for one VM.
 
 ```
 oms beta bootstrap-gcp [flags]
@@ -30,7 +21,7 @@ oms beta bootstrap-gcp [flags]
 
 ```
       --acme-staging                              Use the Let's Encrypt staging ACME endpoint (certificates are not browser-trusted)
-      --airgapped                                 Set up an airgapped installation: run a local container registry on the jumpbox, copy the package images into it and point the install config at it. k0s is installed from the k0s airgap image bundle. Firewall rules block internet egress of all VMs except the jumpbox. Selects the local-container registry type and fails if another --registry-type is given. (default: false)
+      --airgapped                                 Set up an airgapped installation: run a local container registry on the jumpbox, copy the package images into it and point the install config at it. k0s is installed from the k0s airgap image bundle. Firewall rules block internet egress of all VMs except the jumpbox, and the nodes install OS packages (e.g. Docker, LVM tools) through a package proxy on the jumpbox. Selects the local-container registry type and fails if another --registry-type is given. (default: false)
       --azure-devops-app-client-id string         Azure DevOps App Client ID (optional)
       --azure-devops-app-client-secret string     Azure DevOps App Client Secret (optional)
       --base-domain string                        Base domain for Codesphere (required)
@@ -57,14 +48,14 @@ oms beta bootstrap-gcp [flags]
       --github-app-client-id string               GitHub App Client ID (required)
       --github-app-client-secret string           GitHub App Client Secret (required)
       --github-app-name string                    GitHub App Name (optional)
-      --github-pat string                         GitHub Personal Access Token used for direct image access and fetching team SSH keys (defaults to OMS_REGISTRY_PASSWORD). Required when using --github-team-org/--github-team-slug, and for the local-container registry type when installing Codesphere. Required scopes: read:packages, read:org.
+      --github-pat string                         GitHub Personal Access Token for pulling Codesphere images from ghcr.io (defaults to OMS_REGISTRY_PASSWORD). Required scope: read:packages. Team SSH key lookup with --github-team-org/--github-team-slug also requires read:org. Required for the local-container registry type when installing Codesphere.
       --github-team-org string                    GitHub organization used to fetch team SSH keys (optional, used with --github-team-slug). Requires --github-pat with at least the read:org scope.
       --github-team-slug string                   GitHub team slug used to fetch team SSH keys (optional, used with --github-team-org). Requires --github-pat with at least the read:org scope.
       --gitlab-app-client-id string               GitLab App Client ID (optional)
       --gitlab-app-client-secret string           GitLab App Client Secret (optional)
       --google-acme-issuer                        Use Google Public CA as the ACME issuer instead of Let's Encrypt. External Account Binding credentials are obtained automatically via the publicca API (default: false)
   -h, --help                                      help for bootstrap-gcp
-      --install-codesphere-only                   Re-install only Codesphere into an already bootstrapped project, e.g. to roll back to an earlier release. Passes --codesphere-only to the "oms install codesphere" the bootstrap runs on the jumpbox, and skips installing k0s and its config script, which would restart k0s. Requires --install-version or --install-local, and --recover-config (default: false)
+      --install-codesphere-only                   Re-install only Codesphere into an already bootstrapped project, e.g. to roll back to an earlier release. Passes --codesphere-only to the "oms install codesphere" the bootstrap runs on the jumpbox, and skips installing k0s and its config script. Requires --install-version or --install-local, and --recover-config (default: false)
       --install-config string                     Path to install config file (optional) (default "config.yaml")
       --install-config-template string            Initial config.yaml template, applied before --config files
       --install-hash string                       Codesphere package hash to install (default: none)
@@ -72,7 +63,7 @@ oms beta bootstrap-gcp [flags]
   -s, --install-skip-steps stringArray            Installation steps to skip during Codesphere installation (optional)
       --install-version string                    Codesphere version to install (default: none)
       --internal-flags stringArray                Internal flags to enable in Codesphere installation (optional) (default [headless-services,vcluster,custom-service-image,ms-in-ls])
-      --k0s-version string                        K0s version to use for bootstrapping (optional) (default "v1.31.14+k0s.0")
+      --k0s-version string                        K0s version to use for bootstrapping (optional) (default "v1.36.5+k0s.0")
       --local-trace-endpoint string               Endpoint for exporting traces to an in-cluster storage (optional)
       --machine-type string                       GCP machine type override for all VMs (default: role-specific sizes; e2-standard-8 for a single VM)
       --multi-dc                                  Bootstrap two data centers that share one PostgreSQL server but run separate Kubernetes and Ceph clusters. Doubles the Ceph and k0s nodes to 14 VMs (~100 vCPUs) and reserves 6 static IPs, so the region's CPU quota may need raising. Cannot be combined with --datacenter-id. (default: false)
@@ -84,6 +75,7 @@ oms beta bootstrap-gcp [flags]
       --openbao-password string                   OpenBao password (optional)
       --openbao-uri string                        URI for OpenBao (optional)
       --openbao-user string                       OpenBao username (optional) (default "admin")
+      --os string                                 Operating system of all VMs (options: rhel-9, ubuntu). rhel-9 boots RHEL 9.6 with Extended Update Support, which GCP bills as a premium image. Existing VMs keep their OS (default "ubuntu")
       --pc-apps-values stringArray                pc-apps values YAML file passed unchanged to the Codesphere installation (can be specified multiple times, optional)
       --preemptible                               Use preemptible VMs for Codesphere infrastructure. Mutually exclusive with --spot-vms (default: false)
       --preview-flags stringArray                 Preview flags to enable in Codesphere installation (optional) (default [openfga-authz,secret-management,sub-path-mount,workspace-ssh,virtual-machines])
@@ -96,17 +88,15 @@ oms beta bootstrap-gcp [flags]
       --recover-config                            Recover previously generated install config from the jumpbox. This will overwrite the local config! (default: false)
       --region string                             GCP Region (default: europe-west4) (default "europe-west4")
       --registry-type string                      Container registry type to use (options: local-container, artifact-registry, github) (default: github) (default "github")
-      --registry-user string                      Registry username for ghcr.io. Required for the GitHub registry type, and for the local-container registry type when installing Codesphere, where it is used with --github-pat to mirror the Codesphere images into the local container registry (optional)
-      --remote-oms-binary string                  Path to a local Linux amd64 OMS binary to copy to and use on the jumpbox instead of downloading a release (optional)
+      --registry-user string                      Registry username for ghcr.io. Required for the GitHub registry type, and for the local-container registry type when installing Codesphere.
+      --remote-oms-binary string                  Path to a local Linux amd64 OMS binary to copy to and use on the remote host instead of downloading a release (optional)
       --root-disk-size int                        Instance root disk size in GB (default: 50) (default 50)
       --secrets-dir string                        Directory for secrets (default: /etc/codesphere/secrets) (default "/etc/codesphere/secrets")
       --secrets-file string                       Path to secrets files (optional) (default "prod.vault.yaml")
-      --single-vm                                 Install k0s and Codesphere on one GCP VM using the local bootstrap
-      --spot-vms                                  Use Spot VMs for Codesphere infrastructure. Falls back to standard VMs if spot capacity unavailable. Mutually exclusive with --preemptible (default: false)
+      --spot-vms                                  Use Spot VMs for Codesphere infrastructure. Falls back to standard VMs if spot capacity unavailable. (default: false)
       --ssh-private-key-path string               SSH Private Key Path (default: ~/.ssh/id_rsa) (default "~/.ssh/id_rsa")
       --ssh-public-key-path string                SSH Public Key Path (default: ~/.ssh/id_rsa.pub) (default "~/.ssh/id_rsa.pub")
       --ssh-quiet                                 Suppress SSH command output (default: false)
-      --storage-engine string                     Single VM: storage engine (rook-ceph or local) (default "rook-ceph")
       --timer                                     Show how long each step took and a final timing summary table
       --vault string                              SOPS vault for config templating and initial install secrets
       --write-config                              Write generated install config to file (default: true) (default true)
@@ -123,6 +113,8 @@ oms beta bootstrap-gcp [flags]
 
 * [oms beta](oms_beta.md)	 - Commands for early testing
 * [oms beta bootstrap-gcp cleanup](oms_beta_bootstrap-gcp_cleanup.md)	 - Clean up GCP infrastructure created by bootstrap-gcp
+* [oms beta bootstrap-gcp multi-node](oms_beta_bootstrap-gcp_multi-node.md)	 - Bootstrap a multi-node Codesphere cluster on GCP
 * [oms beta bootstrap-gcp postconfig](oms_beta_bootstrap-gcp_postconfig.md)	 - Run post-configuration steps for GCP bootstrapping
 * [oms beta bootstrap-gcp restart-vms](oms_beta_bootstrap-gcp_restart-vms.md)	 - Restart stopped or terminated GCP VMs
+* [oms beta bootstrap-gcp single-node](oms_beta_bootstrap-gcp_single-node.md)	 - Bootstrap k0s and Codesphere on one GCP VM
 

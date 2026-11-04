@@ -616,34 +616,6 @@ var _ = Describe("RootConfig Clone", func() {
 })
 
 var _ = Describe("ManagedService plan parameters", func() {
-	It("parses the old format where each plan parameter is a {pricedAs, schema} object", func() {
-		yamlData := `
-codesphere:
-  managedServices:
-    - name: ferretdb
-      schemaVersion: v0
-      plans:
-        - id: 0
-          name: Small
-          parameters:
-            storage:
-              pricedAs: storage-mib
-              schema:
-                type: integer
-                default: 512
-                minimum: 512
-`
-		var config files.RootConfig
-		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
-
-		Expect(config.Codesphere.ManagedServices).To(HaveLen(1))
-		Expect(config.Codesphere.ManagedServices[0].SchemaVersion).To(Equal("v0"))
-		storage := config.Codesphere.ManagedServices[0].Plans[0].Parameters["storage"]
-		Expect(storage.IsScalar).To(BeFalse())
-		Expect(storage.Legacy.PricedAs).To(Equal("storage-mib"))
-		Expect(storage.Legacy.Schema).To(HaveKeyWithValue("default", 512))
-	})
-
 	It("parses the new format with scalar plan parameters and a provider-level resourceParameters block", func() {
 		yamlData := `
 codesphere:
@@ -673,10 +645,8 @@ codesphere:
 		Expect(resource.Schema).To(HaveKeyWithValue("type", "integer"))
 
 		params := svc.Plans[0].Parameters
-		Expect(params["storage"].IsScalar).To(BeTrue())
-		Expect(params["storage"].Value).To(Equal(512))
-		Expect(params["cpu"].IsScalar).To(BeTrue())
-		Expect(params["cpu"].Value).To(Equal(0))
+		Expect(params["storage"]).To(Equal(512))
+		Expect(params["cpu"]).To(Equal(0))
 	})
 
 	It("preserves a new-format managed service through a Clone round-trip", func() {
@@ -734,28 +704,8 @@ codesphere:
 		clone, err := config.Clone()
 		Expect(err).NotTo(HaveOccurred())
 
-		storage := clone.Codesphere.ManagedServices[0].Plans[0].Parameters["storage"]
-		Expect(storage.Legacy.Schema).To(BeNil())
-	})
-
-	It("fails with a clear error on an unsupported plan parameter shape", func() {
-		yamlData := `
-codesphere:
-  managedServices:
-    - name: ferretdb
-      schemaVersion: v0
-      plans:
-        - id: 0
-          name: Small
-          parameters:
-            storage:
-              - 1
-              - 2
-`
-		var config files.RootConfig
-		err := config.Unmarshal([]byte(yamlData))
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("unsupported plan parameter shape"))
+		params := clone.Codesphere.ManagedServices[0].Plans[0].Parameters
+		Expect(params).To(HaveKeyWithValue("storage", BeNil()))
 	})
 })
 

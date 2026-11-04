@@ -21,6 +21,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/discovery"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -94,6 +95,22 @@ func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts
 		return fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
 
+	registry := ""
+	if cfg.Registry != nil {
+		registry = cfg.Registry.Server
+	}
+
+	if err := stlog.Step("Configure Codesphere image registry", func() error {
+		versionClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
+		if err != nil {
+			return fmt.Errorf("failed to create Kubernetes discovery client: %w", err)
+		}
+
+		return installer.EnsureRegistryPolicy(ctx, kubeClient, registry, versionClient)
+	}); err != nil {
+		return fmt.Errorf("failed to configure Codesphere image registry: %w", err)
+	}
+
 	err = stlog.Step("Ensure Codesphere prerequisites", func() error {
 		return installer.EnsureCodespherePrerequisites(ctx, kubeClient)
 	})
@@ -129,9 +146,33 @@ func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts
 // installArgoCDAndApps runs ArgoCD install, vault secret sync, and pc-apps install
 // before the main dependency steps.
 func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, pm installer.PackageManager, kubeClient ctrlclient.Client, stlog *bootstrap.StepLogger) error {
-	bomConfig, err := bom.Parse(pm.GetDependencyPath("bom.json"))
+	bomConfig, err := bom.Parse(pm.GetDependencyPath(bom.Filename))
 	if err != nil {
 		return fmt.Errorf("failed to parse installer BOM: %w", err)
+	}
+
+	chartSelection, err := argocdinstaller.SelectChart(bomConfig, pm.GetDependencyPath("argocd/files/chart"), opts.ArgoCDVersion, opts.ArgoCDRepoURL)
+	if err != nil {
+		return fmt.Errorf("selecting ArgoCD chart: %w", err)
+	}
+
+	imageRegistry := ""
+	if cfg.Registry != nil && cfg.Registry.ReplaceImagesInBom {
+		imageRegistry = cfg.Registry.Server
+	}
+
+	registryServer := ""
+	if cfg.Registry != nil {
+		registryServer = cfg.Registry.Server
+	}
+
+	registryURL, err := installer.ChartRegistryURL(registryServer)
+	if err != nil {
+		return fmt.Errorf("resolving chart registry: %w", err)
+	}
+
+	if opts.ArgoCDRegistryURL != "" {
+		registryURL = opts.ArgoCDRegistryURL
 	}
 
 	var install *argocdinstaller.AppInstaller
@@ -155,12 +196,12 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 			registryUsername = secret.Fields.Password
 		}
 
-		registryURL := opts.ArgoCDRegistryURL
-		if registryURL == "" && cfg.Registry != nil {
-			registryURL = cfg.Registry.Server + installer.ChartsRepositoryPath
-		}
 		argoCDInstall, err := argocdinstaller.NewInstaller(argocdinstaller.InstallerConfig{
-			Version:           opts.ArgoCDVersion,
+			Version:           chartSelection.Version,
+			PackageChart:      chartSelection.PackageChart,
+			UseUpstream:       chartSelection.UseUpstream,
+			RepoURL:           chartSelection.RepoURL,
+			ImageRegistry:     imageRegistry,
 			DatacenterID:      fmt.Sprintf("%d", cfg.Datacenter.ID),
 			OciUsername:       registryUsername,
 			OciPassword:       registryPassword,
@@ -169,10 +210,9 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 			GitPassword:       os.Getenv("OMS_GIT_PASSWORD"),
 			FullInstall:       true,
 			ForceConflicts:    opts.ArgoCDForceConflicts,
-			RepoURL:           opts.ArgoCDRepoURL,
 			ValueFiles:        opts.ArgoCDValues,
 			RESTConfig:        restConfig,
-		})
+		}, bomConfig)
 		if err != nil {
 			return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
 		}

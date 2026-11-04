@@ -113,6 +113,31 @@ var _ = Describe("ApplyResourceProfile", func() {
 		})
 	})
 
+	Describe("CloudNativePG components", func() {
+		It("with pgOperator and barman plugin unset, applying noRequests creates them enabled", func() {
+			config := &files.RootConfig{}
+
+			Expect(installer.ApplyResourceProfile(config, installer.ResourceProfileNoRequests)).To(Succeed())
+
+			Expect(config.Cluster.PgOperator.Enabled).To(BeTrue())
+			Expect(config.Cluster.BarmanCloudPlugin.Enabled).To(BeTrue())
+		})
+
+		It("with pgOperator and barman plugin disabled, applying noRequests keeps them disabled", func() {
+			config := &files.RootConfig{
+				Cluster: files.ClusterConfig{
+					PgOperator:        &files.PgOperatorConfig{Enabled: false},
+					BarmanCloudPlugin: &files.BarmanCloudPluginConfig{Enabled: false},
+				},
+			}
+
+			Expect(installer.ApplyResourceProfile(config, installer.ResourceProfileNoRequests)).To(Succeed())
+
+			Expect(config.Cluster.PgOperator.Enabled).To(BeFalse())
+			Expect(config.Cluster.BarmanCloudPlugin.Enabled).To(BeFalse())
+		})
+	})
+
 	Describe("noRequestsSingleReplica", func() {
 		It("runs a single replica of the Codesphere services and still zeroes requests", func() {
 			config := &files.RootConfig{}

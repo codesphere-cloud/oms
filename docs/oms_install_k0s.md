@@ -13,6 +13,8 @@ For multi-node deployment, provide a Codesphere install-config file, which will:
 - Generate a k0sctl configuration for cluster deployment
 - Deploy k0s to all nodes defined in the install-config using k0sctl
 
+An existing generated k0sctl config is only overwritten after confirmation or with --yes.
+
 Alternatively, apply a k0sctl config created with 'oms init k0s-config' with --config.
 
 ```
@@ -25,10 +27,13 @@ oms install k0s [flags]
 # Path to Codesphere install-config file to generate k0s config from
 $ oms install k0s --install-config <path>
 
+# Overwrite a previously generated k0sctl config without asking
+$ oms install k0s --install-config <path> --yes
+
 # Path to an existing k0sctl config to apply
 $ oms install k0s --config <path>
 
-# Version of k0s to install (e.g., v1.31.14+k0s.0)
+# Version of k0s to install (e.g., v1.36.5+k0s.0)
 $ oms install k0s --version <version>
 
 # Version of k0sctl to use (e.g., v0.17.4)
@@ -66,7 +71,8 @@ $ oms install k0s --single --package <file>
       --vault string            Path to prod.vault.yaml to save the kubeconfig into (optional)
       --vault-priv-key string   Path to the age private key to decrypt the vault (optional, for SOPS-encrypted vaults)
       --vault-type string       Vault storage type (sops or plain) (default "sops")
-  -v, --version string          Version of k0s to install (default "v1.31.14+k0s.0")
+  -v, --version string          Version of k0s to install (default "v1.36.5+k0s.0")
+  -y, --yes                     Overwrite an existing generated k0sctl config without asking
 ```
 
 ### Options inherited from parent commands

@@ -12,6 +12,7 @@ const (
 	// Codesphere core
 	SecretDomainAuthPrivateKey = "domainAuthPrivateKey"
 	SecretDomainAuthPublicKey  = "domainAuthPublicKey"
+	SecretCustomCertificateKey = "customCertificateKey"
 
 	// OIDC
 	SecretOidcClientId     = "oidcClientId"

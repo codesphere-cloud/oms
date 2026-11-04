@@ -5,25 +5,20 @@ package local
 
 import (
 	"fmt"
-	"net/url"
-	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 )
 
 // DefaultRegistryURL is the registry base used by local bootstrap.
-const DefaultRegistryURL = "ghcr.io"
+const DefaultRegistryURL = installer.DefaultRegistryURL
 
 func (e *CodesphereEnvironment) registryURL() (string, error) {
-	if e.RegistryURL == "" {
-		return DefaultRegistryURL, nil
+	registry, err := installer.NormalizeRegistry(e.RegistryURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid local image registry: %w", err)
 	}
 
-	if strings.Contains(e.RegistryURL, "://") || strings.HasPrefix(e.RegistryURL, "//") {
-		return "", fmt.Errorf("registry URL must not include a scheme or leading //")
-	}
-
-	return strings.TrimRight(e.RegistryURL, "/"), nil
+	return registry, nil
 }
 
 func (e *CodesphereEnvironment) chartsRegistryURL() (string, error) {
@@ -32,10 +27,10 @@ func (e *CodesphereEnvironment) chartsRegistryURL() (string, error) {
 		return "", err
 	}
 
-	registry, err := url.Parse("//" + base)
+	chartsRegistry, err := installer.ChartRegistryURL(base)
 	if err != nil {
-		return "", fmt.Errorf("parse chart registry URL: %w", err)
+		return "", fmt.Errorf("resolving chart registry URL: %w", err)
 	}
 
-	return strings.TrimPrefix(registry.JoinPath(installer.ChartsRepositoryPath).String(), "//"), nil
+	return chartsRegistry, nil
 }

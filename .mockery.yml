@@ -17,3 +17,21 @@ packages:
   github.com/codesphere-cloud/oms/internal:
   github.com/codesphere-cloud/oms/pkg:
   github.com/codesphere-cloud/oms/cli/cmd:
+  net/http:
+    config:
+      dir: internal/installer
+      filename: mock_registry_handler_test.go
+      pkgname: installer_test
+    interfaces:
+      Handler:
+        config:
+          structname: MockRegistryHandler
+  sigs.k8s.io/controller-runtime/pkg/client:
+    config:
+      dir: internal/installer/argocd
+      filename: mock_client_test.go
+      pkgname: argocd_test
+    interfaces:
+      Client:
+        config:
+          structname: MockClient

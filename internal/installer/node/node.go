@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -104,7 +105,7 @@ func (r *SSHNodeClient) RunCommand(n *Node, username string, command string) err
 	session.Stderr = &stderrBuf
 	if !r.Quiet {
 		session.Stdout = os.Stdout
-		session.Stderr = os.Stderr
+		session.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
 	}
 	// Start the command
 	if err := session.Start(command); err != nil {
@@ -112,8 +113,9 @@ func (r *SSHNodeClient) RunCommand(n *Node, username string, command string) err
 	}
 
 	if err := session.Wait(); err != nil {
-		// A non-zero exit status from the remote command is also considered an error
-		if r.Quiet && stderrBuf.Len() > 0 {
+		// Include stderr for callers that classify transient remote command failures,
+		// including when output is streamed to the user.
+		if stderrBuf.Len() > 0 {
 			return fmt.Errorf("command failed: %w\n%s", err, stderrBuf.String())
 		}
 		return fmt.Errorf("command failed: %w", err)
@@ -207,7 +209,8 @@ func (n *Node) HasCommand(command string) bool {
 // InstallOms installs the OMS CLI on the remote node via SSH
 func (n *Node) InstallOms() error {
 	remoteCommands := []string{
-		"wget -qO- 'https://api.github.com/repos/codesphere-cloud/oms/releases/latest' | jq -r '.assets[] | select(.name | match(\"oms.*linux_amd64\")) | .browser_download_url' | xargs wget -O oms",
+		// curl rather than wget, which RHEL cloud images don't ship.
+		"curl -fsSL 'https://api.github.com/repos/codesphere-cloud/oms/releases/latest' | jq -r '.assets[] | select(.name | match(\"oms.*linux_amd64\")) | .browser_download_url' | xargs curl -fsSL -o oms",
 		"chmod +x oms; sudo mv oms /usr/local/bin/",
 	}
 	for _, cmd := range remoteCommands {
@@ -232,7 +235,7 @@ func (n *Node) EnsureOmsDependencies() error {
 		},
 		{
 			command: "age-keygen",
-			install: "wget https://dl.filippo.io/age/latest?for=linux/amd64 -O age.tar.gz; tar -xvf age.tar.gz; sudo mv age/age* /usr/local/bin/",
+			install: "curl -fsSL 'https://dl.filippo.io/age/latest?for=linux/amd64' -o age.tar.gz; tar -xvf age.tar.gz; sudo mv age/age* /usr/local/bin/",
 		},
 	}
 

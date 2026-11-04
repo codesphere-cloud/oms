@@ -156,7 +156,7 @@ var _ = Describe("PCApps.Install", func() {
 			err := pcApps.Install(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("argocd-codesphere-oci-read"))
-			Expect(err.Error()).To(ContainSubstring("oms beta install argocd"))
+			Expect(err.Error()).To(ContainSubstring("oms install codesphere dependencies"))
 		})
 	})
 
@@ -266,13 +266,20 @@ var _ = Describe("PCApps.Install", func() {
 			Expect(nested["fileOnly"]).To(BeTrue())
 		})
 
-		It("omits valuesObject when no values are configured", func() {
+		It("defaults child chart sources to the configured OCI repository", func() {
 			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, nil, nil, false)
 			Expect(pcApps.Install(context.Background())).To(Succeed())
 
 			app := getApp()
 			Expect(app.Spec.Source.Helm).ToNot(BeNil())
-			Expect(app.Spec.Source.Helm.ValuesObject).To(BeNil())
+			Expect(helmValues(app)).To(HaveKeyWithValue("chartsRegistry", secretURL))
+		})
+
+		It("preserves an explicit child chart registry override", func() {
+			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, nil,
+				map[string]interface{}{"chartsRegistry": "other.example.com/charts"}, false)
+			Expect(pcApps.Install(context.Background())).To(Succeed())
+			Expect(helmValues(getApp())).To(HaveKeyWithValue("chartsRegistry", "other.example.com/charts"))
 		})
 	})
 
