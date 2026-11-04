@@ -64,6 +64,7 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 			return fmt.Errorf("failed to pass the vault Secret to the chart: %w", err)
 		}
 
+		// TODO(nate): remove once ESO is persisted, i.e. no release without external secrets is left to roll back to.
 		if err := installer.OrphanCodesphereExternalSecrets(ctx, opts.Vault, opts.PrivKey, opts.VaultType, cfg); err != nil {
 			return fmt.Errorf("failed to hand the Codesphere Secrets over to Helm: %w", err)
 		}
