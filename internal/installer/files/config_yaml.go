@@ -531,6 +531,7 @@ type CodesphereConfig struct {
 	Preview                       map[string]bool        `yaml:"preview"`
 	Features                      map[string]bool        `yaml:"features"`
 	ClusterAdminEmail             string                 `yaml:"clusterAdminEmail,omitempty"`
+	ReleaseName                   string                 `yaml:"releaseName,omitempty"`
 	ExtraCAPem                    string                 `yaml:"extraCaPem,omitempty"`
 	ExtraWorkspaceEnvVars         map[string]string      `yaml:"extraWorkspaceEnvVars,omitempty"`
 	ExtraWorkspaceFiles           []ExtraWorkspaceFile   `yaml:"extraWorkspaceFiles,omitempty"`

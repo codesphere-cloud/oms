@@ -73,6 +73,8 @@ type CodesphereInstaller struct {
 	VaultPath string
 	// PrivKey is the path to the age/GPG private key used to decrypt the vault.
 	PrivKey string
+	// VaultType selects the vault backend that holds the kubeconfig.
+	VaultType string
 	// Force re-extracts the package even if the work directory already exists.
 	Force bool
 	// Verbose enables detailed package extraction output.
@@ -369,6 +371,11 @@ func workspaceImageBuildTag(registryServer, imageKey, flavorKey, version string)
 
 func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.RootConfig) error {
 	if ci.LocalComponents {
+		// TODO(nate): remove once ESO is persisted, i.e. no release without external secrets is left to roll back to.
+		if err := ci.orphanExternalSecretsForCodesphereStep(config); err != nil {
+			return err
+		}
+
 		return ci.runLocalComponents(pm, config)
 	}
 	nodePath := filepath.Join(pm.GetWorkDir(), "node")
@@ -381,6 +388,11 @@ func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.Root
 
 	cmdArgs, err := ci.installerCommandArgs(pm, config)
 	if err != nil {
+		return err
+	}
+
+	// TODO(nate): remove once ESO is persisted, i.e. no release without external secrets is left to roll back to.
+	if err := ci.orphanExternalSecretsForCodesphereStep(config); err != nil {
 		return err
 	}
 
@@ -401,6 +413,27 @@ func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.Root
 	}
 
 	log.Println("Private cloud installer script finished.")
+	return nil
+}
+
+// orphanExternalSecretsForCodesphereStep runs after validation and confirmation, so an aborted
+// install leaves the ExternalSecrets in place.
+//
+// TODO(nate): remove once ESO is persisted, i.e. no release without external secrets is left to roll back to.
+func (ci *CodesphereInstaller) orphanExternalSecretsForCodesphereStep(config files.RootConfig) error {
+	if !ci.executableInstallerSteps(config)[CodesphereStep] {
+		return nil
+	}
+
+	ctx := ci.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	if err := OrphanCodesphereExternalSecrets(ctx, ci.VaultPath, ci.PrivKey, ci.VaultType, config); err != nil {
+		return fmt.Errorf("failed to hand the Codesphere Secrets over to Helm: %w", err)
+	}
+
 	return nil
 }
 
