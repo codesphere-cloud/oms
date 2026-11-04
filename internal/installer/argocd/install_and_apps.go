@@ -43,7 +43,11 @@ func WaitForAppFreshlySyncedAndHealthy(ctx context.Context, kubeClient client.Cl
 		logf = func(string, ...interface{}) {}
 	}
 
-	logf("Waiting for ArgoCD Application %q to become healthy and synced (timeout %s)", name, applicationReadyTimeout)
+	logf(
+		"Waiting for ArgoCD Application %q to become freshly synced and healthy (timeout %s)",
+		name,
+		applicationReadyTimeout,
+	)
 
 	lastState := "not created"
 
@@ -51,7 +55,7 @@ func WaitForAppFreshlySyncedAndHealthy(ctx context.Context, kubeClient client.Cl
 		ctx,
 		applicationReadyPollInterval,
 		applicationReadyTimeout,
-		true,
+		/* immediate */ true,
 		func(ctx context.Context) (bool, error) {
 			app := &argov1alpha1.Application{}
 			if err := kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: DefaultNamespace}, app); err != nil {
@@ -64,20 +68,20 @@ func WaitForAppFreshlySyncedAndHealthy(ctx context.Context, kubeClient client.Cl
 				return false, nil
 			}
 
-			synced, err := syncedCurrentSource(app)
+			synced, err := freshlySynced(app)
 			if err != nil {
 				return false, fmt.Errorf("failed to compare the sources of ArgoCD Application %q: %w", name, err)
 			}
 
 			lastState = fmt.Sprintf(
-				"synced current source=%t, health=%q, sync=%q",
+				"synced current source: %t, health=%q, sync=%q",
 				synced,
 				app.Status.Health.Status,
 				app.Status.Sync.Status,
 			)
 
 			if synced && app.Status.Health.Status == "Healthy" {
-				logf("ArgoCD Application %q is healthy and synced", name)
+				logf("ArgoCD Application %q is freshly synced and healthy", name)
 				return true, nil
 			}
 
@@ -88,7 +92,7 @@ func WaitForAppFreshlySyncedAndHealthy(ctx context.Context, kubeClient client.Cl
 	)
 	if err != nil {
 		return fmt.Errorf(
-			"timed out waiting for ArgoCD Application %q to become healthy and synced (%s): %w",
+			"timed out waiting for ArgoCD Application %q to become freshly synced and healthy (%s): %w",
 			name,
 			lastState,
 			err,
@@ -98,16 +102,36 @@ func WaitForAppFreshlySyncedAndHealthy(ctx context.Context, kubeClient client.Cl
 	return nil
 }
 
-// syncedCurrentSource reports whether the Application is in sync with its current source, or the
-// last sync of that source succeeded.
-func syncedCurrentSource(app *argov1alpha1.Application) (bool, error) {
-	if app.Status.Sync.Status == argov1alpha1.SyncStatusCodeSynced {
-		compared, err := sameSource(app.Spec.Source, &app.Status.Sync.ComparedTo.Source)
-		if err != nil || compared {
-			return compared, err
-		}
+// freshlySynced reports whether Argo CD has synced the Application's current source.
+func freshlySynced(app *argov1alpha1.Application) (bool, error) {
+	inSync, err := comparedSourceInSync(app)
+	if err != nil || inSync {
+		return inSync, err
 	}
 
+	return lastSyncSucceededFor(app)
+}
+
+// comparedSourceInSync reports whether the last comparison used the current source and found the
+// cluster in sync. Spec.Source is what OMS writes: the chart, its version and all values, for an
+// app of apps also its children's versions and values. Argo CD copies it to
+// Status.Sync.ComparedTo.Source on every comparison with the cluster, so once the two match, the
+// sync status describes the current source and not an earlier one. This also covers a source that
+// renders the same manifests, for which Argo CD runs no sync operation.
+func comparedSourceInSync(app *argov1alpha1.Application) (bool, error) {
+	if app.Status.Sync.Status != argov1alpha1.SyncStatusCodeSynced {
+		return false, nil
+	}
+
+	return sameSource(app.Spec.Source, &app.Status.Sync.ComparedTo.Source)
+}
+
+// lastSyncSucceededFor reports whether the last sync operation applied the current source and
+// succeeded. A resource that changes right after the sync, e.g. replicas an autoscaler sets, turns
+// the Application OutOfSync again, and without selfHeal Argo CD leaves it so. The deploy still
+// worked, so this counts. A running or failed sync does not, although Argo CD may already record
+// its source.
+func lastSyncSucceededFor(app *argov1alpha1.Application) (bool, error) {
 	operation := app.Status.OperationState
 	if operation == nil || operation.Phase != synccommon.OperationSucceeded || operation.SyncResult == nil {
 		return false, nil
@@ -116,8 +140,12 @@ func syncedCurrentSource(app *argov1alpha1.Application) (bool, error) {
 	return sameSource(app.Spec.Source, &operation.SyncResult.Source)
 }
 
-// sameSource compares two sources ignoring null values, which Argo CD drops from the sources it
-// records in the status.
+// sameSource compares two sources without their null values. Argo CD leaves nulls out of the
+// sources it records in the status: spec values {"tlsSecret": null, "domain": "a"} come back as
+// {"domain": "a"}, which would never match. sameSource only tells whether a recorded source is the
+// current spec, so dropping nulls misses just one change: a key that only switches between null
+// and missing, i.e. between removing and keeping a chart default. Callers that need it detected
+// must change another value with it, as cs-applications does with its sync trigger on every deploy.
 func sameSource(a, b *argov1alpha1.ApplicationSource) (bool, error) {
 	a, err := withoutNullValues(a)
 	if err != nil {
