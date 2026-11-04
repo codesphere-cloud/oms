@@ -57,6 +57,46 @@ var _ = Describe("Values", func() {
 			Internal:    []string{"internal-flag"},
 			Preview:     map[string]bool{"preview-on": true},
 			Features:    map[string]bool{"feature-on": true, "billing": false},
+			GitProviders: &files.GitProvidersConfig{
+				GitHub: &files.GitProviderConfig{
+					Enabled: true,
+					URL:     "https://github.example.com",
+					API:     files.APIConfig{BaseURL: "https://api.github.example.com"},
+					OAuth: files.OAuthConfig{
+						Issuer:                "https://github.example.com",
+						AuthorizationEndpoint: "https://github.example.com/login/oauth/authorize",
+						TokenEndpoint:         "https://github.example.com/login/oauth/access_token",
+						ClientAuthMethod:      "client_secret_post",
+						Scope:                 "repo",
+						RedirectURI:           "https://codesphere.example.com/oauth/callback",
+						InstallationURI:       "https://github.example.com/apps/codesphere/installations/new",
+					},
+				},
+				SCMManager: &files.SCMManagerConfig{
+					Enabled: true,
+					URL:     "https://scm.example.com",
+					API:     &files.APIConfig{BaseURL: "https://scm.example.com/api"},
+				},
+			},
+			OAuth: &files.OAuthProvidersConfig{Oidc: &files.OidcOAuthProvider{
+				Type:      "oidc",
+				Enabled:   true,
+				Name:      "example-idp",
+				IssuerURL: "https://idp.example.com",
+				Scopes:    []string{"openid"},
+			}},
+			SignUp: &files.SignUpConfig{Email: &files.SignUpEmailConfig{AllowedDomains: []string{"example.com"}}},
+			Email: &files.EmailConfig{
+				Provider: "smtp",
+				SMTP:     files.SMTPConfig{Host: "smtp.example.com", Port: 587, Secure: true, Username: "codesphere"},
+			},
+			Branding: &files.BrandingConfig{
+				Desc:        "Example IDE",
+				DocsURL:     "https://docs.example.com",
+				FaviconHref: "https://example.com/favicon.ico",
+				Title:       "Example",
+				TosURL:      "https://example.com/tos",
+			},
 		}
 		gateways := cluster.Gateways{
 			Codesphere: cluster.GatewayAPI{Enabled: true},
@@ -86,6 +126,28 @@ var _ = Describe("Values", func() {
 			DNSServers:                 []string{"1.1.1.1", "9.9.9.9"},
 			Hosts:                      []string{"codesphere.example.com"},
 			PrePullImages:              false,
+			GitProviders: codesphere.GitProviders{
+				AzureDevOps: codesphere.GitProvider{Enabled: false},
+				GitHub: codesphere.GitProvider{Enabled: true, GitProviderConnection: &codesphere.GitProviderConnection{
+					URL: "https://github.example.com",
+					API: files.APIConfig{BaseURL: "https://api.github.example.com"},
+					OAuth: files.OAuthConfig{
+						Issuer:                "https://github.example.com",
+						AuthorizationEndpoint: "https://github.example.com/login/oauth/authorize",
+						TokenEndpoint:         "https://github.example.com/login/oauth/access_token",
+						RedirectURI:           "https://codesphere.example.com/oauth/callback",
+						InstallationURI:       "https://github.example.com/apps/codesphere/installations/new",
+						ClientAuthMethod:      "client_secret_post",
+						Scope:                 "repo",
+					},
+				}},
+				GitLab:    codesphere.GitProvider{Enabled: false},
+				Bitbucket: codesphere.GitProvider{Enabled: false},
+				SCMManager: codesphere.SCMManager{Enabled: true, SCMManagerConnection: &codesphere.SCMManagerConnection{
+					URL: "https://scm.example.com",
+					API: codesphere.SCMManagerAPI{BaseURL: "https://scm.example.com/api"},
+				}},
+			},
 			Experiments: codesphere.Flags{
 				"hermetic":        {codesphere.FlagEnvProd},
 				"persistent-nix":  {codesphere.FlagEnvProd},
@@ -107,6 +169,24 @@ var _ = Describe("Values", func() {
 				InsecureSkipDomainControlVerify: ptr.To(true),
 				Cert:                            &files.CustomDomainsCertConfig{Algorithm: "ECDSA", Size: 256},
 			},
+			OAuth: codesphere.OAuth{
+				Providers: map[string]codesphere.OAuthProvider{
+					"bitbucket": {Enabled: false},
+					"github":    {Enabled: false},
+					"gitlab":    {Enabled: false},
+					"google":    {Enabled: false},
+				},
+				AdditionalProviders: map[string]codesphere.OIDCProvider{
+					"example-idp": {
+						Type:      "oidc",
+						Enabled:   true,
+						Name:      "example-idp",
+						IssuerURL: "https://idp.example.com",
+						Scopes:    []string{"openid"},
+					},
+				},
+			},
+			SignUp: codesphere.SignUp{Email: files.SignUpEmailConfig{AllowedDomains: []string{"example.com"}}},
 			DeployConfig: codesphere.DeployConfig{Images: map[string]codesphere.DeployImage{
 				"ubuntu-24.04": {
 					Name:           "Ubuntu 24.04",
@@ -127,11 +207,19 @@ var _ = Describe("Values", func() {
 				Image:         images.Image{Name: "ghcr.io/codesphere-cloud/docker/nginx-gateway", Tag: "1.31.5"},
 				GatewayAPI:    codesphere.FrontendGatewayAPI{Enabled: true},
 			},
-			IPService:             &codesphere.IPService{LoadBalancerKind: "metallb", AddressPools: []string{"public"}},
-			SSHWorkspaceProxy:     &files.SSHWorkspaceProxyConfig{BaseDomain: "ssh.example.com"},
+			IPService:         &codesphere.IPService{LoadBalancerKind: "metallb", AddressPools: []string{"public"}},
+			SSHWorkspaceProxy: &files.SSHWorkspaceProxyConfig{BaseDomain: "ssh.example.com"},
+			Branding: &files.BrandingConfig{
+				Desc:        "Example IDE",
+				DocsURL:     "https://docs.example.com",
+				FaviconHref: "https://example.com/favicon.ico",
+				Title:       "Example",
+				TosURL:      "https://example.com/tos",
+			},
 			TLSCertificate:        &codesphere.TLSCertificate{Cert: "cert-pem", KeyName: "customCertificateKey"},
 			UnderprovisionFactors: &files.UnderprovisionFactors{CPU: 0.5, Memory: 0.75},
 			ExtraWorkspaceFiles:   []files.ExtraWorkspaceFile{{Name: ".npmrc", Content: "cmVnaXN0cnk=", Encoded: true}},
+			SMTP:                  &files.SMTPConfig{Host: "smtp.example.com", Port: 587, Secure: true, Username: "codesphere"},
 			ExtraCAPem:            "ca-pem",
 			ExtraWorkspaceEnvVars: map[string]string{"FOO": "bar"},
 		}))
@@ -145,6 +233,7 @@ var _ = Describe("Values", func() {
 			DNSServers:    []string{"8.8.8.8"},
 			Hosts:         []string{""},
 			PrePullImages: true,
+			GitProviders:  codesphere.GitProviders{},
 			Experiments: codesphere.Flags{
 				"hermetic":        {"prod"},
 				"persistent-nix":  {"prod"},
@@ -157,6 +246,15 @@ var _ = Describe("Values", func() {
 				"billing":          {},
 			},
 			CustomDomains: codesphere.CustomDomains{GatewayAPI: codesphere.CustomDomainsGatewayAPI{UseGateway: true}},
+			OAuth: codesphere.OAuth{
+				Providers: map[string]codesphere.OAuthProvider{
+					"bitbucket": {Enabled: false},
+					"github":    {Enabled: false},
+					"gitlab":    {Enabled: false},
+					"google":    {Enabled: false},
+				},
+				AdditionalProviders: map[string]codesphere.OIDCProvider{},
+			},
 			DeployConfig: codesphere.DeployConfig{Images: map[string]codesphere.DeployImage{
 				"ubuntu-24.04": {
 					Name:           "Ubuntu 24.04",

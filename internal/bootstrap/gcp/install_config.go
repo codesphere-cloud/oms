@@ -425,7 +425,7 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	if b.Env.OidcIssuerURL != "" && b.Env.OidcClientID != "" && b.Env.OidcClientSecret != "" {
 		name := b.Env.OidcProviderName
 		if name == "" {
-			name = "OIDC"
+			name = files.DefaultOidcProviderName
 		}
 
 		dc.InstallConfig.Codesphere.OAuth = &files.OAuthProvidersConfig{
