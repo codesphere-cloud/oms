@@ -138,3 +138,17 @@ var _ = Describe("NameAndTag", func() {
 		Expect(err).To(MatchError(ContainSubstring("image api not found in BOM")))
 	})
 })
+
+var _ = Describe("Image", func() {
+	It("reference with registry port and tag -> name with port and tag", func() {
+		Expect(testImages("registry.example.com:5000/api:1.2.3").Image("api")).To(Equal(images.Image{
+			Name: "registry.example.com:5000/api",
+			Tag:  "1.2.3",
+		}))
+	})
+
+	It("digest-only reference -> error", func() {
+		_, err := testImages("ghcr.io/codesphere-cloud/api@" + digest).Image("api")
+		Expect(err).To(MatchError(ContainSubstring("missing a tag")))
+	})
+})

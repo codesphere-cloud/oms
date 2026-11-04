@@ -9,7 +9,9 @@ import (
 	"go.yaml.in/yaml/v3"
 	"k8s.io/utils/ptr"
 
+	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/cluster"
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/codesphere"
+	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/images"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
@@ -38,19 +40,54 @@ var _ = Describe("Values", func() {
 				Server:   &files.ImageRef{ImageName: "registry.example.com/custom/workspace-server"},
 				VPN:      &files.ImageRef{BomRef: "vpn"},
 			},
+			CertIssuer: &files.CertIssuerConfig{Type: files.CertIssuerTypeACME, Acme: &files.ACMEConfig{
+				Enabled:               true,
+				Server:                "https://acme.example.com/directory",
+				Email:                 "ops@example.com",
+				EABKeyID:              "cluster-key",
+				CustomDomainsEABKeyID: "custom-domains-key",
+			}},
+			CustomDomains: files.CustomDomainsConfig{
+				CNameBaseDomain:                 "custom.example.com",
+				InsecureSkipDomainControlVerify: ptr.To(true),
+				Cert:                            &files.CustomDomainsCertConfig{Algorithm: "ECDSA", Size: 256},
+			},
+			IPService: &files.IPServiceConfig{LoadBalancerKind: "metallb", AddressPools: []string{"public"}},
+		}
+		gateways := cluster.Gateways{
+			Codesphere: cluster.GatewayAPI{Enabled: true},
+			Workspaces: cluster.GatewayAPI{Enabled: true, Use: true},
+		}
+		metalLB := &files.MetalLBConfig{
+			Enabled: true,
+			Pools:   []files.MetalLBPoolDef{{Name: "public", IPAddresses: []string{"203.0.113.0/28"}}},
 		}
 		registry := &files.RegistryConfig{Server: "registry.example.com"}
 
-		values, err := codesphere.Values(conf, defaultTestImages(), registry)
+		values, err := codesphere.Values(conf, codesphere.Inputs{
+			Images: defaultTestImages(), Gateways: gateways, MetalLB: metalLB, Registry: registry,
+		})
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(values).To(Equal(codesphere.Codesphere{
-			PublicIP:                   "203.0.113.10",
+			PublicIP: "203.0.113.10",
+			CertIssuer: codesphere.CertIssuer{ACME: codesphere.ACME{Enabled: true, ACMEAccount: &codesphere.ACMEAccount{
+				Server:        "https://acme.example.com/directory",
+				Email:         "ops@example.com",
+				EABKeyID:      "custom-domains-key",
+				EABMacKeyName: "acmeCustomDomainsEabMacKey",
+			}}},
 			WorkspaceHostingBaseDomain: "ws.example.com",
 			VPN:                        codesphere.VPN{LeftPeerID: "vpn.example.com"},
 			DNSServers:                 []string{"1.1.1.1", "9.9.9.9"},
 			Hosts:                      []string{"codesphere.example.com"},
 			PrePullImages:              false,
+			CustomDomains: codesphere.CustomDomains{
+				CNameBaseDomain:                 "custom.example.com",
+				GatewayAPI:                      codesphere.CustomDomainsGatewayAPI{UseGateway: true},
+				InsecureSkipDomainControlVerify: ptr.To(true),
+				Cert:                            &files.CustomDomainsCertConfig{Algorithm: "ECDSA", Size: 256},
+			},
 			DeployConfig: codesphere.DeployConfig{Images: map[string]codesphere.DeployImage{
 				"ubuntu-24.04": {
 					Name:           "Ubuntu 24.04",
@@ -65,6 +102,13 @@ var _ = Describe("Values", func() {
 				Server: "registry.example.com/custom/workspace-server",
 				VPN:    imagePrefix + "vpn",
 			},
+			FrontendGateway: codesphere.FrontendGateway{
+				Issuer:        "acme",
+				RedirectToIde: true,
+				Image:         images.Image{Name: "ghcr.io/codesphere-cloud/docker/nginx-gateway", Tag: "1.31.5"},
+				GatewayAPI:    codesphere.FrontendGatewayAPI{Enabled: true},
+			},
+			IPService:             &codesphere.IPService{LoadBalancerKind: "metallb", AddressPools: []string{"public"}},
 			SSHWorkspaceProxy:     &files.SSHWorkspaceProxyConfig{BaseDomain: "ssh.example.com"},
 			TLSCertificate:        &codesphere.TLSCertificate{Cert: "cert-pem", KeyName: "customCertificateKey"},
 			UnderprovisionFactors: &files.UnderprovisionFactors{CPU: 0.5, Memory: 0.75},
@@ -75,13 +119,14 @@ var _ = Describe("Values", func() {
 	})
 
 	It("no keys configured -> default DNS server and pre-pulling, optional keys left out", func() {
-		values, err := codesphere.Values(files.CodesphereConfig{}, defaultTestImages(), noRegistry)
+		values, err := codesphere.Values(files.CodesphereConfig{}, defaultTestInputs())
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(values).To(Equal(codesphere.Codesphere{
 			DNSServers:    []string{"8.8.8.8"},
 			Hosts:         []string{""},
 			PrePullImages: true,
+			CustomDomains: codesphere.CustomDomains{GatewayAPI: codesphere.CustomDomainsGatewayAPI{UseGateway: true}},
 			DeployConfig: codesphere.DeployConfig{Images: map[string]codesphere.DeployImage{
 				"ubuntu-24.04": {
 					Name:           "Ubuntu 24.04",
@@ -95,6 +140,12 @@ var _ = Describe("Values", func() {
 				Server: imagePrefix + "workspace-server",
 				VPN:    imagePrefix + "vpn",
 			},
+			FrontendGateway: codesphere.FrontendGateway{
+				Issuer:        "self-signed",
+				RedirectToIde: true,
+				Image:         images.Image{Name: "ghcr.io/codesphere-cloud/docker/nginx-gateway", Tag: "1.31.5"},
+				GatewayAPI:    codesphere.FrontendGatewayAPI{Enabled: true},
+			},
 		}))
 	})
 
@@ -103,7 +154,7 @@ var _ = Describe("Values", func() {
 			CustomCertificate: &files.CustomCertificate{Cert: "cert-pem", Key: "key-pem"},
 		}
 
-		values, err := codesphere.Values(conf, defaultTestImages(), noRegistry)
+		values, err := codesphere.Values(conf, defaultTestInputs())
 		Expect(err).NotTo(HaveOccurred())
 
 		rendered, err := yaml.Marshal(values)
@@ -114,9 +165,17 @@ var _ = Describe("Values", func() {
 	It("empty DNS server list -> kept empty", func() {
 		conf := files.CodesphereConfig{DNSServers: []string{}}
 
-		values, err := codesphere.Values(conf, defaultTestImages(), noRegistry)
+		values, err := codesphere.Values(conf, defaultTestInputs())
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(values.DNSServers).To(Equal([]string{}))
+	})
+
+	It("disabled gateway APIs -> frontend gateway and custom domains without them", func() {
+		values, err := codesphere.Values(files.CodesphereConfig{}, codesphere.Inputs{Images: defaultTestImages()})
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(values.FrontendGateway.GatewayAPI.Enabled).To(BeFalse())
+		Expect(values.CustomDomains.GatewayAPI.UseGateway).To(BeFalse())
 	})
 })
