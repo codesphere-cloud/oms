@@ -12,12 +12,14 @@ import (
 	"time"
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
+	admissionv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -27,6 +29,8 @@ import (
 
 const (
 	registryPolicyName         = "codesphere-image-registry"
+	registryPolicyKind         = "MutatingAdmissionPolicy"
+	registryPolicyBindingKind  = "MutatingAdmissionPolicyBinding"
 	codesphereImagePrefix      = DefaultRegistryURL + "/codesphere-cloud/"
 	registryPolicyReadyTimeout = 30 * time.Second
 	registryPolicyPollInterval = time.Second
@@ -75,7 +79,7 @@ func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base
 	failurePolicy := admissionv1.Fail
 
 	policy := &admissionv1.MutatingAdmissionPolicy{
-		TypeMeta:   metav1.TypeMeta{APIVersion: admissionv1.SchemeGroupVersion.String(), Kind: "MutatingAdmissionPolicy"},
+		TypeMeta:   metav1.TypeMeta{APIVersion: admissionv1.SchemeGroupVersion.String(), Kind: registryPolicyKind},
 		ObjectMeta: metav1.ObjectMeta{Name: registryPolicyName},
 		Spec: admissionv1.MutatingAdmissionPolicySpec{
 			MatchConstraints: &admissionv1.MatchResources{ResourceRules: []admissionv1.NamedRuleWithOperations{{
@@ -110,7 +114,7 @@ func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base
 	}
 
 	binding := &admissionv1.MutatingAdmissionPolicyBinding{
-		TypeMeta:   metav1.TypeMeta{APIVersion: admissionv1.SchemeGroupVersion.String(), Kind: "MutatingAdmissionPolicyBinding"},
+		TypeMeta:   metav1.TypeMeta{APIVersion: admissionv1.SchemeGroupVersion.String(), Kind: registryPolicyBindingKind},
 		ObjectMeta: metav1.ObjectMeta{Name: registryPolicyName},
 		Spec:       admissionv1.MutatingAdmissionPolicyBindingSpec{PolicyName: registryPolicyName},
 	}
@@ -125,12 +129,12 @@ func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base
 // images first. Version discovery is skipped so clusters without the policy API succeed.
 // When anything was removed, it waits until dry-run Pods keep their default images.
 func removeRegistryPolicy(ctx context.Context, client RegistryPolicyClient) error {
-	removedBinding, err := deleteRegistryResource(ctx, client, "MutatingAdmissionPolicyBinding")
+	removedBinding, err := deleteRegistryResource(ctx, client, registryPolicyBindingKind)
 	if err != nil {
 		return fmt.Errorf("failed to remove image registry policy binding: %w", err)
 	}
 
-	removedPolicy, err := deleteRegistryResource(ctx, client, "MutatingAdmissionPolicy")
+	removedPolicy, err := deleteRegistryResource(ctx, client, registryPolicyKind)
 	if err != nil {
 		return fmt.Errorf("failed to remove image registry policy: %w", err)
 	}
@@ -149,22 +153,17 @@ func removeRegistryPolicy(ctx context.Context, client RegistryPolicyClient) erro
 // deleteRegistryResource deletes the named admission resource through the first served
 // policy API version. It reports false when the API or the resource does not exist.
 func deleteRegistryResource(ctx context.Context, client RegistryPolicyClient, kind string) (bool, error) {
-	for _, apiVersion := range []string{admissionv1.SchemeGroupVersion.String(), "admissionregistration.k8s.io/v1beta1"} {
+	for _, apiVersion := range []string{admissionv1.SchemeGroupVersion.String(), admissionv1beta1.SchemeGroupVersion.String()} {
 		resource := &unstructured.Unstructured{}
-		resource.SetAPIVersion(apiVersion)
-		resource.SetKind(kind)
+		resource.SetGroupVersionKind(schema.FromAPIVersionAndKind(apiVersion, kind))
 		resource.SetName(registryPolicyName)
 
-		err := client.Delete(ctx, resource)
-		if meta.IsNoMatchError(err) {
+		switch err := client.Delete(ctx, resource); {
+		case meta.IsNoMatchError(err):
 			continue
-		}
-
-		if apierrors.IsNotFound(err) {
+		case apierrors.IsNotFound(err):
 			return false, nil
-		}
-
-		if err != nil {
+		case err != nil:
 			return false, fmt.Errorf("failed to delete %s %s: %w", apiVersion, kind, err)
 		}
 
@@ -262,7 +261,7 @@ func registryPolicyAPIVersion(client ClusterVersionClient) (string, error) {
 	}
 
 	if !serverVersion.AtLeast(version.MustParseGeneric("v1.36.0")) {
-		return "admissionregistration.k8s.io/v1beta1", nil
+		return admissionv1beta1.SchemeGroupVersion.String(), nil
 	}
 
 	return admissionv1.SchemeGroupVersion.String(), nil
