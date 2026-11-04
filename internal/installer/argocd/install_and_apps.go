@@ -121,8 +121,17 @@ func currentSourceDeployed(app *argov1alpha1.Application) (bool, error) {
 	// must be of the current source: until the new sync starts, OperationState still holds the
 	// previous deploy's succeeded sync.
 	operation := app.Status.OperationState
-	if operation != nil && operation.Phase == synccommon.OperationSucceeded && operation.SyncResult != nil {
-		return sameSource(app.Spec.Source, &operation.SyncResult.Source)
+	if operation == nil || operation.SyncResult == nil {
+		return false, nil
+	}
+
+	freshlySynced, err := sameSource(app.Spec.Source, &operation.SyncResult.Source)
+	if err != nil {
+		return false, err
+	}
+
+	if freshlySynced && operation.Phase == synccommon.OperationSucceeded {
+		return true, nil
 	}
 
 	return false, nil
