@@ -100,26 +100,32 @@ func WaitForAppFreshlySyncedAndHealthy(ctx context.Context, kubeClient client.Cl
 // Spec.Source is what OMS writes: the chart, its version and all values, for an app of apps also its
 // children's versions and values.
 func currentSourceDeployed(app *argov1alpha1.Application) (bool, error) {
-	// Argo CD copies Spec.Source to Status.Sync.ComparedTo.Source on every comparison with the
-	// cluster. Once they match, the sync status describes the current source, not an earlier one.
-	// This also covers a source that renders the same manifests, for which no sync runs.
-	if app.Status.Sync.Status == argov1alpha1.SyncStatusCodeSynced {
-		compared, err := sameSource(app.Spec.Source, &app.Status.Sync.ComparedTo.Source)
-		if err != nil || compared {
-			return compared, err
-		}
+	// Argo CD writes Status.Sync.ComparedTo.Source on every comparison with the
+	// cluster (and sets it to Spec.Source). Once they match we know the sync status describes the current source.
+	freshlyCompared, err := sameSource(app.Spec.Source, &app.Status.Sync.ComparedTo.Source)
+	if err != nil {
+		return false, err
 	}
 
-	// A resource that changes right after the sync, e.g. replicas an autoscaler sets, turns the
-	// Application OutOfSync again, and without selfHeal Argo CD leaves it so. The deploy still
-	// worked, so a succeeded sync of the current source counts too. A running or failed one does
-	// not, although Argo CD may already record its source.
-	operation := app.Status.OperationState
-	if operation == nil || operation.Phase != synccommon.OperationSucceeded || operation.SyncResult == nil {
+	if !freshlyCompared {
 		return false, nil
 	}
 
-	return sameSource(app.Spec.Source, &operation.SyncResult.Source)
+	// Happy case: Argo CD compared and synced (or a sync was not necessary).
+	if app.Status.Sync.Status == argov1alpha1.SyncStatusCodeSynced {
+		return true, nil
+	}
+
+	// Drift case: Argo CD compared and synced, but the resources in the cluster changed afterwards
+	// (example: an autoscaler changes replicas). The deploy still worked, so this is fine. The sync
+	// must be of the current source: until the new sync starts, OperationState still holds the
+	// previous deploy's succeeded sync.
+	operation := app.Status.OperationState
+	if operation != nil && operation.Phase == synccommon.OperationSucceeded && operation.SyncResult != nil {
+		return sameSource(app.Spec.Source, &operation.SyncResult.Source)
+	}
+
+	return false, nil
 }
 
 // sameSource compares two sources without their null values. Argo CD leaves nulls out of the
