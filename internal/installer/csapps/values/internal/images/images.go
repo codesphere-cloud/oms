@@ -49,6 +49,11 @@ func New(b *bom.Config) (Images, error) {
 	return images, nil
 }
 
+// Has reports whether the BOM has the named image.
+func (images Images) Has(name string) bool {
+	return images[name] != ""
+}
+
 // Reference returns the named image's reference as the BOM has it.
 func (images Images) Reference(name string) (string, error) {
 	named, err := images.parse(name)

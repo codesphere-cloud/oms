@@ -251,6 +251,8 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 	}
 
 	errors = append(errors, validateOpenFga(g.Config.Codesphere.OpenFga)...)
+	errors = append(errors, validatePooledInstances(g.Config.Codesphere)...)
+	errors = append(errors, validateWorkspaceImageBuilds(g.Config)...)
 
 	// OpenFGA's database is a CloudNativePG cluster; without the operator's CRDs ArgoCD cannot sync it.
 	if pg := g.Config.Cluster.PgOperator; pg != nil && !pg.Enabled && !pg.ManagedExternally && g.Config.Codesphere.OpenFga.DeploysOpenFga() {
@@ -258,6 +260,56 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 	}
 
 	return errors
+}
+
+// validatePooledInstances rejects pool sizes in two places, as the old installer did.
+func validatePooledInstances(config files.CodesphereConfig) []string {
+	if config.DeployConfig.Images == nil {
+		return nil
+	}
+
+	for _, plan := range config.Plans.HostingPlans {
+		if plan.PooledInstances != nil && *plan.PooledInstances != 0 {
+			return []string{"configuring .deployConfig AND .pooledInstances is ambiguous (remove the .pooledInstances config)"}
+		}
+	}
+
+	return nil
+}
+
+func validateWorkspaceImageBuilds(config *files.RootConfig) []string {
+	if config.Registry != nil && config.Registry.Server != "" {
+		return nil
+	}
+
+	errors := []string{}
+
+	for _, image := range workspaceAgentImages(config.Codesphere) {
+		if image.Dockerfile != "" && image.ImageName == "" {
+			errors = append(errors, fmt.Sprintf("workspace image Dockerfile %s requires registry.server to push the built image to", image.Dockerfile))
+		}
+	}
+
+	return errors
+}
+
+func workspaceAgentImages(config files.CodesphereConfig) []files.ImageRef {
+	images := []files.ImageRef{}
+	if config.WorkspaceImages != nil && config.WorkspaceImages.Agent != nil {
+		images = append(images, *config.WorkspaceImages.Agent)
+	}
+
+	if config.WorkspaceImages != nil && config.WorkspaceImages.AgentGpu != nil {
+		images = append(images, *config.WorkspaceImages.AgentGpu)
+	}
+
+	for _, image := range config.DeployConfig.Images {
+		for _, flavor := range image.Flavors {
+			images = append(images, flavor.Image)
+		}
+	}
+
+	return images
 }
 
 // validateOpenFga checks the codesphere.openFga block. A data center that does not deploy

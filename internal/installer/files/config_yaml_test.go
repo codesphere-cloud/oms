@@ -274,6 +274,20 @@ codesphere:
 		})
 	})
 
+	Describe("RegistryConfig.WorkspaceImage", func() {
+		It("registry server -> image named after the image and flavor", func() {
+			registry := files.RegistryConfig{Server: "registry.example.com"}
+
+			Expect(registry.WorkspaceImage("ubuntu-24.04", "default")).To(Equal("registry.example.com/ubuntu-24.04-default"))
+		})
+
+		It("registry server with a trailing slash -> image without a double slash", func() {
+			registry := files.RegistryConfig{Server: "registry.example.com/private-cloud/"}
+
+			Expect(registry.WorkspaceImage("ubuntu-24.04", "gpu")).To(Equal("registry.example.com/private-cloud/ubuntu-24.04-gpu"))
+		})
+	})
+
 	Describe("ACME config structure", func() {
 		// Verifies the marshaled YAML matches the structure documented at:
 		// https://docs.codesphere.com/private-cloud/cluster-ingress-ca-options
