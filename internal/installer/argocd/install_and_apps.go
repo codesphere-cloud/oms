@@ -5,7 +5,6 @@ package argocd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -18,6 +17,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
+	jsonpatch "github.com/evanphx/json-patch/v5"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -137,19 +137,19 @@ func currentSourceDeployed(app *argov1alpha1.Application) (bool, error) {
 	return false, nil
 }
 
-// sameSource compares two sources without their null values. Argo CD leaves nulls out of the
-// sources it records in the status: spec values {"tlsSecret": null, "domain": "a"} come back as
-// {"domain": "a"}, which would never match. sameSource only tells whether a recorded source is the
-// current spec, so dropping nulls misses just one change: a key that only switches between null
-// and missing, i.e. between removing and keeping a chart default. Callers that need it detected
-// must change another value with it, as cs-applications does with its sync trigger on every deploy.
+// sameSource compares two sources the way Argo CD records them in the status. Argo CD writes the
+// status as a JSON merge patch, in which null deletes a key, so spec values {"metrics": null} come
+// back as {}. Applying the same merge patch to both sides drops those keys before comparing. That
+// misses only a key that switches between null and missing, which cs-applications never does
+// alone: every deploy also changes its sync trigger. Passing the values as a YAML string
+// (helm.values) would keep the nulls, but makes them hard to read and diff in the Argo CD UI.
 func sameSource(a, b *argov1alpha1.ApplicationSource) (bool, error) {
-	a, err := withoutNullValues(a)
+	a, err := asStoredInStatus(a)
 	if err != nil {
 		return false, err
 	}
 
-	b, err = withoutNullValues(b)
+	b, err = asStoredInStatus(b)
 	if err != nil {
 		return false, err
 	}
@@ -157,49 +157,20 @@ func sameSource(a, b *argov1alpha1.ApplicationSource) (bool, error) {
 	return a.Equals(b), nil
 }
 
-func withoutNullValues(source *argov1alpha1.ApplicationSource) (*argov1alpha1.ApplicationSource, error) {
+func asStoredInStatus(source *argov1alpha1.ApplicationSource) (*argov1alpha1.ApplicationSource, error) {
 	if source == nil || source.Helm == nil || source.Helm.ValuesObject == nil {
 		return source, nil
 	}
 
-	values := map[string]any{}
-	if err := json.Unmarshal(source.Helm.ValuesObject.Raw, &values); err != nil {
-		return nil, fmt.Errorf("failed to parse the Helm values: %w", err)
-	}
-
-	raw, err := json.Marshal(dropNulls(values))
+	raw, err := jsonpatch.MergePatch([]byte("{}"), source.Helm.ValuesObject.Raw)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal the Helm values: %w", err)
+		return nil, fmt.Errorf("failed to apply the Helm values as a merge patch: %w", err)
 	}
 
 	copied := source.DeepCopy()
 	copied.Helm.ValuesObject = &runtime.RawExtension{Raw: raw}
 
 	return copied, nil
-}
-
-func dropNulls(values map[string]any) map[string]any {
-	for key, value := range values {
-		if value == nil {
-			delete(values, key)
-			continue
-		}
-
-		dropNestedNulls(value)
-	}
-
-	return values
-}
-
-func dropNestedNulls(value any) {
-	switch v := value.(type) {
-	case map[string]any:
-		dropNulls(v)
-	case []any:
-		for _, item := range v {
-			dropNestedNulls(item)
-		}
-	}
 }
 
 // InstallerAPI is implemented by the concrete ArgoCD chart installer.
