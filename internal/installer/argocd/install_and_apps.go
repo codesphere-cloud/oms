@@ -79,8 +79,10 @@ func WaitForApplicationHealthy(ctx context.Context, kubeClient client.Client, na
 }
 
 // InstallerAPI is implemented by the concrete ArgoCD chart installer.
+//
+//mockery:generate: true
 type InstallerAPI interface {
-	Install() error
+	Install(ctx context.Context) error
 }
 
 // AppInstallerConfig configures the shared ArgoCD, vault secret, and
@@ -106,12 +108,12 @@ func NewAppInstaller(cfg AppInstallerConfig) *AppInstaller {
 }
 
 // InstallArgoCD installs or upgrades ArgoCD using the configured installer.
-func (i *AppInstaller) InstallArgoCD() error {
+func (i *AppInstaller) InstallArgoCD(ctx context.Context) error {
 	if i.cfg.Installer == nil {
 		return fmt.Errorf("ArgoCD installer is required")
 	}
 
-	if err := i.cfg.Installer.Install(); err != nil {
+	if err := i.cfg.Installer.Install(ctx); err != nil {
 		return fmt.Errorf("failed to install ArgoCD: %w", err)
 	}
 

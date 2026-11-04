@@ -4,8 +4,11 @@
 package cmd
 
 import (
+	"context"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/cli/cmd/apikey"
@@ -88,7 +91,10 @@ func Execute() {
 	//Disable printing timestamps on log lines
 	log.SetFlags(0)
 
-	err := GetRootCmd().Execute()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	err := GetRootCmd().ExecuteContext(ctx)
+
+	stop()
 	if err != nil {
 		os.Exit(1)
 	}

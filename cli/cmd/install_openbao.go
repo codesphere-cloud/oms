@@ -5,17 +5,14 @@ package cmd
 
 import (
 	"bufio"
-	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
@@ -47,7 +44,8 @@ type InstallOpenBaoOpts struct {
 	StepTimer         bool
 }
 
-func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
+// RunE bootstraps OpenBao using the command context, which is cancelled on SIGINT or SIGTERM.
+func (c *InstallOpenBaoCmd) RunE(cmd *cobra.Command, _ []string) error {
 	if err := validateOpenBaoPrereqs(); err != nil {
 		return err
 	}
@@ -109,10 +107,11 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	if err := inst.Install(cmd.Context()); err != nil {
+		return fmt.Errorf("installing OpenBao: %w", err)
+	}
 
-	return inst.Install(ctx)
+	return nil
 }
 
 // AddInstallOpenBaoCmd registers the openbao subcommand under install.
