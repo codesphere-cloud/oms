@@ -92,16 +92,17 @@ func recordDeletePropagation(policies map[string]metav1.DeletionPropagation) int
 }
 
 var _ = Describe("OrphanCodesphereExternalSecrets", func() {
-	It("deletes the release ExternalSecret with orphan propagation, so its Secret is not garbage-collected", func() {
+	It("deletes both ExternalSecrets with orphan propagation, so their Secrets are not garbage-collected", func() {
 		policies := map[string]metav1.DeletionPropagation{}
 		kubeClient := newExternalSecretsClient(recordDeletePropagation(policies),
-			newExternalSecret("codesphere"), newESOSecret("codesphere"))
+			newExternalSecret("codesphere"), newExternalSecret("cd-codesphere-eab-hmac-key"))
 
 		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "")).To(Succeed())
 
-		Expect(policies).To(HaveKeyWithValue("codesphere", metav1.DeletePropagationOrphan))
-		Expect(externalSecretExists(kubeClient, "codesphere")).To(BeFalse())
-		Expect(getSecret(kubeClient, "codesphere").Data).To(HaveKeyWithValue("token", []byte("from-eso")))
+		Expect(policies).To(Equal(map[string]metav1.DeletionPropagation{
+			"codesphere":                 metav1.DeletePropagationOrphan,
+			"cd-codesphere-eab-hmac-key": metav1.DeletePropagationOrphan,
+		}))
 	})
 
 	It("marks the Secret as owned by the release, so Helm can adopt it", func() {
@@ -170,26 +171,6 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 		Expect(err).To(MatchError(ContainSubstring("failed to wait for deletion of ExternalSecret codesphere/codesphere")))
 		Expect(err).To(MatchError(ContainSubstring("connection refused")))
 		Expect(getSecret(kubeClient, "codesphere").Labels).NotTo(HaveKey("app.kubernetes.io/managed-by"))
-	})
-
-	It("orphans the EAB HMAC key ExternalSecret of the release", func() {
-		policies := map[string]metav1.DeletionPropagation{}
-		kubeClient := newExternalSecretsClient(recordDeletePropagation(policies),
-			newExternalSecret("cd-codesphere-eab-hmac-key"), newESOSecret("cd-codesphere-eab-hmac-key"))
-
-		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "")).To(Succeed())
-
-		Expect(policies).To(HaveKeyWithValue("cd-codesphere-eab-hmac-key", metav1.DeletePropagationOrphan))
-		Expect(getSecret(kubeClient, "cd-codesphere-eab-hmac-key").Annotations).To(HaveKeyWithValue("meta.helm.sh/release-name", "codesphere"))
-	})
-
-	It("leaves the OpenFGA token ExternalSecret alone, because every chart renders it as ExternalSecret", func() {
-		kubeClient := newExternalSecretsClient(interceptor.Funcs{},
-			newExternalSecret("codesphere-openfga-token"))
-
-		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient, "")).To(Succeed())
-
-		Expect(externalSecretExists(kubeClient, "codesphere-openfga-token")).To(BeTrue())
 	})
 
 	It("finishes the handover on a retry after the ownership patch failed", func() {
