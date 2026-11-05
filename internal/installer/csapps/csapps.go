@@ -37,7 +37,7 @@ func Install(
 	csBom *bom.Config,
 	vaultSecretName string,
 ) error {
-	appValues, err := Values(cfg, csBom, vaultSecretName)
+	appValues, err := parentAppValues(cfg, csBom, vaultSecretName)
 	if err != nil {
 		return err
 	}
@@ -112,12 +112,12 @@ func subAppNames(ctx context.Context, kubeClient client.Client, parentAppName st
 	return names, nil
 }
 
-// Values returns the cs-applications values: the Codesphere umbrella chart version and the values
+// parentAppValues returns the cs-applications values: the Codesphere umbrella chart version and the values
 // OMS builds from the config, with the config's csApps block merged over them. The built global
 // values go to the top level, which the chart shares with every sub application. Other values reach
 // a sub application only through csApps; for permanent config for a new app, extend the config
 // appropriately.
-func Values(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName string) (map[string]any, error) {
+func parentAppValues(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName string) (map[string]any, error) {
 	chart, ok := csBom.GetChart(csUmbrellaComponent)
 	if !ok {
 		return nil, fmt.Errorf("%s chart not found in BOM", csUmbrellaComponent)

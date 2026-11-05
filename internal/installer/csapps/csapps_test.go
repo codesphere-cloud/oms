@@ -80,85 +80,18 @@ func at(values map[string]any, keys ...string) any {
 	return current
 }
 
-var _ = Describe("Values", func() {
-	It("full config -> the Codesphere chart version, and the built global values shared at the top level", func() {
-		cfg := fullConfig("pr-1")
-		b := bomWithCharts()
+// asJSON returns value as it reads back from the Application's JSON values.
+func asJSON(value any) any {
+	GinkgoHelper()
 
-		values, err := csapps.Values(cfg, b, vaultSecretName)
-		Expect(err).NotTo(HaveOccurred())
+	raw, err := json.Marshal(value)
+	Expect(err).NotTo(HaveOccurred())
 
-		Expect(values).NotTo(HaveKey("releaseName"))
-		Expect(at(values, "namespace")).To(Equal("codesphere"))
-		Expect(at(values, "applications", "codesphere", "enabled")).To(BeTrue())
-		Expect(at(values, "applications", "codesphere", "version")).To(Equal(codesphereVersion))
+	var decoded any
+	Expect(json.Unmarshal(raw, &decoded)).To(Succeed())
 
-		expected, err := csappsvalues.Build(cfg, b)
-		Expect(err).NotTo(HaveOccurred())
-
-		syncTrigger := at(values, "global", "externalSecretsSyncTrigger")
-		Expect(syncTrigger).NotTo(BeEmpty())
-
-		expectedGlobal := expected["global"].(map[string]any)
-		expectedGlobal["externalSecrets"] = true
-		expectedGlobal["externalSecretsSyncTrigger"] = syncTrigger
-		expectedGlobal["externalSecretsVaultSecret"] = vaultSecretName
-		expectedGlobal["argoCd"] = true
-
-		delete(expected, "global")
-
-		Expect(at(values, "global")).To(Equal(expectedGlobal))
-		Expect(at(values, "applications", "codesphere", "valuesObject")).To(Equal(expected))
-	})
-
-	It("override with a key outside global -> only in the Codesphere values, not shared", func() {
-		cfg := fullConfig("pr-1")
-		cfg.Codesphere.Override = map[string]any{"ideService": map[string]any{"replicas": 3}}
-
-		values, err := csapps.Values(cfg, bomWithCharts(), vaultSecretName)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(at(values, "applications", "codesphere", "valuesObject")).
-			To(Equal(map[string]any{"ideService": map[string]any{"replicas": 3}}))
-		Expect(at(values, "global")).NotTo(HaveKey("ideService"))
-	})
-
-	It("override disables external secrets -> still enabled, the values hold no secrets", func() {
-		cfg := fullConfig("pr-1")
-		cfg.Codesphere.Override = map[string]any{"global": map[string]any{"externalSecrets": false}}
-
-		values, err := csapps.Values(cfg, bomWithCharts(), vaultSecretName)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(at(values, "global", "externalSecrets")).To(BeTrue())
-	})
-
-	It("csApps block -> merged over the built values", func() {
-		cfg := fullConfig("pr-1")
-		cfg.CsApps = map[string]any{"appProject": "previews"}
-		cfg.CsApps["applications"] = map[string]any{
-			"codesphere": map[string]any{"ignoreDifferences": []any{map[string]any{"kind": "HTTPRoute"}}},
-		}
-
-		values, err := csapps.Values(cfg, bomWithCharts(), vaultSecretName)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(at(values, "appProject")).To(Equal("previews"))
-		Expect(at(values, "applications", "codesphere", "ignoreDifferences")).To(HaveLen(1))
-		Expect(at(values, "applications", "codesphere", "version")).To(Equal(codesphereVersion))
-	})
-
-	It("BOM without a Codesphere chart -> error", func() {
-		b := bomWithCharts()
-		codesphere := b.Components["codesphere"]
-		codesphere.Files = nil
-		b.Components["codesphere"] = codesphere
-
-		_, err := csapps.Values(fullConfig("pr-1"), b, vaultSecretName)
-
-		Expect(err).To(MatchError(ContainSubstring("codesphere chart not found in BOM")))
-	})
-})
+	return decoded
+}
 
 var _ = Describe("Install", func() {
 	var kubeClient client.Client
@@ -176,12 +109,113 @@ var _ = Describe("Install", func() {
 	})
 
 	// Nothing syncs the Applications in a fake cluster, so Install stops at the wait.
-	installUntilWait := func() error {
+	installUntilWaitWith := func(cfg *files.RootConfig) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		defer cancel()
 
-		return csapps.Install(ctx, kubeClient, fullConfig("pr-1"), bomWithCharts(), vaultSecretName)
+		return csapps.Install(ctx, kubeClient, cfg, bomWithCharts(), vaultSecretName)
 	}
+
+	installUntilWait := func() error {
+		return installUntilWaitWith(fullConfig("pr-1"))
+	}
+
+	parentValues := func() map[string]any {
+		GinkgoHelper()
+
+		app := &argo.Application{}
+		Expect(kubeClient.Get(context.Background(), client.ObjectKey{Name: "pr-1-cs-applications", Namespace: "argocd"}, app)).
+			To(Succeed())
+
+		values := map[string]any{}
+		Expect(json.Unmarshal(app.Spec.Source.Helm.ValuesObject.Raw, &values)).To(Succeed())
+
+		return values
+	}
+
+	Context("values of the cs-applications Application", func() {
+		appliedValues := func(cfg *files.RootConfig) map[string]any {
+			GinkgoHelper()
+
+			Expect(installUntilWaitWith(cfg)).To(HaveOccurred())
+
+			return parentValues()
+		}
+
+		It("full config -> the Codesphere chart version, and the built global values shared at the top level", func() {
+			cfg := fullConfig("pr-1")
+
+			values := appliedValues(cfg)
+
+			Expect(values).NotTo(HaveKey("releaseName"))
+			Expect(at(values, "namespace")).To(Equal("codesphere"))
+			Expect(at(values, "applications", "codesphere", "enabled")).To(BeTrue())
+			Expect(at(values, "applications", "codesphere", "version")).To(Equal(codesphereVersion))
+
+			expected, err := csappsvalues.Build(cfg, bomWithCharts())
+			Expect(err).NotTo(HaveOccurred())
+
+			syncTrigger := at(values, "global", "externalSecretsSyncTrigger")
+			Expect(syncTrigger).NotTo(BeEmpty())
+
+			expectedGlobal := expected["global"].(map[string]any)
+			expectedGlobal["externalSecrets"] = true
+			expectedGlobal["externalSecretsSyncTrigger"] = syncTrigger
+			expectedGlobal["externalSecretsVaultSecret"] = vaultSecretName
+			expectedGlobal["argoCd"] = true
+
+			delete(expected, "global")
+
+			Expect(at(values, "global")).To(Equal(asJSON(expectedGlobal)))
+			Expect(at(values, "applications", "codesphere", "valuesObject")).To(Equal(asJSON(expected)))
+		})
+
+		It("override with a key outside global -> only in the Codesphere values, not shared", func() {
+			cfg := fullConfig("pr-1")
+			cfg.Codesphere.Override = map[string]any{"ideService": map[string]any{"replicas": 3}}
+
+			values := appliedValues(cfg)
+
+			Expect(at(values, "applications", "codesphere", "valuesObject")).
+				To(Equal(map[string]any{"ideService": map[string]any{"replicas": float64(3)}}))
+			Expect(at(values, "global")).NotTo(HaveKey("ideService"))
+		})
+
+		It("override disables external secrets -> still enabled, the values hold no secrets", func() {
+			cfg := fullConfig("pr-1")
+			cfg.Codesphere.Override = map[string]any{"global": map[string]any{"externalSecrets": false}}
+
+			Expect(at(appliedValues(cfg), "global", "externalSecrets")).To(BeTrue())
+		})
+
+		It("csApps block -> merged over the built values", func() {
+			cfg := fullConfig("pr-1")
+			cfg.CsApps = map[string]any{"appProject": "previews"}
+			cfg.CsApps["applications"] = map[string]any{
+				"codesphere": map[string]any{"ignoreDifferences": []any{map[string]any{"kind": "HTTPRoute"}}},
+			}
+
+			values := appliedValues(cfg)
+
+			Expect(at(values, "appProject")).To(Equal("previews"))
+			Expect(at(values, "applications", "codesphere", "ignoreDifferences")).To(HaveLen(1))
+			Expect(at(values, "applications", "codesphere", "version")).To(Equal(codesphereVersion))
+		})
+	})
+
+	It("BOM without a Codesphere chart -> error before applying anything", func() {
+		b := bomWithCharts()
+		codesphere := b.Components["codesphere"]
+		codesphere.Files = nil
+		b.Components["codesphere"] = codesphere
+
+		Expect(csapps.Install(context.Background(), kubeClient, fullConfig("pr-1"), b, vaultSecretName)).
+			To(MatchError(ContainSubstring("codesphere chart not found in BOM")))
+
+		apps := &argo.ApplicationList{}
+		Expect(kubeClient.List(context.Background(), apps)).To(Succeed())
+		Expect(apps.Items).To(BeEmpty())
+	})
 
 	It("release pr-1 -> applies pr-1-cs-applications and waits for it to sync", func() {
 		Expect(installUntilWait()).To(MatchError(ContainSubstring(`"pr-1-cs-applications"`)))
@@ -195,8 +229,7 @@ var _ = Describe("Install", func() {
 		Expect(app.Spec.Source.Helm.ReleaseName).To(Equal("pr-1"))
 		Expect(app.Finalizers).To(ConsistOf(argo.ResourcesFinalizerName))
 
-		values := map[string]any{}
-		Expect(json.Unmarshal(app.Spec.Source.Helm.ValuesObject.Raw, &values)).To(Succeed())
+		values := parentValues()
 		Expect(at(values, "chartsRegistry")).To(Equal(chartsRegistry))
 		Expect(at(values, "applications", "codesphere", "version")).To(Equal(codesphereVersion))
 		Expect(at(values, "global", "externalSecretsSyncTrigger")).
@@ -216,14 +249,7 @@ var _ = Describe("Install", func() {
 
 	It("second install -> a new sync trigger, so External Secrets reads the vault again", func() {
 		syncTrigger := func() any {
-			app := &argo.Application{}
-			Expect(kubeClient.Get(context.Background(), client.ObjectKey{Name: "pr-1-cs-applications", Namespace: "argocd"}, app)).
-				To(Succeed())
-
-			values := map[string]any{}
-			Expect(json.Unmarshal(app.Spec.Source.Helm.ValuesObject.Raw, &values)).To(Succeed())
-
-			return at(values, "global", "externalSecretsSyncTrigger")
+			return at(parentValues(), "global", "externalSecretsSyncTrigger")
 		}
 
 		Expect(installUntilWait()).To(HaveOccurred())
