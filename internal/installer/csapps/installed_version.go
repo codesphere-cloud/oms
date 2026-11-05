@@ -16,12 +16,10 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
-const codesphereAppSuffix = "-" + csUmbrellaComponent
-
 // InstalledVersion returns the Codesphere version ArgoCD last deployed for the release cfg
 // configures, or "" when ArgoCD has not deployed it yet.
 func InstalledVersion(ctx context.Context, kubeClient client.Client, cfg *files.RootConfig) (string, error) {
-	name := releaseName(cfg) + codesphereAppSuffix
+	name := releaseName(cfg) + "-" + csAppsComponent
 
 	app := &argo.Application{}
 	if err := kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: argocd.DefaultNamespace}, app); err != nil {
