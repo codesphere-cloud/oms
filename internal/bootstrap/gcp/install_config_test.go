@@ -489,11 +489,31 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(bs.Env.InstallConfig.Registry.Server).To(Equal("ghcr.io"))
-				Expect(bs.Env.InstallConfig.Registries.Codesphere).To(Equal(&files.RegistryAccessConfig{
-					Registry: "registry.codesphere.com",
-					Username: gcp.CodesphereRegistryUsername,
+				Expect(bs.Env.InstallConfig.AdditionalRegistries).To(Equal([]files.AdditionalRegistryConfig{
+					{Name: "codesphere", Registry: "registry.codesphere.com"},
 				}))
-				Expect(vault.GetSecret(files.SecretCodesphereRegistryPassword).Fields.Password).To(Equal("portal-api-key"))
+				Expect(vault.GetSecret("codesphereRegistryUsername").Fields.Password).To(Equal(gcp.CodesphereRegistryUsername))
+				Expect(vault.GetSecret("codesphereRegistryPassword").Fields.Password).To(Equal("portal-api-key"))
+			})
+			It("replaces the codesphere registry kept from an earlier run and keeps other additional registries", func() {
+				csEnv.InstallConfig.AdditionalRegistries = []files.AdditionalRegistryConfig{
+					{Name: "other", Registry: "other.example.com"},
+					{Name: "codesphere", Registry: "registry.dev.codesphere.com"},
+				}
+
+				icg.EXPECT().GenerateSecrets().Return(nil)
+				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+				err := bs.UpdateInstallConfig()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(bs.Env.InstallConfig.AdditionalRegistries).To(Equal([]files.AdditionalRegistryConfig{
+					{Name: "other", Registry: "other.example.com"},
+					{Name: "codesphere", Registry: "registry.codesphere.com"},
+				}))
 			})
 			It("wires the openfga backup config and secrets when a bucket was provisioned", func() {
 				csEnv.OpenfgaBackupBucket = "pid-openfga-backup"

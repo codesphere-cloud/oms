@@ -200,29 +200,61 @@ codesphere:
 			Expect(rootConfig.Codesphere.DeployConfig.Images).To(BeEmpty())
 		})
 
-		It("parses the codesphere registry independently of the registry config", func() {
+		It("parses additional registries independently of the registry config", func() {
 			var cfg files.RootConfig
 			Expect(cfg.Unmarshal([]byte(`registry:
   server: ghcr.io
-registries:
-  codesphere:
+additionalRegistries:
+  - name: codesphere
     registry: registry.codesphere.com
-    username: oms
 `))).To(Succeed())
 
 			Expect(cfg.Registry.Server).To(Equal("ghcr.io"))
-			Expect(cfg.Registries.Codesphere).To(Equal(&files.RegistryAccessConfig{
-				Registry: "registry.codesphere.com",
-				Username: "oms",
+			Expect(cfg.AdditionalRegistries).To(Equal([]files.AdditionalRegistryConfig{
+				{Name: "codesphere", Registry: "registry.codesphere.com"},
 			}))
 		})
 
-		It("omits registries when they are not configured", func() {
+		It("omits additional registries when they are not configured", func() {
 			cfg := files.RootConfig{}
 
 			data, err := cfg.Marshal()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(string(data)).NotTo(ContainSubstring("registries"))
+			Expect(string(data)).NotTo(ContainSubstring("additionalRegistries"))
+		})
+	})
+
+	Describe("SetAdditionalRegistry", func() {
+		It("appends a registry with a new name", func() {
+			cfg := files.RootConfig{AdditionalRegistries: []files.AdditionalRegistryConfig{
+				{Name: "other", Registry: "other.example.com"},
+			}}
+
+			cfg.SetAdditionalRegistry(files.AdditionalRegistryConfig{Name: "codesphere", Registry: "registry.codesphere.com"})
+
+			Expect(cfg.AdditionalRegistries).To(Equal([]files.AdditionalRegistryConfig{
+				{Name: "other", Registry: "other.example.com"},
+				{Name: "codesphere", Registry: "registry.codesphere.com"},
+			}))
+		})
+
+		It("replaces the registry with the same name", func() {
+			cfg := files.RootConfig{AdditionalRegistries: []files.AdditionalRegistryConfig{
+				{Name: "codesphere", Registry: "registry.dev.codesphere.com"},
+			}}
+
+			cfg.SetAdditionalRegistry(files.AdditionalRegistryConfig{Name: "codesphere", Registry: "registry.codesphere.com"})
+
+			Expect(cfg.AdditionalRegistries).To(Equal([]files.AdditionalRegistryConfig{
+				{Name: "codesphere", Registry: "registry.codesphere.com"},
+			}))
+		})
+	})
+
+	Describe("additional registry secret names", func() {
+		It("prefixes the username and password entries with the registry name", func() {
+			Expect(files.AdditionalRegistryUsernameSecret("codesphere")).To(Equal("codesphereRegistryUsername"))
+			Expect(files.AdditionalRegistryPasswordSecret("codesphere")).To(Equal("codesphereRegistryPassword"))
 		})
 	})
 

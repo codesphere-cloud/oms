@@ -106,7 +106,7 @@ type RootConfig struct {
 	DefaultDataCenterID    int                           `yaml:"defaultDataCenterId,omitempty"`
 	Secrets                SecretsConfig                 `yaml:"secrets"`
 	Registry               *RegistryConfig               `yaml:"registry,omitempty"`
-	Registries             *RegistriesConfig             `yaml:"registries,omitempty"`
+	AdditionalRegistries   []AdditionalRegistryConfig    `yaml:"additionalRegistries,omitempty"`
 	Postgres               PostgresConfig                `yaml:"postgres"`
 	Ceph                   CephConfig                    `yaml:"ceph"`
 	Kubernetes             KubernetesConfig              `yaml:"kubernetes"`
@@ -272,16 +272,25 @@ type RegistryConfig struct {
 	LoadContainerImages bool   `yaml:"loadContainerImages"`
 }
 
-// RegistriesConfig lists named registries the installation pulls from. It is independent of
-// RegistryConfig, which describes the registry the installation's images are served from.
-type RegistriesConfig struct {
-	Codesphere *RegistryAccessConfig `yaml:"codesphere,omitempty"`
+// AdditionalRegistryConfig is a named registry the installation logs in to, independent of
+// RegistryConfig, which describes the registry the installation's images are served from. Its
+// credentials are kept in the vault under AdditionalRegistryUsernameSecret and
+// AdditionalRegistryPasswordSecret.
+type AdditionalRegistryConfig struct {
+	Name     string `yaml:"name"`
+	Registry string `yaml:"registry"`
 }
 
-// RegistryAccessConfig is the address of a registry and the user to log in to it with.
-type RegistryAccessConfig struct {
-	Registry string `yaml:"registry"`
-	Username string `yaml:"username"`
+// SetAdditionalRegistry adds the registry or replaces the one with the same name.
+func (c *RootConfig) SetAdditionalRegistry(registry AdditionalRegistryConfig) {
+	for i, existing := range c.AdditionalRegistries {
+		if existing.Name == registry.Name {
+			c.AdditionalRegistries[i] = registry
+			return
+		}
+	}
+
+	c.AdditionalRegistries = append(c.AdditionalRegistries, registry)
 }
 
 // PostgresPort is the port the Postgres installed by OMS listens on.

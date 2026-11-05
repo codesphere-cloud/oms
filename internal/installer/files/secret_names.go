@@ -38,9 +38,6 @@ const (
 	SecretRegistryUsername = "registryUsername"
 	SecretRegistryPassword = "registryPassword"
 
-	// Codesphere registry
-	SecretCodesphereRegistryPassword = "codesphereRegistryPassword"
-
 	// ACME
 	SecretAcmeEabMacKey              = "acmeEabMacKey"
 	SecretAcmeCustomDomainsEabMacKey = "acmeCustomDomainsEabMacKey"
@@ -122,4 +119,16 @@ func PostgresUserSecretName(serviceName string) string {
 // service with the given name, e.g. "auth" -> "postgresPasswordAuth".
 func PostgresPasswordSecretName(serviceName string) string {
 	return "postgresPassword" + Capitalize(serviceName)
+}
+
+// AdditionalRegistryUsernameSecret names the vault entry holding the username of the additional
+// registry with the given name.
+func AdditionalRegistryUsernameSecret(name string) string {
+	return name + "RegistryUsername"
+}
+
+// AdditionalRegistryPasswordSecret names the vault entry holding the password of the additional
+// registry with the given name.
+func AdditionalRegistryPasswordSecret(name string) string {
+	return name + "RegistryPassword"
 }

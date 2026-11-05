@@ -597,6 +597,19 @@ var _ = Describe("ConfigManager", func() {
 				errors := configManager.ValidateVault()
 				Expect(errors).To(BeEmpty())
 			})
+
+			It("requires the username and password of every additional registry", func() {
+				configManager.Config.AdditionalRegistries = []files.AdditionalRegistryConfig{
+					{Name: "codesphere", Registry: "registry.codesphere.com"},
+					{Name: "other", Registry: "other.example.com"},
+				}
+				configManager.Vault.SetSecret(files.SecretEntry{Name: "codesphereRegistryUsername"})
+				configManager.Vault.SetSecret(files.SecretEntry{Name: "codesphereRegistryPassword"})
+				configManager.Vault.SetSecret(files.SecretEntry{Name: "otherRegistryPassword"})
+
+				errors := configManager.ValidateVault()
+				Expect(errors).To(ConsistOf("required secret for additional registry other missing: otherRegistryUsername"))
+			})
 		})
 
 		Context("with partial vault", func() {

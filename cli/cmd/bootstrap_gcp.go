@@ -89,7 +89,7 @@ func (c *BootstrapGcpCmd) addSharedBootstrapFlags() {
 
 	flags.StringVar(&c.CodesphereEnv.GitHubPAT, "github-pat", "", patHelp)
 	flags.StringVar(&c.CodesphereEnv.RegistryUser, "registry-user", "", userHelp)
-	flags.StringVar(&c.CodesphereEnv.CodesphereRegistry, "codesphere-registry", gcp.DefaultCodesphereRegistry, "Codesphere registry server written to registries.codesphere.registry in the install config; override only for development. Its password is read from OMS_PORTAL_API_KEY")
+	flags.StringVar(&c.CodesphereEnv.CodesphereRegistry, "codesphere-registry", gcp.DefaultCodesphereRegistry, "Codesphere registry server written to the \"codesphere\" entry of additionalRegistries in the install config; override only for development. Its password is read from OMS_PORTAL_API_KEY")
 
 	flags.BoolVar(&c.StepTimer, util.TimerFlag, false, util.ShowStepDurationHelp)
 	flags.StringVar(&c.CodesphereEnv.ProjectName, "project-name", "", "Unique GCP Project Name (required)")

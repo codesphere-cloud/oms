@@ -205,12 +205,17 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 // overrides it.
 const DefaultCodesphereRegistry = "registry.codesphere.com"
 
+// CodesphereRegistryName is the name of the Codesphere registry in additionalRegistries, which
+// also prefixes its vault entries.
+const CodesphereRegistryName = "codesphere"
+
 // CodesphereRegistryUsername is the user every installation logs in to the Codesphere registry
 // with; the OMS portal API key is its password.
-const CodesphereRegistryUsername = "oms@codesphere.com"
+const CodesphereRegistryUsername = "oms-gcp-bootstrap@codesphere.com"
 
-// applyCodesphereRegistry sets registries.codesphere and its password in the vault. Every
-// installation logs in to the Codesphere registry, so both must be given.
+// applyCodesphereRegistry adds the Codesphere registry to additionalRegistries and its
+// credentials to the vault. Every installation logs in to the Codesphere registry, so both the
+// registry and its password must be given. The username is always 'oms-gcp-bootstrap@codesphere.com'.
 func (b *GCPBootstrapper) applyCodesphereRegistry(dc *datacenter.DataCenter) error {
 	if b.Env.CodesphereRegistry == "" {
 		return fmt.Errorf("codesphere registry is not set")
@@ -220,17 +225,18 @@ func (b *GCPBootstrapper) applyCodesphereRegistry(dc *datacenter.DataCenter) err
 		return fmt.Errorf("codesphere registry password is not set")
 	}
 
-	if dc.InstallConfig.Registries == nil {
-		dc.InstallConfig.Registries = &files.RegistriesConfig{}
-	}
-
-	dc.InstallConfig.Registries.Codesphere = &files.RegistryAccessConfig{
+	dc.InstallConfig.SetAdditionalRegistry(files.AdditionalRegistryConfig{
+		Name:     CodesphereRegistryName,
 		Registry: b.Env.CodesphereRegistry,
-		Username: CodesphereRegistryUsername,
-	}
+	})
 
-	dc.ConfigManager.GetVault().SetSecret(files.SecretEntry{
-		Name:   files.SecretCodesphereRegistryPassword,
+	vault := dc.ConfigManager.GetVault()
+	vault.SetSecret(files.SecretEntry{
+		Name:   files.AdditionalRegistryUsernameSecret(CodesphereRegistryName),
+		Fields: &files.SecretFields{Password: CodesphereRegistryUsername},
+	})
+	vault.SetSecret(files.SecretEntry{
+		Name:   files.AdditionalRegistryPasswordSecret(CodesphereRegistryName),
 		Fields: &files.SecretFields{Password: b.Env.CodesphereRegistryPassword},
 	})
 
