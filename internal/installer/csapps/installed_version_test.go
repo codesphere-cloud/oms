@@ -34,7 +34,7 @@ var _ = Describe("InstalledVersion", func() {
 		return app
 	}
 
-	It("last deployed chart 1.113.0 with an image tag -> 1.113.0, the version migrations compare to", func() {
+	It("last deployed chart 1.113.0 with an image tag -> 1.113.0", func() {
 		app := deployed("pr-1-cs-applications", "1.112.0-old-tag-1234567890", "1.113.0-nate-test-pre-7a1cd4d4-ca735854c8")
 
 		version, err := csapps.InstalledVersion(context.Background(), clientWith(app), fullConfig("pr-1"))
@@ -52,14 +52,14 @@ var _ = Describe("InstalledVersion", func() {
 		Expect(version).To(BeEmpty())
 	})
 
-	It("Application not synced yet -> nothing installed", func() {
+	It("Application not installed yet -> nothing installed", func() {
 		version, err := csapps.InstalledVersion(context.Background(), clientWith(deployed("pr-1-cs-applications")), fullConfig("pr-1"))
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(version).To(BeEmpty())
 	})
 
-	It("deployed revision is not a semantic version -> error, not a guess", func() {
+	It("deployed revision is not a semantic version -> error", func() {
 		app := deployed("pr-1-cs-applications", "main")
 
 		_, err := csapps.InstalledVersion(context.Background(), clientWith(app), fullConfig("pr-1"))

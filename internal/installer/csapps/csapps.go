@@ -40,7 +40,7 @@ func Install(
 	}
 
 	release := releaseName(cfg)
-	parentAppName := release + "-" + csAppsComponent
+	parentAppName := parentAppNameFor(cfg)
 
 	parentApp, err := installer.NewAppOfAppsFromBom(kubeClient, csBom, installer.AppOfAppsConfig{
 		Component:      csAppsComponent,
@@ -119,6 +119,10 @@ func parentAppValues(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName s
 			"externalSecretsSyncTrigger": time.Now().UTC().Format(time.RFC3339Nano),
 		},
 	}), nil
+}
+
+func parentAppNameFor(cfg *files.RootConfig) string {
+	return releaseName(cfg) + "-" + csAppsComponent
 }
 
 // releaseName names the Codesphere Helm release and the release's Applications. Dev clusters set

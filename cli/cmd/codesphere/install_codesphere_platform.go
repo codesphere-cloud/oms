@@ -70,16 +70,22 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 
 	viaArgoCD := opts.CodesphereViaArgoCD && !installer.IsStepSkipped(cfg, opts.SkipSteps, installer.CodesphereStep)
 
-	var kubeClient client.Client
-
-	installedVersion := ""
+	var (
+		kubeClient       client.Client
+		installedVersion string
+	)
 
 	if viaArgoCD {
 		var err error
 
-		kubeClient, installedVersion, err = readArgoCDInstall(ctx, opts, cfg)
+		kubeClient, err = newKubeClient(opts, cfg)
 		if err != nil {
 			return err
+		}
+
+		installedVersion, err = csapps.InstalledVersion(ctx, kubeClient, &cfg)
+		if err != nil {
+			return fmt.Errorf("failed to read the installed Codesphere version: %w", err)
 		}
 	}
 
@@ -107,8 +113,10 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		LocalConfigDir:    opts.LocalConfigDir,
 		SkipImageBuilding: opts.LocalComponents,
 		SkipChartDeploy:   viaArgoCD,
-		InstalledVersion:  installedVersion,
-		Context:           ctx,
+		// The legacy installer picks the migrations to run from it. With ArgoCD there is no Helm
+		// release it could read the version from.
+		InstalledVersion: installedVersion,
+		Context:          ctx,
 	}
 	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install platform: %w", err)
@@ -123,25 +131,19 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	return nil
 }
 
-// readArgoCDInstall returns a client for the cluster and the Codesphere version ArgoCD has
-// installed there, which the installer migrates the database from.
-func readArgoCDInstall(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig) (client.Client, string, error) {
+// newKubeClient connects to the cluster the config and vault describe.
+func newKubeClient(opts *InstallCodesphereOpts, cfg files.RootConfig) (client.Client, error) {
 	_, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to load the Kubernetes config: %w", err)
+		return nil, fmt.Errorf("failed to load the Kubernetes config: %w", err)
 	}
 
 	kubeClient, err := installer.NewKubeClient(restConfig)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to create Kubernetes client: %w", err)
+		return nil, fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
 
-	installedVersion, err := csapps.InstalledVersion(ctx, kubeClient, &cfg)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to read the installed Codesphere version: %w", err)
-	}
-
-	return kubeClient, installedVersion, nil
+	return kubeClient, nil
 }
 
 func deployCodesphereViaArgoCD(
