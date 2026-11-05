@@ -16,7 +16,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
-const codesphereAppSuffix = "-" + codesphereComponent
+const codesphereAppSuffix = "-" + csUmbrellaComponent
 
 // InstalledVersion returns the Codesphere version ArgoCD last deployed for the release cfg
 // configures, or "" when ArgoCD has not deployed it yet.
