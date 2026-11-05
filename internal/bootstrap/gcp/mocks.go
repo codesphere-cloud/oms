@@ -1285,6 +1285,75 @@ func (_c *MockGCPClientManager_EnsureDNSRecordSets_Call) RunAndReturn(run func(p
 	return _c
 }
 
+// EnsurePrivateGoogleAccess provides a mock function for the type MockGCPClientManager
+func (_mock *MockGCPClientManager) EnsurePrivateGoogleAccess(projectID string, region string, networkName string, subnetName string) error {
+	ret := _mock.Called(projectID, region, networkName, subnetName)
+
+	if len(ret) == 0 {
+		panic("no return value specified for EnsurePrivateGoogleAccess")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, string, string) error); ok {
+		r0 = returnFunc(projectID, region, networkName, subnetName)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockGCPClientManager_EnsurePrivateGoogleAccess_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'EnsurePrivateGoogleAccess'
+type MockGCPClientManager_EnsurePrivateGoogleAccess_Call struct {
+	*mock.Call
+}
+
+// EnsurePrivateGoogleAccess is a helper method to define mock.On call
+//   - projectID string
+//   - region string
+//   - networkName string
+//   - subnetName string
+func (_e *MockGCPClientManager_Expecter) EnsurePrivateGoogleAccess(projectID any, region any, networkName any, subnetName any) *MockGCPClientManager_EnsurePrivateGoogleAccess_Call {
+	return &MockGCPClientManager_EnsurePrivateGoogleAccess_Call{Call: _e.mock.On("EnsurePrivateGoogleAccess", projectID, region, networkName, subnetName)}
+}
+
+func (_c *MockGCPClientManager_EnsurePrivateGoogleAccess_Call) Run(run func(projectID string, region string, networkName string, subnetName string)) *MockGCPClientManager_EnsurePrivateGoogleAccess_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockGCPClientManager_EnsurePrivateGoogleAccess_Call) Return(err error) *MockGCPClientManager_EnsurePrivateGoogleAccess_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockGCPClientManager_EnsurePrivateGoogleAccess_Call) RunAndReturn(run func(projectID string, region string, networkName string, subnetName string) error) *MockGCPClientManager_EnsurePrivateGoogleAccess_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // EnsureStorageBucket provides a mock function for the type MockGCPClientManager
 func (_mock *MockGCPClientManager) EnsureStorageBucket(projectID string, bucketName string, location string) error {
 	ret := _mock.Called(projectID, bucketName, location)
