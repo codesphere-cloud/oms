@@ -143,12 +143,16 @@ func parentValues(kubeClient client.Client) map[string]any {
 	return values
 }
 
-// appliedValues installs cfg into a cluster where nothing syncs and returns the parent's values.
+func newSyncedCluster() client.Client {
+	return newCluster(append([]string{parentAppName}, subAppNames...)...)
+}
+
+// appliedValues installs cfg and returns the parent's values.
 func appliedValues(cfg *files.RootConfig) map[string]any {
 	GinkgoHelper()
 
-	kubeClient := newCluster()
-	Expect(install(kubeClient, cfg, bomWithCharts())).To(HaveOccurred())
+	kubeClient := newSyncedCluster()
+	Expect(install(kubeClient, cfg, bomWithCharts())).To(Succeed())
 
 	return parentValues(kubeClient)
 }
@@ -182,9 +186,9 @@ func asJSON(value any) any {
 
 var _ = Describe("Install", func() {
 	It("release pr-1 -> applies pr-1-cs-applications with the cs-applications chart from the BOM", func() {
-		kubeClient := newCluster()
+		kubeClient := newSyncedCluster()
 
-		Expect(install(kubeClient, fullConfig("pr-1"), bomWithCharts())).To(MatchError(ContainSubstring(`"` + parentAppName + `"`)))
+		Expect(install(kubeClient, fullConfig("pr-1"), bomWithCharts())).To(Succeed())
 
 		app := parentApp(kubeClient)
 		Expect(app.Spec.Source.Chart).To(Equal("cs-applications"))
@@ -233,12 +237,12 @@ var _ = Describe("Install", func() {
 	})
 
 	It("second install -> a new sync trigger, so External Secrets reads the vault again", func() {
-		kubeClient := newCluster()
+		kubeClient := newSyncedCluster()
 
-		Expect(install(kubeClient, fullConfig("pr-1"), bomWithCharts())).To(HaveOccurred())
+		Expect(install(kubeClient, fullConfig("pr-1"), bomWithCharts())).To(Succeed())
 		first := at(parentValues(kubeClient), "global", "externalSecretsSyncTrigger")
 
-		Expect(install(kubeClient, fullConfig("pr-1"), bomWithCharts())).To(HaveOccurred())
+		Expect(install(kubeClient, fullConfig("pr-1"), bomWithCharts())).To(Succeed())
 
 		Expect(at(parentValues(kubeClient), "global", "externalSecretsSyncTrigger")).NotTo(Equal(first))
 	})
@@ -254,12 +258,6 @@ var _ = Describe("Install", func() {
 
 		Expect(kubeClient.Get(context.Background(), client.ObjectKey{Name: parentAppName, Namespace: "argocd"}, &argo.Application{})).
 			NotTo(Succeed())
-	})
-
-	It("parent and every sub application synced and healthy -> done", func() {
-		kubeClient := newCluster(append([]string{parentAppName}, subAppNames...)...)
-
-		Expect(install(kubeClient, fullConfig("pr-1"), bomWithCharts())).To(Succeed())
 	})
 
 	It("one sub application never syncs -> error naming only that one", func() {
