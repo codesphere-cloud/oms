@@ -33,6 +33,7 @@ oms beta bootstrap-gcp [flags]
       --central-otel-span-metrics                 Enable span metrics in Central OpenTelemetry export (default: false)
       --central-otel-username string              Central OpenTelemetry username. Needed when sending spans to central collector (optional)
       --cluster-admin-email string                Email address of the initial cluster admin. Written to the install config and applied as the cluster-admin-email secret before the Codesphere platform is installed (optional)
+      --codesphere-registry string                Codesphere registry server written to the "codesphere" entry of additionalRegistries in the install config; override only for development. Its password is read from OMS_PORTAL_API_KEY (default "registry.codesphere.com")
       --config stringArray                        Local config.yaml file; repeat to merge in order before VM settings
       --create-test-user                          Create a test user with API token on the bootstrapped instance for smoke testing (default: false)
       --custom-pg-ip string                       Custom PostgreSQL IP (optional)
