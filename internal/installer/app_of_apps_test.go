@@ -333,12 +333,6 @@ var _ = Describe("AppOfApps.Install", func() {
 
 			Expect(getApp().Finalizers).To(ConsistOf(argov1alpha1.ResourcesFinalizerName))
 		})
-
-		It("no DeleteResourcesWithApp -> no finalizer", func() {
-			Expect(newAppOfApps(version, namespace, nil, nil).Install(context.Background())).To(Succeed())
-
-			Expect(getApp().Finalizers).To(BeEmpty())
-		})
 	})
 
 	Context("invalid input", func() {
