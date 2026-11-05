@@ -92,6 +92,9 @@ func Execute() {
 	log.SetFlags(0)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	// Restore default signal handling once cancelled, so a second signal terminates
+	// commands that do not observe the context.
+	context.AfterFunc(ctx, stop)
 	err := GetRootCmd().ExecuteContext(ctx)
 
 	stop()
