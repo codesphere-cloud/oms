@@ -81,7 +81,7 @@ func at(values map[string]any, keys ...string) any {
 }
 
 var _ = Describe("Values", func() {
-	It("full config -> the Codesphere chart version and values, with secrets from the vault", func() {
+	It("full config -> the Codesphere chart version, and the built global values shared at the top level", func() {
 		cfg := fullConfig("pr-1")
 		b := bomWithCharts()
 
@@ -96,7 +96,7 @@ var _ = Describe("Values", func() {
 		expected, err := csappsvalues.Build(cfg, b)
 		Expect(err).NotTo(HaveOccurred())
 
-		syncTrigger := at(values, "applications", "codesphere", "valuesObject", "global", "externalSecretsSyncTrigger")
+		syncTrigger := at(values, "global", "externalSecretsSyncTrigger")
 		Expect(syncTrigger).NotTo(BeEmpty())
 
 		expectedGlobal := expected["global"].(map[string]any)
@@ -105,7 +105,22 @@ var _ = Describe("Values", func() {
 		expectedGlobal["externalSecretsVaultSecret"] = vaultSecretName
 		expectedGlobal["argoCd"] = true
 
+		delete(expected, "global")
+
+		Expect(at(values, "global")).To(Equal(expectedGlobal))
 		Expect(at(values, "applications", "codesphere", "valuesObject")).To(Equal(expected))
+	})
+
+	It("override with a key outside global -> only in the Codesphere values, not shared", func() {
+		cfg := fullConfig("pr-1")
+		cfg.Codesphere.Override = map[string]any{"ideService": map[string]any{"replicas": 3}}
+
+		values, err := csapps.Values(cfg, bomWithCharts(), vaultSecretName)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(at(values, "applications", "codesphere", "valuesObject")).
+			To(Equal(map[string]any{"ideService": map[string]any{"replicas": 3}}))
+		Expect(at(values, "global")).NotTo(HaveKey("ideService"))
 	})
 
 	It("override disables external secrets -> still enabled, the values hold no secrets", func() {
@@ -115,7 +130,7 @@ var _ = Describe("Values", func() {
 		values, err := csapps.Values(cfg, bomWithCharts(), vaultSecretName)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(at(values, "applications", "codesphere", "valuesObject", "global", "externalSecrets")).To(BeTrue())
+		Expect(at(values, "global", "externalSecrets")).To(BeTrue())
 	})
 
 	It("csApps block -> merged over the built values", func() {
@@ -184,7 +199,7 @@ var _ = Describe("Install", func() {
 		Expect(json.Unmarshal(app.Spec.Source.Helm.ValuesObject.Raw, &values)).To(Succeed())
 		Expect(at(values, "chartsRegistry")).To(Equal(chartsRegistry))
 		Expect(at(values, "applications", "codesphere", "version")).To(Equal(codesphereVersion))
-		Expect(at(values, "applications", "codesphere", "valuesObject", "global", "externalSecretsSyncTrigger")).
+		Expect(at(values, "global", "externalSecretsSyncTrigger")).
 			NotTo(BeEmpty())
 	})
 
@@ -208,7 +223,7 @@ var _ = Describe("Install", func() {
 			values := map[string]any{}
 			Expect(json.Unmarshal(app.Spec.Source.Helm.ValuesObject.Raw, &values)).To(Succeed())
 
-			return at(values, "applications", "codesphere", "valuesObject", "global", "externalSecretsSyncTrigger")
+			return at(values, "global", "externalSecretsSyncTrigger")
 		}
 
 		Expect(installUntilWait()).To(HaveOccurred())
