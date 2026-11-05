@@ -35,7 +35,7 @@ var _ = Describe("InstalledVersion", func() {
 	}
 
 	It("last deployed chart 1.113.0 with an image tag -> 1.113.0, the version migrations compare to", func() {
-		app := deployed("pr-1-codesphere", "1.112.0-old-tag-1234567890", "1.113.0-nate-test-pre-7a1cd4d4-ca735854c8")
+		app := deployed("pr-1-cs-applications", "1.112.0-old-tag-1234567890", "1.113.0-nate-test-pre-7a1cd4d4-ca735854c8")
 
 		version, err := csapps.InstalledVersion(context.Background(), clientWith(app), fullConfig("pr-1"))
 
@@ -44,7 +44,7 @@ var _ = Describe("InstalledVersion", func() {
 	})
 
 	It("Application of another release -> nothing installed for this one", func() {
-		app := deployed("codesphere-codesphere", "1.113.0-tag")
+		app := deployed("codesphere-cs-applications", "1.113.0-tag")
 
 		version, err := csapps.InstalledVersion(context.Background(), clientWith(app), fullConfig("pr-1"))
 
@@ -53,14 +53,14 @@ var _ = Describe("InstalledVersion", func() {
 	})
 
 	It("Application not synced yet -> nothing installed", func() {
-		version, err := csapps.InstalledVersion(context.Background(), clientWith(deployed("pr-1-codesphere")), fullConfig("pr-1"))
+		version, err := csapps.InstalledVersion(context.Background(), clientWith(deployed("pr-1-cs-applications")), fullConfig("pr-1"))
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(version).To(BeEmpty())
 	})
 
 	It("deployed revision is not a semantic version -> error, not a guess", func() {
-		app := deployed("pr-1-codesphere", "main")
+		app := deployed("pr-1-cs-applications", "main")
 
 		_, err := csapps.InstalledVersion(context.Background(), clientWith(app), fullConfig("pr-1"))
 
