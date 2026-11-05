@@ -19,7 +19,7 @@ import (
 // InstalledVersion returns the Codesphere version ArgoCD last deployed for the release cfg
 // configures, or "" when ArgoCD has not deployed it yet.
 func InstalledVersion(ctx context.Context, kubeClient client.Client, cfg *files.RootConfig) (string, error) {
-	name := releaseName(cfg) + "-" + csAppsComponent
+	name := parentAppNameFor(cfg)
 
 	app := &argo.Application{}
 	if err := kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: argocd.DefaultNamespace}, app); err != nil {
@@ -36,8 +36,8 @@ func InstalledVersion(ctx context.Context, kubeClient client.Client, cfg *files.
 
 	revision := app.Status.History.LastRevisionHistory().Revision
 
-	// The chart version is the Codesphere version with the image tag appended as a prerelease,
-	// which the installer's migration order would sort before the version itself.
+	// The chart version is the Codesphere version with the image tag appended as a prerelease, e.g.
+	// 1.113.0-master-7a1cd4d4c8, which the installer's migration order would sort before 1.113.0.
 	version, err := semver.StrictNewVersion(revision)
 	if err != nil {
 		return "", fmt.Errorf("ArgoCD Application %q deployed chart version %q, which is not a semantic version: %w", name, revision, err)
