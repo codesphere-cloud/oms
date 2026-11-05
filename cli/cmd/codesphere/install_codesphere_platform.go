@@ -137,7 +137,7 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	}
 
 	if viaArgoCD {
-		if err := deployCodesphereViaArgoCD(ctx, kubeClient, cfg, pm); err != nil {
+		if err := deployCodesphereViaArgoCD(ctx, kubeClient, cfg, pm, opts.VaultSecretName); err != nil {
 			return fmt.Errorf("failed to deploy Codesphere through ArgoCD: %w", err)
 		}
 	}
@@ -166,13 +166,19 @@ func readArgoCDInstall(ctx context.Context, opts *InstallCodesphereOpts, cfg fil
 	return kubeClient, installedVersion, nil
 }
 
-func deployCodesphereViaArgoCD(ctx context.Context, kubeClient client.Client, cfg files.RootConfig, pm installer.PackageManager) error {
+func deployCodesphereViaArgoCD(
+	ctx context.Context,
+	kubeClient client.Client,
+	cfg files.RootConfig,
+	pm installer.PackageManager,
+	vaultSecretName string,
+) error {
 	installerBOM, err := bom.Parse(pm.GetDependencyPath("bom.json"))
 	if err != nil {
 		return fmt.Errorf("failed to read the package BOM: %w", err)
 	}
 
-	if err := csapps.Install(ctx, kubeClient, &cfg, installerBOM); err != nil {
+	if err := csapps.Install(ctx, kubeClient, &cfg, installerBOM, vaultSecretName); err != nil {
 		return fmt.Errorf("failed to deploy the cs-applications: %w", err)
 	}
 
