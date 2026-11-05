@@ -22,7 +22,7 @@ import (
 
 const (
 	csAppsComponent     = "cs-applications"
-	codesphereComponent = "codesphere"
+	csUmbrellaComponent = "codesphere"
 	codesphereNamespace = "codesphere"
 	defaultReleaseName  = "codesphere"
 )
@@ -118,9 +118,9 @@ func subAppNames(ctx context.Context, kubeClient client.Client, parentAppName st
 // a sub application only through csApps; for permanent config for a new app, extend the config
 // appropriately.
 func Values(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName string) (map[string]any, error) {
-	chart, ok := csBom.GetChart(codesphereComponent)
+	chart, ok := csBom.GetChart(csUmbrellaComponent)
 	if !ok {
-		return nil, fmt.Errorf("%s chart not found in BOM", codesphereComponent)
+		return nil, fmt.Errorf("%s chart not found in BOM", csUmbrellaComponent)
 	}
 
 	codesphereValues, err := values.Build(cfg, csBom)
@@ -135,7 +135,7 @@ func Values(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName string) (m
 		"namespace": codesphereNamespace,
 		"global":    global,
 		"applications": map[string]any{
-			codesphereComponent: map[string]any{
+			csUmbrellaComponent: map[string]any{
 				"enabled":      true,
 				"version":      chart.Tag(),
 				"valuesObject": codesphereValues,
