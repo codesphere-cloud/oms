@@ -26,6 +26,9 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const k0sAPIReadyCommand = "k0s kubectl --request-timeout=5s get --raw=/readyz"
+const k0sNodeWaitCommand = "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m"
+
 func protoString(s string) *string { return &s }
 
 // errK0sNotConfigured is how a node answers the k0s check when the check ran and failed.
