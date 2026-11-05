@@ -34,6 +34,20 @@ var _ = Describe("CancelOnSignal", func() {
 		Expect(runCtx).NotTo(BeIdenticalTo(parent))
 	})
 
+	It("restores the parent context so the command can run again", func() {
+		parent := context.Background()
+		cmd := &cobra.Command{}
+		cmd.SetContext(parent)
+
+		run := util.CancelOnSignal(func(cmd *cobra.Command, _ []string) error {
+			return cmd.Context().Err()
+		})
+
+		Expect(run(cmd, nil)).To(Succeed())
+		Expect(cmd.Context()).To(BeIdenticalTo(parent))
+		Expect(run(cmd, nil)).To(Succeed())
+	})
+
 	It("returns the error of the wrapped command", func() {
 		runErr := errors.New("install failed")
 		cmd := &cobra.Command{}

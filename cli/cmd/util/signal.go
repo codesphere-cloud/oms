@@ -17,8 +17,11 @@ import (
 // and default handling is restored after the first signal so a second one terminates the process.
 func CancelOnSignal(run func(cmd *cobra.Command, args []string) error) func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
-		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+		parent := cmd.Context()
+
+		ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 		defer stop()
+		defer cmd.SetContext(parent)
 
 		context.AfterFunc(ctx, stop)
 
