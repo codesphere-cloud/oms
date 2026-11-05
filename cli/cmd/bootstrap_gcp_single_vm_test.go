@@ -206,7 +206,7 @@ var _ = Describe("Multi-node GCP bootstrap options", func() {
 		mockEnv.EXPECT().GetOmsPortalApiKey().Return("", errors.New("OMS_PORTAL_API_KEY env var required, but not set"))
 		command.Env = mockEnv
 
-		Expect(command.prepareBootstrapOptions()).To(MatchError(ContainSubstring("the codesphere registry requires the OMS portal API key")))
+		Expect(command.prepareBootstrapOptions()).To(MatchError(ContainSubstring("OMS Portal Key not set")))
 	})
 
 	It("rejects an empty codesphere registry", func() {

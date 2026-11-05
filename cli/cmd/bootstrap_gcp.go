@@ -132,7 +132,7 @@ func (c *BootstrapGcpCmd) prepareBootstrapOptions() error {
 
 	apiKey, err := c.Env.GetOmsPortalApiKey()
 	if err != nil {
-		return fmt.Errorf("the codesphere registry requires the OMS portal API key as its password: %w", err)
+		return fmt.Errorf("OMS Portal Key not set: %w", err)
 	}
 
 	c.CodesphereEnv.CodesphereRegistryPassword = apiKey
