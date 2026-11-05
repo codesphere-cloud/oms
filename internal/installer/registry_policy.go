@@ -12,11 +12,14 @@ import (
 	"time"
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
+	admissionv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -26,17 +29,20 @@ import (
 
 const (
 	registryPolicyName         = "codesphere-image-registry"
+	registryPolicyKind         = "MutatingAdmissionPolicy"
+	registryPolicyBindingKind  = "MutatingAdmissionPolicyBinding"
 	codesphereImagePrefix      = DefaultRegistryURL + "/codesphere-cloud/"
 	registryPolicyReadyTimeout = 30 * time.Second
 	registryPolicyPollInterval = time.Second
 )
 
-// RegistryPolicyClient is the Kubernetes API surface needed to apply admission resources.
+// RegistryPolicyClient is the Kubernetes API surface needed to apply and remove admission resources.
 //
 //mockery:generate: true
 type RegistryPolicyClient interface {
 	Apply(context.Context, runtime.ApplyConfiguration, ...ctrlclient.ApplyOption) error
 	Create(context.Context, ctrlclient.Object, ...ctrlclient.CreateOption) error
+	Delete(context.Context, ctrlclient.Object, ...ctrlclient.DeleteOption) error
 }
 
 // ClusterVersionClient reads the configured Kubernetes API server version.
@@ -53,7 +59,8 @@ type ClusterVersionClient interface {
 // where the MutatingAdmissionPolicy feature and v1beta1 API must be enabled.
 // After applying both resources, it verifies container and init-container mutation
 // through dry-run Pod admission, waiting at most 30 seconds before returning an error.
-// The default registry needs no rewriting and causes no Kubernetes API writes.
+// The default registry needs no rewriting: it removes an existing Codesphere policy
+// and binding left by a previous custom registry and otherwise changes nothing.
 func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base string, versions ClusterVersionClient) error {
 	registry, err := NormalizeRegistry(base)
 	if err != nil {
@@ -61,9 +68,7 @@ func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base
 	}
 
 	if registry == DefaultRegistryURL {
-		// TODO: Clean up an existing policy and binding when reverting from a custom registry.
-		// https://app.clickup.com/t/1an123k8zcb
-		return nil
+		return removeRegistryPolicy(ctx, client)
 	}
 
 	apiVersion, err := registryPolicyAPIVersion(versions)
@@ -74,7 +79,7 @@ func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base
 	failurePolicy := admissionv1.Fail
 
 	policy := &admissionv1.MutatingAdmissionPolicy{
-		TypeMeta:   metav1.TypeMeta{APIVersion: admissionv1.SchemeGroupVersion.String(), Kind: "MutatingAdmissionPolicy"},
+		TypeMeta:   metav1.TypeMeta{APIVersion: admissionv1.SchemeGroupVersion.String(), Kind: registryPolicyKind},
 		ObjectMeta: metav1.ObjectMeta{Name: registryPolicyName},
 		Spec: admissionv1.MutatingAdmissionPolicySpec{
 			MatchConstraints: &admissionv1.MatchResources{ResourceRules: []admissionv1.NamedRuleWithOperations{{
@@ -109,7 +114,7 @@ func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base
 	}
 
 	binding := &admissionv1.MutatingAdmissionPolicyBinding{
-		TypeMeta:   metav1.TypeMeta{APIVersion: admissionv1.SchemeGroupVersion.String(), Kind: "MutatingAdmissionPolicyBinding"},
+		TypeMeta:   metav1.TypeMeta{APIVersion: admissionv1.SchemeGroupVersion.String(), Kind: registryPolicyBindingKind},
 		ObjectMeta: metav1.ObjectMeta{Name: registryPolicyName},
 		Spec:       admissionv1.MutatingAdmissionPolicyBindingSpec{PolicyName: registryPolicyName},
 	}
@@ -118,6 +123,61 @@ func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base
 	}
 
 	return waitForRegistryPolicy(ctx, client, registry)
+}
+
+// removeRegistryPolicy deletes the binding before its policy so admission stops rewriting
+// images first. Both API versions are listed because Kubernetes 1.34–1.35 only serve the
+// beta API. Version discovery is skipped so clusters without the policy API succeed.
+// When anything was removed, it waits until dry-run Pods keep their default images.
+func removeRegistryPolicy(ctx context.Context, client RegistryPolicyClient) error {
+	removed, err := deleteRegistryResources(ctx, client, []*unstructured.Unstructured{
+		registryResource(admissionv1.SchemeGroupVersion.WithKind(registryPolicyBindingKind)),
+		registryResource(admissionv1beta1.SchemeGroupVersion.WithKind(registryPolicyBindingKind)),
+		registryResource(admissionv1.SchemeGroupVersion.WithKind(registryPolicyKind)),
+		registryResource(admissionv1beta1.SchemeGroupVersion.WithKind(registryPolicyKind)),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to remove image registry policy: %w", err)
+	}
+
+	if !removed {
+		return nil
+	}
+
+	if err := waitForRegistryPolicy(ctx, client, DefaultRegistryURL); err != nil {
+		return fmt.Errorf("failed to verify image registry policy removal: %w", err)
+	}
+
+	return nil
+}
+
+func registryResource(gvk schema.GroupVersionKind) *unstructured.Unstructured {
+	resource := &unstructured.Unstructured{}
+	resource.SetGroupVersionKind(gvk)
+	resource.SetName(registryPolicyName)
+
+	return resource
+}
+
+// deleteRegistryResources deletes the resources in order, skipping those whose API is not
+// served or that do not exist. It reports whether any resource was deleted.
+func deleteRegistryResources(ctx context.Context, client RegistryPolicyClient, resources []*unstructured.Unstructured) (bool, error) {
+	removed := false
+
+	for _, resource := range resources {
+		err := client.Delete(ctx, resource)
+		if meta.IsNoMatchError(err) || apierrors.IsNotFound(err) {
+			continue
+		}
+
+		if err != nil {
+			return removed, fmt.Errorf("failed to delete %s %s: %w", resource.GetAPIVersion(), resource.GetKind(), err)
+		}
+
+		removed = true
+	}
+
+	return removed, nil
 }
 
 // waitForRegistryPolicy verifies admission has observed the policy and binding before
@@ -208,7 +268,7 @@ func registryPolicyAPIVersion(client ClusterVersionClient) (string, error) {
 	}
 
 	if !serverVersion.AtLeast(version.MustParseGeneric("v1.36.0")) {
-		return "admissionregistration.k8s.io/v1beta1", nil
+		return admissionv1beta1.SchemeGroupVersion.String(), nil
 	}
 
 	return admissionv1.SchemeGroupVersion.String(), nil
