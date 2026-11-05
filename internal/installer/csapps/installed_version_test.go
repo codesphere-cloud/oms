@@ -6,7 +6,7 @@ package csapps_test
 import (
 	"context"
 
-	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
+	argo "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,15 +20,15 @@ import (
 var _ = Describe("InstalledVersion", func() {
 	clientWith := func(objects ...client.Object) client.Client {
 		scheme := runtime.NewScheme()
-		Expect(argov1alpha1.AddToScheme(scheme)).To(Succeed())
+		Expect(argo.AddToScheme(scheme)).To(Succeed())
 
 		return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
 	}
 
-	deployed := func(name string, revisions ...string) *argov1alpha1.Application {
-		app := &argov1alpha1.Application{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "argocd"}}
+	deployed := func(name string, revisions ...string) *argo.Application {
+		app := &argo.Application{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "argocd"}}
 		for i, revision := range revisions {
-			app.Status.History = append(app.Status.History, argov1alpha1.RevisionHistory{ID: int64(i), Revision: revision})
+			app.Status.History = append(app.Status.History, argo.RevisionHistory{ID: int64(i), Revision: revision})
 		}
 
 		return app

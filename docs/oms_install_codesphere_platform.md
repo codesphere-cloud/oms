@@ -23,7 +23,7 @@ $ oms install codesphere platform -p codesphere-v1.2.3-installer-lite.tar.gz -k 
 ### Options
 
 ```
-      --codesphere-via-argocd   Deploy Codesphere through the cs-applications ArgoCD app of apps instead of Helm. Requires the chart's external secrets
+      --codesphere-via-argocd   Deploy Codesphere through the cs-applications ArgoCD app of apps instead of Helm
   -h, --help                    help for platform
 ```
 
