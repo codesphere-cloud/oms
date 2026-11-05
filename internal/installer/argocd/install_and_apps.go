@@ -166,11 +166,14 @@ func (i *AppInstaller) getPcAppsValues(bomConfig *bom.Config) (files.ChartValues
 	if err != nil {
 		return nil, fmt.Errorf("configuring cluster-config application: %w", err)
 	}
+
+	gatewayValues := pcapps.GatewayPcAppsValues(&i.cfg.Config, bomConfig)
 	openFGAppValues := pcapps.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault)
 	rookCephAppValues := pcapps.RookCephPcAppsValues(&i.cfg.Config)
 
 	values := util.DeepMergeMaps(openFGAppValues, rookCephAppValues)
 	values = util.DeepMergeMaps(values, clusterConfigValues)
+	values = util.DeepMergeMaps(values, gatewayValues)
 	values = util.DeepMergeMaps(values, i.cfg.Config.PcApps)
 
 	return values, nil
