@@ -55,6 +55,41 @@ var _ = Describe("ClusterConfigPcAppsValues", func() {
 		merged := util.DeepMergeMaps(values, explicit)
 		Expect(merged["applications"].(files.ChartValues)["cluster-config"].(files.ChartValues)["enabled"]).To(BeFalse())
 	})
+	Context("with additional registries", func() {
+		BeforeEach(func() {
+			config.AdditionalRegistries = []files.AdditionalRegistryConfig{{Name: "codesphere", Registry: "registry.codesphere.com"}}
+			vault.SetSecret(files.SecretEntry{Name: "codesphereRegistryUsername", Fields: &files.SecretFields{Password: "oms@codesphere.com"}})
+			vault.SetSecret(files.SecretEntry{Name: "codesphereRegistryPassword", Fields: &files.SecretFields{Password: "portal-api-key"}})
+		})
+
+		It("enables each registry with its credentials from the vault", func() {
+			values, err := pcapps.ClusterConfigPcAppsValues(&config, vault, packageBOM)
+			Expect(err).NotTo(HaveOccurred())
+
+			chart := values["applications"].(files.ChartValues)["cluster-config"].(files.ChartValues)["valuesObject"].(files.ChartValues)
+			Expect(chart["additionalRegistries"]).To(Equal([]any{files.ChartValues{
+				"name":     "codesphere",
+				"enabled":  true,
+				"registry": "registry.codesphere.com",
+				"username": "oms@codesphere.com",
+				"password": "portal-api-key",
+			}}))
+		})
+
+		It("rejects a registry without a username", func() {
+			vault.GetSecret("codesphereRegistryUsername").Fields.Password = ""
+
+			_, err := pcapps.ClusterConfigPcAppsValues(&config, vault, packageBOM)
+			Expect(err).To(MatchError(ContainSubstring("username of additional registry codesphere is required")))
+		})
+
+		It("rejects a registry without a password", func() {
+			vault.GetSecret("codesphereRegistryPassword").Fields.Password = ""
+
+			_, err := pcapps.ClusterConfigPcAppsValues(&config, vault, packageBOM)
+			Expect(err).To(MatchError(ContainSubstring("password of additional registry codesphere is required")))
+		})
+	})
 	It("rejects a missing registry password without exposing the registry username", func() {
 		vault.GetSecret(files.SecretRegistryPassword).Fields.Password = ""
 		_, err := pcapps.ClusterConfigPcAppsValues(&config, vault, packageBOM)

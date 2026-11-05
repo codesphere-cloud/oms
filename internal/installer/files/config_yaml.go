@@ -785,8 +785,10 @@ type TelemetryExport struct {
 }
 
 type (
+	// ChartOverride holds Helm values a component override in the install config sets.
 	ChartOverride = map[string]interface{}
-	ChartValues   = map[string]interface{}
+	// ChartValues holds Helm values passed to a chart.
+	ChartValues = map[string]interface{}
 )
 
 type ImageRef struct {
