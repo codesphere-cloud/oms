@@ -23,8 +23,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const codesphereStep = "codesphere"
-
 // InstallCodespherePlatformCmd runs only the Codesphere platform step (Phase 3).
 type InstallCodespherePlatformCmd struct {
 	cmd  *cobra.Command
@@ -53,10 +51,6 @@ func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) erro
 	return installCodespherePlatform(cmd.Context(), effectiveOpts, cfg, c.Env)
 }
 
-func deploysViaArgoCD(opts *InstallCodesphereOpts, cfg files.RootConfig) bool {
-	return opts.CodesphereViaArgoCD && !installer.IsStepSkipped(cfg, opts.SkipSteps, codesphereStep)
-}
-
 func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, env env.Env) error {
 	if err := installer.EnsureClusterAdminSecret(ctx, opts.Vault, opts.PrivKey, opts.VaultType, cfg); err != nil {
 		return fmt.Errorf("failed to set cluster admin email: %w", err)
@@ -74,7 +68,7 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		}
 	}
 
-	viaArgoCD := deploysViaArgoCD(opts, cfg)
+	viaArgoCD := opts.CodesphereViaArgoCD && !installer.IsStepSkipped(cfg, opts.SkipSteps, installer.CodesphereStep)
 
 	var kubeClient client.Client
 
@@ -122,7 +116,7 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 
 	if viaArgoCD {
 		if err := deployCodesphereViaArgoCD(ctx, kubeClient, cfg, pm, opts.VaultSecretName); err != nil {
-			return fmt.Errorf("failed to deploy Codesphere through ArgoCD: %w", err)
+			return err
 		}
 	}
 
@@ -163,7 +157,7 @@ func deployCodesphereViaArgoCD(
 	}
 
 	if err := csapps.Install(ctx, kubeClient, &cfg, installerBOM, vaultSecretName); err != nil {
-		return fmt.Errorf("failed to deploy the cs-applications: %w", err)
+		return fmt.Errorf("failed to deploy Codesphere through ArgoCD: %w", err)
 	}
 
 	return nil
@@ -218,5 +212,5 @@ func AddInstallCodespherePlatformCmd(codesphere *cobra.Command, opts *InstallCod
 
 // addCodesphereViaArgoCDFlag adds the flag only to the commands that deploy Codesphere.
 func addCodesphereViaArgoCDFlag(cmd *cobra.Command, opts *InstallCodesphereOpts) {
-	cmd.Flags().BoolVar(&opts.CodesphereViaArgoCD, "codesphere-via-argocd", false, "Deploy Codesphere through the cs-applications ArgoCD app of apps instead of Helm. Requires the chart's external secrets")
+	cmd.Flags().BoolVar(&opts.CodesphereViaArgoCD, "codesphere-via-argocd", false, "Deploy Codesphere through the cs-applications ArgoCD app of apps instead of Helm")
 }

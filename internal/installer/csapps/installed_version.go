@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/Masterminds/semver/v3"
-	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
+	argo "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -23,7 +23,7 @@ const codesphereAppSuffix = "-" + csUmbrellaComponent
 func InstalledVersion(ctx context.Context, kubeClient client.Client, cfg *files.RootConfig) (string, error) {
 	name := releaseName(cfg) + codesphereAppSuffix
 
-	app := &argov1alpha1.Application{}
+	app := &argo.Application{}
 	if err := kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: argocd.DefaultNamespace}, app); err != nil {
 		if apierrors.IsNotFound(err) {
 			return "", nil
