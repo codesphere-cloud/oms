@@ -22,7 +22,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/platform"
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/postgres"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
-	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 // Build returns the Codesphere chart values for the data center the config installs. They hold no
@@ -52,7 +51,7 @@ func Build(cfg *files.RootConfig, b *bom.Config) (map[string]any, error) {
 		return nil, fmt.Errorf("failed to read the release image tag: %w", err)
 	}
 
-	values := util.MergeChartValues(map[string]any{"global": global}, cfg.Codesphere.Override)
+	values := MergeOverride(map[string]any{"global": global}, cfg.Codesphere.Override)
 
 	// The image tag wins over the override to match the old pc-installer. Likely reason: the installer
 	// only mirrors the BOM's images, so a tag from the override may not exist in the registry.

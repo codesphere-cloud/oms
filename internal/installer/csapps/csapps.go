@@ -17,7 +17,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
-	"github.com/codesphere-cloud/oms/internal/util"
 	chartutil "helm.sh/helm/v4/pkg/chart/v2/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -156,10 +155,10 @@ func Values(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName string) (m
 		},
 	}
 
-	merged := util.MergeChartValues(built, cfg.CsApps)
+	merged := values.MergeOverride(built, cfg.CsApps)
 
 	// Set after the csApps merge, which must not undo them.
-	return util.MergeChartValues(merged, map[string]any{
+	return values.MergeOverride(merged, map[string]any{
 		"applications": map[string]any{
 			codesphereComponent: map[string]any{
 				"valuesObject": map[string]any{
