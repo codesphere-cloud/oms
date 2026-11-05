@@ -136,6 +136,7 @@ func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config)
 	if err != nil {
 		return err
 	}
+
 	pcApps, err := installer.NewAppOfAppsFromBom(i.cfg.KubeClient, bomConfig, installer.AppOfAppsConfig{
 		Component:      pcAppsName,
 		Name:           pcAppsName,

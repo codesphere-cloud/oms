@@ -55,9 +55,10 @@ var _ = Describe("ClusterConfigPcAppsValues", func() {
 		merged := util.DeepMergeMaps(values, explicit)
 		Expect(merged["applications"].(files.ChartValues)["cluster-config"].(files.ChartValues)["enabled"]).To(BeFalse())
 	})
-	It("rejects missing bootstrap credentials without exposing secret contents", func() {
-		vault.Secrets = nil
+	It("rejects a missing registry password without exposing the registry username", func() {
+		vault.GetSecret(files.SecretRegistryPassword).Fields.Password = ""
 		_, err := pcapps.ClusterConfigPcAppsValues(&config, vault, packageBOM)
 		Expect(err).To(MatchError(ContainSubstring("registry password is required")))
+		Expect(err.Error()).NotTo(ContainSubstring("registry-user"))
 	})
 })
