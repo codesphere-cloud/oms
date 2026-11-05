@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -14,7 +15,6 @@ import (
 )
 
 // EnsureK0s executed all steps to ensure a k0s cluster in gcp for every data center.
-// Only executing the config script needs to be done after installing codesphere, as crucial parts are still in the ts-installer.
 // k0s is installed only into data centers where it is not configured yet. It is downloaded to the
 // jumpbox before installing, airgapped bootstraps also download the airgap bundle and generate an
 // airgap k0sctl config first.
@@ -47,6 +47,11 @@ func (b *GCPBootstrapper) EnsureK0s() error {
 	err = b.InstallK0s(unconfigured)
 	if err != nil {
 		return fmt.Errorf("failed to install k0s: %w", err)
+	}
+
+	err = b.RunK0sConfigScript()
+	if err != nil {
+		return err
 	}
 
 	err = b.WaitForK0sNodes()
@@ -190,6 +195,64 @@ func (b *GCPBootstrapper) generateK0sConfigScript(dc *datacenter.DataCenter) err
 	}
 
 	script := fmt.Sprintf(`#!/bin/bash
+set -eo pipefail
+%s
+%s
+# Keep interactive kubectl aliases with node configuration.
+grep -qxF 'alias kubectl="k0s kubectl"' /root/.bashrc || echo 'alias kubectl="k0s kubectl"' >> /root/.bashrc
+grep -qxF 'alias k="k0s kubectl"' /root/.bashrc || echo 'alias k="k0s kubectl"' >> /root/.bashrc
+`, enableWorkerDaemonsCmds.String(), enableCloudProviderCmd("k0scontroller"))
+
+	localScript := dc.K0sConfigScriptPath()
+
+	err := b.fw.WriteFile(localScript, []byte(script), 0755)
+	if err != nil {
+		return fmt.Errorf("failed to write %s: %w", localScript, err)
+	}
+
+	controller := dc.ControlPlaneNodes[0]
+
+	err = controller.NodeClient.CopyFile(controller, localScript, remoteK0sConfigScriptPath)
+	if err != nil {
+		return fmt.Errorf("failed to copy %s to control plane node: %w", localScript, err)
+	}
+
+	err = controller.RunSSHCommand("root", "chmod +x "+remoteK0sConfigScriptPath)
+	if err != nil {
+		return fmt.Errorf("failed to make %s executable: %w", localScript, err)
+	}
+
+	return nil
+}
+
+// cloudControllerCommand stages the controller image on each node and applies the
+// controller resources through SSH from the connected jumpbox. Deploy a resolved
+// content-addressed tag with IfNotPresent so kube-system needs neither internet nor registry auth.
+func (b *GCPBootstrapper) cloudControllerCommand(dc *datacenter.DataCenter) string {
+	var imports strings.Builder
+	for _, node := range dc.ControlPlaneNodes {
+		fmt.Fprintf(&imports, "podman save --format docker-archive \"$image\" | ssh -o StrictHostKeyChecking=no root@%s 'k0s ctr -n k8s.io images import -'\n", node.GetInternalIP())
+	}
+
+	imageSetup := "image=docker.io/k8scloudprovidergcp/cloud-controller-manager:latest"
+	if b.Env.Airgapped {
+		imageSetup = `podman pull docker.io/k8scloudprovidergcp/cloud-controller-manager:latest
+image_id=$(podman image inspect --format '{{.Id}}' docker.io/k8scloudprovidergcp/cloud-controller-manager:latest)
+image="docker.io/k8scloudprovidergcp/cloud-controller-manager:oms-${image_id#sha256:}"
+podman tag docker.io/k8scloudprovidergcp/cloud-controller-manager:latest "$image"
+` + imports.String()
+	}
+
+	return fmt.Sprintf(`set -eo pipefail
+
+# Fetch on the connected jumpbox; nodes never download manifests or images.
+manifest=$(mktemp)
+trap 'rm -f "$manifest"' EXIT
+curl --fail --location --retry 3 https://raw.githubusercontent.com/kubernetes/cloud-provider-gcp/refs/tags/providers/v0.28.2/deploy/packages/default/manifest.yaml > "$manifest"
+%s
+ssh -o StrictHostKeyChecking=no root@%s 'k0s kubectl apply -f -' < "$manifest"
+ssh -o StrictHostKeyChecking=no root@%s bash -s <<SCRIPT
+#!/bin/bash
 
 set -eo pipefail
 
@@ -215,10 +278,13 @@ spec:
       labels:
         component: cloud-controller-manager
     spec:
+      hostNetwork: true
+      dnsPolicy: Default
       serviceAccountName: cloud-controller-manager
       containers:
       - name: cloud-controller-manager
-        image: k8scloudprovidergcp/cloud-controller-manager:latest
+        image: $image
+        imagePullPolicy: IfNotPresent
         command:
         - /usr/local/bin/cloud-controller-manager
         args:
@@ -249,42 +315,13 @@ spec:
 EOF
 
 KUBECTL="k0s kubectl"
-$KUBECTL create configmap cloud-config --from-file=cloud.conf -n kube-system --dry-run=client -o yaml | $KUBECTL apply -f -
-echo alias kubectl=\"$KUBECTL\" >> /root/.bashrc
-echo alias k=\"$KUBECTL\" >> /root/.bashrc
+\$KUBECTL create configmap cloud-config --from-file=cloud.conf -n kube-system --dry-run=client -o yaml | \$KUBECTL apply -f -
 
-$KUBECTL apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-gcp/refs/tags/providers/v0.28.2/deploy/packages/default/manifest.yaml
 
-$KUBECTL apply -f cc-deployment.yaml
+\$KUBECTL apply -f cc-deployment.yaml
 
-# set loadBalancerIP for public-gateway-controller and gateway-controller
-$KUBECTL patch svc public-gateway-controller -n codesphere -p '{"spec": {"loadBalancerIP": "'%s'"}}'
-$KUBECTL patch svc gateway-controller -n codesphere -p '{"spec": {"loadBalancerIP": "'%s'"}}'
-
-%s
-%s
-`, b.Env.ProjectID, dc.PublicGatewayIP, dc.GatewayIP, enableWorkerDaemonsCmds.String(), enableCloudProviderCmd("k0scontroller"))
-
-	localScript := dc.K0sConfigScriptPath()
-
-	err := b.fw.WriteFile(localScript, []byte(script), 0755)
-	if err != nil {
-		return fmt.Errorf("failed to write %s: %w", localScript, err)
-	}
-
-	controller := dc.ControlPlaneNodes[0]
-
-	err = controller.NodeClient.CopyFile(controller, localScript, remoteK0sConfigScriptPath)
-	if err != nil {
-		return fmt.Errorf("failed to copy %s to control plane node: %w", localScript, err)
-	}
-
-	err = controller.RunSSHCommand("root", "chmod +x "+remoteK0sConfigScriptPath)
-	if err != nil {
-		return fmt.Errorf("failed to make %s executable: %w", localScript, err)
-	}
-
-	return nil
+SCRIPT
+`, imageSetup, dc.ControlPlaneNodes[0].GetInternalIP(), dc.ControlPlaneNodes[0].GetInternalIP(), b.Env.ProjectID)
 }
 
 // enableCloudProviderCmd returns a shell command that adds --enable-cloud-provider to the k0s
@@ -302,8 +339,8 @@ func enableCloudProviderCmd(service string) string {
 }
 
 // RunK0sConfigScript runs every data center's k0s configuration script on its first control
-// plane node. It requires that data center's Codesphere install to have completed, since the
-// script patches the gateway services the install creates.
+// plane node, after staging the cloud controller from the jumpbox. No Codesphere
+// services need to exist yet.
 func (b *GCPBootstrapper) RunK0sConfigScript() error {
 	if err := b.ensureDataCenters(); err != nil {
 		return err
@@ -322,6 +359,10 @@ func (b *GCPBootstrapper) RunK0sConfigScript() error {
 }
 
 func (b *GCPBootstrapper) runK0sConfigScript(dc *datacenter.DataCenter) error {
+	if err := b.Env.Jumpbox.RunSSHCommand("root", b.cloudControllerCommand(dc)); err != nil {
+		return fmt.Errorf("failed to configure cloud controller from jumpbox: %w", err)
+	}
+
 	err := dc.ControlPlaneNodes[0].RunSSHCommand("root", remoteK0sConfigScriptPath)
 	if err != nil {
 		return fmt.Errorf("failed to configure k0s in data center %d: %w", dc.ID, err)
@@ -427,10 +468,45 @@ func (b *GCPBootstrapper) WaitForK0sNodes() error {
 }
 
 func (b *GCPBootstrapper) waitForK0sNodes(dc *datacenter.DataCenter) error {
+	if err := b.waitForK0sAPI(dc); err != nil {
+		return err
+	}
+
 	const command = "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m"
 	if err := dc.ControlPlaneNodes[0].RunSSHCommand("root", command); err != nil {
 		return fmt.Errorf("k0s nodes did not become ready (data center %d): %w", dc.ID, err)
 	}
 
 	return nil
+}
+
+// waitForK0sAPI runs on the controller, where the admin kubeconfig intentionally
+// uses the local API endpoint. Enabling the cloud provider restarts k0scontroller;
+// systemd returning does not imply that the API is listening yet. kubectl wait
+// cannot wait through an initial connection refusal, so probe readiness first.
+func (b *GCPBootstrapper) waitForK0sAPI(dc *datacenter.DataCenter) error {
+	const (
+		timeout = 5 * time.Minute
+		command = "k0s kubectl --request-timeout=5s get --raw=/readyz"
+	)
+
+	deadline := b.Time.Now().Add(timeout)
+
+	for {
+		err := dc.ControlPlaneNodes[0].RunSSHCommand("root", command)
+		if err == nil {
+			return nil
+		}
+
+		var exitErr *ssh.ExitError
+		if !errors.As(err, &exitErr) {
+			return fmt.Errorf("failed to check k0s API readiness on controller (data center %d): %w", dc.ID, err)
+		}
+
+		if !b.Time.Now().Before(deadline) {
+			return fmt.Errorf("k0s API did not become ready within %s (data center %d): %w", timeout, dc.ID, err)
+		}
+
+		b.Time.Sleep(5 * time.Second)
+	}
 }

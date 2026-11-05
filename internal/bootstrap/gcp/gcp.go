@@ -904,6 +904,13 @@ func airgappedEgressRules() []*computepb.Firewall {
 			Description:       protoString("Allow egress of air-gapped VMs inside the VPC"),
 		},
 		{
+			Name:      protoString("allow-google-apis-egress"),
+			Direction: protoString("EGRESS"), Priority: protoInt32(800),
+			Allowed:           []*computepb.Allowed{{IPProtocol: protoString("tcp"), Ports: []string{"443"}}},
+			DestinationRanges: []string{"199.36.153.8/30"}, TargetTags: []string{"k0s"},
+			Description: protoString("Allow cloud controller HTTPS to the private Google API VIP"),
+		},
+		{
 			Name:              protoString(airgappedDenyEgressRule),
 			Direction:         protoString("EGRESS"),
 			Priority:          protoInt32(900),
@@ -936,6 +943,9 @@ func (b *GCPBootstrapper) createFirewallRules(network string, rules []*computepb
 // Without airgapping the rules are removed, so a re-run that switches it off can pull again.
 func (b *GCPBootstrapper) ensureAirgappedEgressRules(network string) error {
 	if b.Env.Airgapped {
+		if err := b.GCPClient.EnsurePrivateGoogleAccess(b.Env.ProjectID, b.Env.Region, b.Env.ProjectID+"-vpc", b.Env.ProjectID+"-"+b.Env.Region+"-subnet"); err != nil {
+			return fmt.Errorf("failed to configure private Google API access: %w", err)
+		}
 		return b.createFirewallRules(network, airgappedEgressRules())
 	}
 
@@ -1247,8 +1257,8 @@ func (b *GCPBootstrapper) runDockerInstallCommand(n *node.Node, command string) 
 	}
 }
 
-// InstallK0sAndCodesphere installs k0s and Codesphere into every data center and then runs the
-// k0s config scripts. A Codesphere-only install leaves k0s and its config script alone.
+// InstallK0sAndCodesphere configures k0s before installing Codesphere into every data center.
+// A Codesphere-only install leaves k0s and its config script alone.
 func (b *GCPBootstrapper) InstallK0sAndCodesphere() error {
 	if b.Env.InstallCodesphereOnly {
 		log.Printf("Warning: installing only Codesphere. k0s, PostgreSQL, Ceph and the database keep their current state, so installing an older version than the running one, e.g. for a rollback, can fail or leave the instance broken.")
@@ -1262,17 +1272,6 @@ func (b *GCPBootstrapper) InstallK0sAndCodesphere() error {
 	err := b.InstallCodesphere()
 	if err != nil {
 		return fmt.Errorf("failed to install Codesphere: %w", err)
-	}
-
-	if b.Env.InstallCodesphereOnly {
-		return nil
-	}
-
-	// Every data center is installed before any k0s script runs, so a script never patches
-	// gateway services an install has yet to create.
-	err = b.RunK0sConfigScript()
-	if err != nil {
-		return fmt.Errorf("failed to run k0s config script: %w", err)
 	}
 
 	return nil
