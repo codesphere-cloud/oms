@@ -53,12 +53,6 @@ type AppOfApps struct {
 	client         client.Client
 }
 
-// DeleteResourcesWithApplication makes deleting the Application delete everything ArgoCD
-// deployed from it.
-func (p *AppOfApps) DeleteResourcesWithApplication() {
-	p.finalizers = []string{argov1alpha1.ResourcesFinalizerName}
-}
-
 // AppOfAppsConfig names the app of apps chart to apply and how.
 type AppOfAppsConfig struct {
 	Component      string // BOM component holding the chart
@@ -67,6 +61,8 @@ type AppOfAppsConfig struct {
 	Namespace      string // destination namespace of the app-of-apps
 	ValuesFiles    []string
 	ValuesOverride map[string]interface{}
+	// DeleteResourcesWithApp makes deleting the Application delete everything ArgoCD deployed from it.
+	DeleteResourcesWithApp bool
 }
 
 // NewAppOfAppsFromBom creates an installer for the chart in the BOM component.
@@ -95,6 +91,11 @@ func NewAppOfAppsFromBom(c client.Client, bomConfig *bom.Config, cfg AppOfAppsCo
 		return nil, fmt.Errorf("%s chart not found in BOM", cfg.Component)
 	}
 
+	var finalizers []string
+	if cfg.DeleteResourcesWithApp {
+		finalizers = []string{argov1alpha1.ResourcesFinalizerName}
+	}
+
 	return &AppOfApps{
 		name:           cfg.Name,
 		chart:          path.Base(reference.Path(chart)),
@@ -103,6 +104,7 @@ func NewAppOfAppsFromBom(c client.Client, bomConfig *bom.Config, cfg AppOfAppsCo
 		namespace:      cfg.Namespace,
 		valuesFiles:    cfg.ValuesFiles,
 		valuesOverride: cfg.ValuesOverride,
+		finalizers:     finalizers,
 		client:         c,
 	}, nil
 }
@@ -123,14 +125,14 @@ func checkArgoCDScheme(c client.Client) error {
 	return nil
 }
 
-// ResolveChartsRegistry reads the OCI registry base URL from the K8s Secret created by
-// "oms install codesphere dependencies". An Application's repoURL must
+// resolveRepoURL reads the OCI registry base URL from the K8s Secret created by
+// "oms install codesphere dependencies". The Application's repoURL must
 // match that secret's url verbatim, otherwise ArgoCD cannot match the
 // credentials to the repository.
-func ResolveChartsRegistry(ctx context.Context, c client.Client) (string, error) {
+func (p *AppOfApps) resolveRepoURL(ctx context.Context) (string, error) {
 	secret := &corev1.Secret{}
 	key := client.ObjectKey{Name: ociCredentialSecretName, Namespace: ociCredentialNamespace}
-	if err := c.Get(ctx, key, secret); err != nil {
+	if err := p.client.Get(ctx, key, secret); err != nil {
 		return "", fmt.Errorf(
 			"K8s secret %q not found in namespace %q: %w\n"+
 				"Run 'oms install codesphere dependencies' first to create registry credentials",
@@ -210,7 +212,7 @@ func (p *AppOfApps) Install(ctx context.Context) error {
 	vals := util.DeepMergeMaps(map[string]any{}, p.valuesOverride)
 	vals = util.DeepMergeMaps(vals, fileVals)
 
-	repoURL, err := ResolveChartsRegistry(ctx, p.client)
+	repoURL, err := p.resolveRepoURL(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to resolve repo url: %w", err)
 	}
