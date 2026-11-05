@@ -11,13 +11,12 @@ import (
 	"fmt"
 	"sync"
 
-	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
+	argo "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
-	chartutil "helm.sh/helm/v4/pkg/chart/v2/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -27,25 +26,6 @@ const (
 	codesphereNamespace = "codesphere"
 	defaultReleaseName  = "codesphere"
 )
-
-// ValidateConfig rejects what the legacy installer accepts but must not reach the ArgoCD
-// Application, where the values sit in plain text. It is exported so the CLI can reject the config
-// before the legacy installer turns on maintenance mode and migrates the database.
-func ValidateConfig(cfg *files.RootConfig) error {
-	if err := chartutil.ValidateReleaseName(releaseName(cfg)); err != nil {
-		return fmt.Errorf("codesphere.releaseName %q: %w", cfg.Codesphere.ReleaseName, err)
-	}
-
-	// TODO(nate): Remove this extra check once there hasn't been a config that still included that secret for a while.
-	if cert := cfg.Codesphere.CustomCertificate; cert != nil && cert.Key != "" {
-		return fmt.Errorf(
-			"codesphere.customCertificate.key must not be in the config when deploying through ArgoCD, move it into the vault entry %q",
-			files.SecretCustomCertificateKey,
-		)
-	}
-
-	return nil
-}
 
 // Install applies the cs-applications Application of the release cfg configures, and waits until
 // ArgoCD has deployed all sub applications with the values built from cfg and they are healthy.
@@ -57,10 +37,6 @@ func Install(
 	csBom *bom.Config,
 	vaultSecretName string,
 ) error {
-	if err := ValidateConfig(cfg); err != nil {
-		return err
-	}
-
 	appValues, err := Values(cfg, csBom, vaultSecretName)
 	if err != nil {
 		return err
@@ -120,7 +96,7 @@ func waitForSubApps(ctx context.Context, kubeClient client.Client, parentAppName
 }
 
 func subAppNames(ctx context.Context, kubeClient client.Client, parentAppName string) ([]string, error) {
-	parent := &argov1alpha1.Application{}
+	parent := &argo.Application{}
 	if err := kubeClient.Get(ctx, client.ObjectKey{Name: parentAppName, Namespace: argocd.DefaultNamespace}, parent); err != nil {
 		return nil, fmt.Errorf("failed to read ArgoCD Application %q: %w", parentAppName, err)
 	}
@@ -128,7 +104,7 @@ func subAppNames(ctx context.Context, kubeClient client.Client, parentAppName st
 	var names []string
 
 	for _, resource := range parent.Status.Resources {
-		if resource.Group == argov1alpha1.SchemeGroupVersion.Group && resource.Kind == argov1alpha1.ApplicationSchemaGroupVersionKind.Kind {
+		if resource.Group == argo.SchemeGroupVersion.Group && resource.Kind == argo.ApplicationSchemaGroupVersionKind.Kind {
 			names = append(names, resource.Name)
 		}
 	}
