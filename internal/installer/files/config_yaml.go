@@ -293,6 +293,11 @@ func (c *RootConfig) SetAdditionalRegistry(registry AdditionalRegistryConfig) {
 	c.AdditionalRegistries = append(c.AdditionalRegistries, registry)
 }
 
+// WorkspaceImage is the name, without tag, that a flavor built from a Dockerfile is pushed under.
+func (r RegistryConfig) WorkspaceImage(imageKey, flavorKey string) string {
+	return fmt.Sprintf("%s/%s-%s", strings.TrimRight(r.Server, "/"), imageKey, flavorKey)
+}
+
 // PostgresPort is the port the Postgres installed by OMS listens on.
 const PostgresPort = 5432
 
@@ -408,6 +413,7 @@ type K8sNode struct {
 }
 
 type ClusterConfig struct {
+	ClusterConfig       *ChartOverrideConfig       `yaml:"clusterConfig,omitempty"`
 	Certificates        ClusterCertificates        `yaml:"certificates"`
 	CertManager         *CertManagerConfig         `yaml:"certManager,omitempty"`
 	TrustManager        *TrustManagerConfig        `yaml:"trustManager,omitempty"`
@@ -468,6 +474,11 @@ type GatewayConfig struct {
 type GatewayAPIConfig struct {
 	Enabled bool  `yaml:"enabled"`
 	Use     *bool `yaml:"use,omitempty"`
+}
+
+// ChartOverrideConfig preserves Helm values supplied through legacy component settings.
+type ChartOverrideConfig struct {
+	Override ChartOverride `yaml:"override,omitempty"`
 }
 
 type CertManagerConfig struct {
@@ -536,6 +547,9 @@ type MetalLBBGPConfig struct {
 	BFDProfile  string `yaml:"bfdProfile,omitempty"`
 }
 
+// WorkspacePVCStorageFlag stores workspaces on PVCs instead of CephFS.
+const WorkspacePVCStorageFlag = "workspace-pvc-storage"
+
 type CodesphereConfig struct {
 	Domain                     string                   `yaml:"domain"`
 	WorkspaceHostingBaseDomain string                   `yaml:"workspaceHostingBaseDomain"`
@@ -553,6 +567,7 @@ type CodesphereConfig struct {
 	Preview                       map[string]bool        `yaml:"preview"`
 	Features                      map[string]bool        `yaml:"features"`
 	ClusterAdminEmail             string                 `yaml:"clusterAdminEmail,omitempty"`
+	ReleaseName                   string                 `yaml:"releaseName,omitempty"`
 	ExtraCAPem                    string                 `yaml:"extraCaPem,omitempty"`
 	ExtraWorkspaceEnvVars         map[string]string      `yaml:"extraWorkspaceEnvVars,omitempty"`
 	ExtraWorkspaceFiles           []ExtraWorkspaceFile   `yaml:"extraWorkspaceFiles,omitempty"`
@@ -696,6 +711,9 @@ type OAuthProvidersConfig struct {
 	Oidc *OidcOAuthProvider `yaml:"oidc,omitempty"`
 }
 
+// DefaultOidcProviderName names an OIDC provider the config leaves unnamed.
+const DefaultOidcProviderName = "OIDC"
+
 type OidcOAuthProvider struct {
 	Type      string   `yaml:"type"`
 	Enabled   bool     `yaml:"enabled"`
@@ -766,8 +784,10 @@ type TelemetryExport struct {
 	SpanMetrics    bool   `yaml:"spanMetrics"`
 }
 
-type ChartOverride = map[string]interface{}
-type ChartValues = map[string]interface{}
+type (
+	ChartOverride = map[string]interface{}
+	ChartValues   = map[string]interface{}
+)
 
 type ImageRef struct {
 	BomRef     string `yaml:"bomRef,omitempty"`
@@ -902,57 +922,16 @@ type ManagedServiceConfig struct {
 }
 
 type ServicePlan struct {
-	ID          int                  `yaml:"id"`
-	Description string               `yaml:"description"`
-	Name        string               `yaml:"name"`
-	Parameters  map[string]PlanParam `yaml:"parameters"`
+	ID          int                    `yaml:"id"`
+	Description string                 `yaml:"description"`
+	Name        string                 `yaml:"name"`
+	Parameters  map[string]interface{} `yaml:"parameters"`
 }
 
 // ResourceParam defines the schema for provider plan parameters.
 type ResourceParam struct {
 	PricedAs string                 `yaml:"pricedAs,omitempty"`
 	Schema   map[string]interface{} `yaml:"schema"`
-}
-
-// PlanParam is a provider plan's value for a resource parameter: a scalar (new format) or an inline
-// ResourceParam definition (old format).
-//
-// TODO(CU-869ev5bn2): once legacy support is dropped, delete PlanParam and its custom
-// (Un)MarshalYAML methods; ServicePlan.Parameters becomes map[string]interface{}.
-type PlanParam struct {
-	IsScalar bool
-	Value    interface{}
-	Legacy   ResourceParam
-}
-
-// UnmarshalYAML reads a plan parameter in either the scalar or object form.
-func (p *PlanParam) UnmarshalYAML(value *yaml.Node) error {
-	switch value.Kind {
-	case yaml.ScalarNode:
-		p.IsScalar = true
-		if err := value.Decode(&p.Value); err != nil {
-			return fmt.Errorf("decode scalar plan parameter: %w", err)
-		}
-		return nil
-	case yaml.MappingNode:
-		if err := value.Decode(&p.Legacy); err != nil {
-			return fmt.Errorf("decode legacy plan parameter: %w", err)
-		}
-		return nil
-	default:
-		return fmt.Errorf("unsupported plan parameter shape %s at line %d", value.ShortTag(), value.Line)
-	}
-}
-
-// MarshalYAML writes the parameter back in the form it was read, rendering a null/empty value as null rather than an empty {schema: {}} object.
-func (p PlanParam) MarshalYAML() (interface{}, error) {
-	if p.IsScalar {
-		return p.Value, nil
-	}
-	if p.Legacy.PricedAs == "" && p.Legacy.Schema == nil {
-		return nil, nil
-	}
-	return p.Legacy, nil
 }
 
 type ManagedServiceBackendsConfig struct {

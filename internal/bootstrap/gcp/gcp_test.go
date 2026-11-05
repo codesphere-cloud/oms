@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/artifactregistry/apiv1/artifactregistrypb"
 	"cloud.google.com/go/compute/apiv1/computepb"
@@ -25,6 +26,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
+	"golang.org/x/crypto/ssh"
 	"google.golang.org/api/cloudbilling/v1"
 	"google.golang.org/api/dns/v1"
 )
@@ -1984,6 +1986,43 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(starts).To(Equal(hosts))
 			})
 
+			It("retries Docker installation after an RPM lock conflict", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				lockErr := fmt.Errorf("command failed: %w\nerror: can't create transaction lock on /var/lib/rpm/.rpm.lock (Resource temporarily unavailable)", &ssh.ExitError{})
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", dockerRunningCheck).Return(fmt.Errorf("not installed"))
+				failed := nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", "dnf install -y docker-ce docker-ce-cli containerd.io").Return(lockErr).Once()
+				nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", "dnf install -y docker-ce docker-ce-cli containerd.io").Return(nil).Once().NotBefore(failed)
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil)
+
+				started := bs.Time.Now()
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				Expect(bs.Time.Now().Sub(started)).To(Equal(10 * time.Second))
+			})
+
+			It("stops retrying a busy RPM lock after five minutes", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				lockErr := fmt.Errorf("command failed: %w\nerror: can't create transaction lock on /var/lib/rpm/.rpm.lock (Resource temporarily unavailable)", &ssh.ExitError{})
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", dockerRunningCheck).Return(fmt.Errorf("not installed"))
+				nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", "dnf install -y docker-ce docker-ce-cli containerd.io").Return(lockErr).Times(31)
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil)
+
+				started := bs.Time.Now()
+				Expect(bs.EnsureHostsConfigured()).To(MatchError(ContainSubstring("RPM transaction lock remained busy for 5m")))
+				Expect(bs.Time.Now().Sub(started)).To(Equal(5 * time.Minute))
+			})
+
+			It("does not retry a genuine package signature failure", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				signatureErr := fmt.Errorf("command failed: %w\nError: GPG check FAILED", &ssh.ExitError{})
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", dockerRunningCheck).Return(fmt.Errorf("not installed"))
+				nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", "dnf install -y docker-ce docker-ce-cli containerd.io").Return(signatureErr).Once()
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil)
+
+				started := bs.Time.Now()
+				Expect(bs.EnsureHostsConfigured()).To(MatchError(ContainSubstring("failed to install Docker on postgres")))
+				Expect(bs.Time.Now()).To(Equal(started))
+			})
+
 			It("leaves hosts alone that already run Docker, so a re-run does not need the Docker repository", func() {
 				bs.Env.HostOS = gcp.HostOSRHEL9
 
@@ -2270,7 +2309,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil)
 
 				err := bs.EnsureHostsConfigured()
-				Expect(err).To(MatchError(ContainSubstring("failed to ensure Docker: failed to install Docker on postgres: repo unreachable")))
+				Expect(err).To(MatchError(ContainSubstring("failed to ensure Docker: failed to install Docker on postgres: docker installation command failed: repo unreachable")))
 			})
 
 			It("fails when the secrets directory cannot be created", func() {
