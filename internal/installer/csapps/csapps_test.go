@@ -6,6 +6,7 @@ package csapps_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/csapps"
@@ -30,6 +32,7 @@ import (
 const (
 	chartsRegistry    = "registry.example.com/codesphere-cloud/charts"
 	codesphereVersion = "1.40.0-v1.2.3"
+	vaultSecretName   = "pr-1-vault"
 	csAppsVersion     = "0.2.0"
 )
 
@@ -121,10 +124,9 @@ var _ = Describe("Values", func() {
 		cfg := fullConfig("pr-1")
 		b := bomWithCharts()
 
-		values, err := csapps.Values(cfg, b, chartsRegistry, "trigger-1")
+		values, err := csapps.Values(cfg, b, vaultSecretName)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(at(values, "chartsRegistry")).To(Equal(chartsRegistry))
 		Expect(values).NotTo(HaveKey("releaseName"))
 		Expect(at(values, "namespace")).To(Equal("codesphere"))
 		Expect(at(values, "applications", "codesphere", "enabled")).To(BeTrue())
@@ -133,9 +135,13 @@ var _ = Describe("Values", func() {
 		expected, err := csappsvalues.Build(cfg, b)
 		Expect(err).NotTo(HaveOccurred())
 
+		syncTrigger := at(values, "applications", "codesphere", "valuesObject", "global", "externalSecretsSyncTrigger")
+		Expect(syncTrigger).NotTo(BeEmpty())
+
 		expectedGlobal := expected["global"].(map[string]any)
 		expectedGlobal["externalSecrets"] = true
-		expectedGlobal["externalSecretsSyncTrigger"] = "trigger-1"
+		expectedGlobal["externalSecretsSyncTrigger"] = syncTrigger
+		expectedGlobal["externalSecretsVaultSecret"] = vaultSecretName
 		expectedGlobal["argoCd"] = true
 
 		Expect(at(values, "applications", "codesphere", "valuesObject")).To(Equal(expected))
@@ -145,7 +151,7 @@ var _ = Describe("Values", func() {
 		cfg := fullConfig("pr-1")
 		cfg.Codesphere.Override = map[string]any{"global": map[string]any{"externalSecrets": false}}
 
-		values, err := csapps.Values(cfg, bomWithCharts(), chartsRegistry, "trigger-1")
+		values, err := csapps.Values(cfg, bomWithCharts(), vaultSecretName)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(at(values, "applications", "codesphere", "valuesObject", "global", "externalSecrets")).To(BeTrue())
@@ -158,7 +164,7 @@ var _ = Describe("Values", func() {
 			"codesphere": map[string]any{"ignoreDifferences": []any{map[string]any{"kind": "HTTPRoute"}}},
 		}
 
-		values, err := csapps.Values(cfg, bomWithCharts(), chartsRegistry, "trigger-1")
+		values, err := csapps.Values(cfg, bomWithCharts(), vaultSecretName)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(at(values, "appProject")).To(Equal("previews"))
@@ -172,7 +178,7 @@ var _ = Describe("Values", func() {
 		codesphere.Files = nil
 		b.Components["codesphere"] = codesphere
 
-		_, err := csapps.Values(fullConfig("pr-1"), b, chartsRegistry, "trigger-1")
+		_, err := csapps.Values(fullConfig("pr-1"), b, vaultSecretName)
 
 		Expect(err).To(MatchError(ContainSubstring("codesphere chart not found in BOM")))
 	})
@@ -198,7 +204,7 @@ var _ = Describe("Install", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		defer cancel()
 
-		return csapps.Install(ctx, kubeClient, fullConfig("pr-1"), bomWithCharts())
+		return csapps.Install(ctx, kubeClient, fullConfig("pr-1"), bomWithCharts(), vaultSecretName)
 	}
 
 	It("release pr-1 -> applies pr-1-cs-applications and waits for it to sync", func() {
@@ -221,23 +227,10 @@ var _ = Describe("Install", func() {
 			NotTo(BeEmpty())
 	})
 
-	It("default release -> no finalizer, deleting the Application leaves Codesphere running", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-		defer cancel()
-
-		Expect(csapps.Install(ctx, kubeClient, fullConfig(""), bomWithCharts())).To(HaveOccurred())
-
-		app := &argov1alpha1.Application{}
-		Expect(kubeClient.Get(context.Background(), client.ObjectKey{Name: "codesphere-cs-applications", Namespace: "argocd"}, app)).
-			To(Succeed())
-		Expect(app.Spec.Source.Helm.ReleaseName).To(Equal("codesphere"))
-		Expect(app.Finalizers).To(BeEmpty())
-	})
-
 	It("invalid release name -> error before applying anything", func() {
 		cfg := fullConfig("PR_1")
 
-		Expect(csapps.Install(context.Background(), kubeClient, cfg, bomWithCharts())).
+		Expect(csapps.Install(context.Background(), kubeClient, cfg, bomWithCharts(), vaultSecretName)).
 			To(MatchError(ContainSubstring("codesphere.releaseName")))
 
 		apps := &argov1alpha1.ApplicationList{}
@@ -266,12 +259,101 @@ var _ = Describe("Install", func() {
 		Expect(syncTrigger()).NotTo(Equal(first))
 	})
 
+	Context("ArgoCD syncs the Applications", func() {
+		const parentAppName = "pr-1-cs-applications"
+
+		subAppNames := []string{"pr-1-codesphere", "pr-1-mounter"}
+
+		var synced map[string]bool
+
+		BeforeEach(func() {
+			synced = map[string]bool{parentAppName: true}
+
+			scheme := runtime.NewScheme()
+			Expect(clientgoscheme.AddToScheme(scheme)).To(Succeed())
+			Expect(argov1alpha1.AddToScheme(scheme)).To(Succeed())
+
+			objects := []client.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "argocd-codesphere-oci-read", Namespace: "argocd"},
+				Data:       map[string][]byte{"url": []byte(chartsRegistry)},
+			}}
+
+			var resources []argov1alpha1.ResourceStatus
+
+			for _, name := range subAppNames {
+				objects = append(objects, &argov1alpha1.Application{
+					ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "argocd"},
+					Spec:       argov1alpha1.ApplicationSpec{Source: &argov1alpha1.ApplicationSource{Chart: name}},
+				})
+				resources = append(resources, argov1alpha1.ResourceStatus{
+					Group: "argoproj.io", Kind: "Application", Namespace: "argocd", Name: name,
+				})
+			}
+			// The parent also deploys resources that are not Applications.
+			resources = append(resources, argov1alpha1.ResourceStatus{Kind: "ConfigMap", Namespace: "argocd", Name: "pr-1-config"})
+
+			kubeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).WithInterceptorFuncs(interceptor.Funcs{
+				Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+					if err := c.Get(ctx, key, obj, opts...); err != nil {
+						return fmt.Errorf("failed to get %s: %w", key, err)
+					}
+
+					app, ok := obj.(*argov1alpha1.Application)
+					if !ok || !synced[key.Name] {
+						return nil
+					}
+
+					app.Status.Sync.ComparedTo.Source = *app.Spec.Source.DeepCopy()
+					app.Status.Sync.Status = argov1alpha1.SyncStatusCodeSynced
+
+					app.Status.Health.Status = "Healthy"
+					if key.Name == parentAppName {
+						app.Status.Resources = resources
+					}
+
+					return nil
+				},
+			}).Build()
+		})
+
+		installWithTimeout := func() error {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+
+			return csapps.Install(ctx, kubeClient, fullConfig("pr-1"), bomWithCharts(), vaultSecretName)
+		}
+
+		It("parent and every sub application synced and healthy -> done", func() {
+			for _, name := range subAppNames {
+				synced[name] = true
+			}
+
+			Expect(installWithTimeout()).To(Succeed())
+		})
+
+		It("one sub application never syncs -> error naming only that one", func() {
+			synced["pr-1-codesphere"] = true
+
+			err := installWithTimeout()
+
+			Expect(err).To(MatchError(ContainSubstring(`"pr-1-mounter"`)))
+			Expect(err).NotTo(MatchError(ContainSubstring(`"pr-1-codesphere"`)))
+		})
+
+		It("no sub application syncs -> error naming each one", func() {
+			err := installWithTimeout()
+
+			Expect(err).To(MatchError(ContainSubstring(`"pr-1-codesphere"`)))
+			Expect(err).To(MatchError(ContainSubstring(`"pr-1-mounter"`)))
+		})
+	})
+
 	It("no registry credentials -> error before applying anything", func() {
 		Expect(kubeClient.Delete(context.Background(), &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: "argocd-codesphere-oci-read", Namespace: "argocd"},
 		})).To(Succeed())
 
-		Expect(installUntilWait()).To(MatchError(ContainSubstring("failed to resolve the charts registry")))
+		Expect(installUntilWait()).To(MatchError(ContainSubstring("failed to resolve repo url")))
 
 		apps := &argov1alpha1.ApplicationList{}
 		Expect(kubeClient.List(context.Background(), apps)).To(Succeed())
