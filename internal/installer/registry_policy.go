@@ -126,20 +126,21 @@ func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base
 }
 
 // removeRegistryPolicy deletes the binding before its policy so admission stops rewriting
-// images first. Version discovery is skipped so clusters without the policy API succeed.
+// images first. Both API versions are listed because Kubernetes 1.34–1.35 only serve the
+// beta API. Version discovery is skipped so clusters without the policy API succeed.
 // When anything was removed, it waits until dry-run Pods keep their default images.
 func removeRegistryPolicy(ctx context.Context, client RegistryPolicyClient) error {
-	removedBinding, err := deleteRegistryResource(ctx, client, registryPolicyBindingKind)
-	if err != nil {
-		return fmt.Errorf("failed to remove image registry policy binding: %w", err)
-	}
-
-	removedPolicy, err := deleteRegistryResource(ctx, client, registryPolicyKind)
+	removed, err := deleteRegistryResources(ctx, client, []*unstructured.Unstructured{
+		registryResource(admissionv1.SchemeGroupVersion.WithKind(registryPolicyBindingKind)),
+		registryResource(admissionv1beta1.SchemeGroupVersion.WithKind(registryPolicyBindingKind)),
+		registryResource(admissionv1.SchemeGroupVersion.WithKind(registryPolicyKind)),
+		registryResource(admissionv1beta1.SchemeGroupVersion.WithKind(registryPolicyKind)),
+	})
 	if err != nil {
 		return fmt.Errorf("failed to remove image registry policy: %w", err)
 	}
 
-	if !removedBinding && !removedPolicy {
+	if !removed {
 		return nil
 	}
 
@@ -150,27 +151,33 @@ func removeRegistryPolicy(ctx context.Context, client RegistryPolicyClient) erro
 	return nil
 }
 
-// deleteRegistryResource deletes the named admission resource through the first served
-// policy API version. It reports false when the API or the resource does not exist.
-func deleteRegistryResource(ctx context.Context, client RegistryPolicyClient, kind string) (bool, error) {
-	for _, apiVersion := range []string{admissionv1.SchemeGroupVersion.String(), admissionv1beta1.SchemeGroupVersion.String()} {
-		resource := &unstructured.Unstructured{}
-		resource.SetGroupVersionKind(schema.FromAPIVersionAndKind(apiVersion, kind))
-		resource.SetName(registryPolicyName)
+func registryResource(gvk schema.GroupVersionKind) *unstructured.Unstructured {
+	resource := &unstructured.Unstructured{}
+	resource.SetGroupVersionKind(gvk)
+	resource.SetName(registryPolicyName)
 
-		switch err := client.Delete(ctx, resource); {
-		case meta.IsNoMatchError(err):
+	return resource
+}
+
+// deleteRegistryResources deletes the resources in order, skipping those whose API is not
+// served or that do not exist. It reports whether any resource was deleted.
+func deleteRegistryResources(ctx context.Context, client RegistryPolicyClient, resources []*unstructured.Unstructured) (bool, error) {
+	removed := false
+
+	for _, resource := range resources {
+		err := client.Delete(ctx, resource)
+		if meta.IsNoMatchError(err) || apierrors.IsNotFound(err) {
 			continue
-		case apierrors.IsNotFound(err):
-			return false, nil
-		case err != nil:
-			return false, fmt.Errorf("failed to delete %s %s: %w", apiVersion, kind, err)
 		}
 
-		return true, nil
+		if err != nil {
+			return removed, fmt.Errorf("failed to delete %s %s: %w", resource.GetAPIVersion(), resource.GetKind(), err)
+		}
+
+		removed = true
 	}
 
-	return false, nil
+	return removed, nil
 }
 
 // waitForRegistryPolicy verifies admission has observed the policy and binding before
