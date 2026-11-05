@@ -127,6 +127,15 @@ func (ci *CodesphereInstaller) Install(pm PackageManager, cm ConfigManager, im s
 	return ci.runInstaller(pm, config)
 }
 
+// runContext returns the configured context, falling back to context.Background when none is set.
+func (ci *CodesphereInstaller) runContext() context.Context {
+	if ci.Context == nil {
+		return context.Background()
+	}
+
+	return ci.Context
+}
+
 func (ci *CodesphereInstaller) loadConfig(cm ConfigManager) (files.RootConfig, error) {
 	config, err := cm.ParseConfigYaml(ci.ConfigPath)
 	if err != nil {
@@ -391,12 +400,7 @@ func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.Root
 		return err
 	}
 
-	ctx := ci.Context
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	cmd := exec.CommandContext(ctx, nodePath, cmdArgs...)
+	cmd := exec.CommandContext(ci.runContext(), nodePath, cmdArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -420,12 +424,7 @@ func (ci *CodesphereInstaller) orphanExternalSecretsForCodesphereStep(config fil
 		return nil
 	}
 
-	ctx := ci.Context
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	if err := OrphanCodesphereExternalSecrets(ctx, ci.VaultPath, ci.PrivKey, ci.VaultType, config); err != nil {
+	if err := OrphanCodesphereExternalSecrets(ci.runContext(), ci.VaultPath, ci.PrivKey, ci.VaultType, config); err != nil {
 		return fmt.Errorf("failed to hand the Codesphere Secrets over to Helm: %w", err)
 	}
 
@@ -461,12 +460,7 @@ func (ci *CodesphereInstaller) runLocalComponents(pm PackageManager, config file
 			"--dependenciesDir", filepath.Join(bundleDir, "deps"),
 			"--config", ci.ConfigPath, "--privKey", privKey}
 
-		ctx := ci.Context
-		if ctx == nil {
-			ctx = context.Background()
-		}
-
-		cmd := exec.CommandContext(ctx, filepath.Join(bundleDir, "node"), args...)
+		cmd := exec.CommandContext(ci.runContext(), filepath.Join(bundleDir, "node"), args...)
 
 		cmd.Stdout, cmd.Stderr, cmd.Stdin = os.Stdout, os.Stderr, os.Stdin
 		if err := cmd.Run(); err != nil {
