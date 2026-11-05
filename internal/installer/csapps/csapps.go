@@ -26,7 +26,6 @@ const (
 	codesphereComponent = "codesphere"
 	codesphereNamespace = "codesphere"
 	defaultReleaseName  = "codesphere"
-	csAppsAppNameSuffix = "-" + csAppsComponent
 )
 
 // ValidateConfig rejects what the legacy installer accepts but must not reach the ArgoCD
@@ -37,6 +36,7 @@ func ValidateConfig(cfg *files.RootConfig) error {
 		return fmt.Errorf("codesphere.releaseName %q: %w", cfg.Codesphere.ReleaseName, err)
 	}
 
+	// TODO(nate): Remove this extra check once there hasn't been a config that still included that secret for a while.
 	if cert := cfg.Codesphere.CustomCertificate; cert != nil && cert.Key != "" {
 		return fmt.Errorf(
 			"codesphere.customCertificate.key must not be in the config when deploying through ArgoCD, move it into the vault entry %q",
@@ -50,7 +50,13 @@ func ValidateConfig(cfg *files.RootConfig) error {
 // Install applies the cs-applications Application of the release cfg configures, and waits until
 // ArgoCD has deployed all sub applications with the values built from cfg and they are healthy.
 // The release reads its secrets from the vault Secret vaultSecretName.
-func Install(ctx context.Context, kubeClient client.Client, cfg *files.RootConfig, csBom *bom.Config, vaultSecretName string) error {
+func Install(
+	ctx context.Context,
+	kubeClient client.Client,
+	cfg *files.RootConfig,
+	csBom *bom.Config,
+	vaultSecretName string,
+) error {
 	if err := ValidateConfig(cfg); err != nil {
 		return err
 	}
@@ -61,7 +67,7 @@ func Install(ctx context.Context, kubeClient client.Client, cfg *files.RootConfi
 	}
 
 	release := releaseName(cfg)
-	parentAppName := release + csAppsAppNameSuffix
+	parentAppName := release + "-" + csAppsComponent
 
 	parentApp, err := installer.NewAppOfAppsFromBom(kubeClient, csBom, installer.AppOfAppsConfig{
 		Component:      csAppsComponent,
@@ -81,7 +87,7 @@ func Install(ctx context.Context, kubeClient client.Client, cfg *files.RootConfi
 		return fmt.Errorf("failed to apply ArgoCD Application %q: %w", parentAppName, err)
 	}
 
-	// The parent must sync first: that sync writes the new values into the sub applications.
+	// The parent must sync first: its sync creates the sub applications and writes their new values.
 	if err := argocd.WaitForAppFreshlySyncedAndHealthy(ctx, kubeClient, parentAppName); err != nil {
 		return fmt.Errorf("failed to wait for ArgoCD Application %q: %w", parentAppName, err)
 	}
@@ -130,9 +136,9 @@ func subAppNames(ctx context.Context, kubeClient client.Client, parentAppName st
 	return names, nil
 }
 
-// Values returns the cs-applications values: the Codesphere chart version and values OMS builds,
-// with the config's csApps block merged over them. Sub applications other than codesphere get
-// their values only from csApps; extend the config for a new one that needs built values.
+// Values returns the cs-applications values: the Codesphere umbrella chart version and values OMS builds,
+// with the config's csApps block merged over them. Sub applications other than codesphere umbrella get
+// their values only from csApps; for permanent config for a new app, extend the config appropriately.
 func Values(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName string) (map[string]any, error) {
 	chart, ok := csBom.GetChart(codesphereComponent)
 	if !ok {
