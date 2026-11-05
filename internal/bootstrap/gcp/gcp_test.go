@@ -2570,6 +2570,19 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			icg.EXPECT().GetSecretFilePath().Return("/etc/codesphere/secrets/prod.vault.yaml").Maybe()
 		})
+		It("prepares jumpbox certificates after mirroring and before installing an airgapped instance", func() {
+			csEnv.Airgapped = true
+			csEnv.RegistryType = gcp.RegistryTypeLocalContainer
+			csEnv.DNSProjectID = "public-dns-project"
+
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(c string) bool { return strings.Contains(c, "oms download package") })).Return(nil).Once()
+			mirrored := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(c string) bool { return strings.HasPrefix(c, "oms copy package") })).Return(nil).Once()
+			certificate := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(c string) bool {
+				return strings.HasPrefix(c, "oms install bootstrap-tls ") && strings.Contains(c, "--dns-project 'public-dns-project'")
+			})).Return(nil).Once().NotBefore(mirrored)
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(c string) bool { return strings.HasPrefix(c, "oms install codesphere ") })).Return(nil).Once().NotBefore(certificate)
+			Expect(bs.InstallCodesphere()).To(Succeed())
+		})
 		Describe("Valid InstallCodesphere", func() {
 			Context("Direct GitHub access", func() {
 				BeforeEach(func() {
