@@ -4,9 +4,11 @@
 package installer
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -81,6 +83,9 @@ type HelmClient interface {
 
 	// UpgradeChart upgrades an existing Helm release and returns an error on failure.
 	UpgradeChart(ctx context.Context, cfg ChartConfig, opts UpgradeChartOptions) error
+
+	// WaitForResources waits for named resources using Helm's status watcher.
+	WaitForResources(ctx context.Context, apiVersion, kind string, names []string, timeout time.Duration) error
 
 	// ConfigureRegistryCA adds a PEM certificate authority for login and chart downloads.
 	ConfigureRegistryCA(caPEM []byte) error
@@ -402,6 +407,46 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 	_, err = upgradeClient.RunWithContext(ctx, cfg.ReleaseName, chartRequested, cfg.Values)
 	if err != nil {
 		return fmt.Errorf("upgrade failed: %w", err)
+	}
+
+	return nil
+}
+
+// WaitForResources delegates existence, readiness, retries, and timeout handling
+// to Helm's watcher. Resources may be created asynchronously by another controller.
+func (h *helmClient) WaitForResources(ctx context.Context, apiVersion, kind string, names []string, timeout time.Duration) error {
+	items := make([]map[string]any, 0, len(names))
+	for _, name := range names {
+		items = append(items, map[string]any{"apiVersion": apiVersion, "kind": kind, "metadata": map[string]any{"name": name}})
+	}
+
+	manifest, err := json.Marshal(map[string]any{"apiVersion": "v1", "kind": "List", "items": items})
+	if err != nil {
+		return fmt.Errorf("encoding resources to wait for: %w", err)
+	}
+
+	settings := cli.New()
+	settings.SetNamespace(h.defaultNamespace)
+
+	getter := settings.RESTClientGetter()
+	if h.restConfig != nil {
+		getter = newRESTConfigGetter(h.restConfig, h.defaultNamespace)
+	}
+
+	kubeClient := kube.New(getter)
+
+	resources, err := kubeClient.Build(bytes.NewReader(manifest), false)
+	if err != nil {
+		return fmt.Errorf("building resources to wait for: %w", err)
+	}
+
+	waiter, err := kubeClient.GetWaiterWithOptions(kube.StatusWatcherStrategy, kube.WithWaitContext(ctx))
+	if err != nil {
+		return fmt.Errorf("initializing Helm resource waiter: %w", err)
+	}
+
+	if err := waiter.Wait(resources, timeout); err != nil {
+		return fmt.Errorf("waiting for %s resources %v: %w", kind, names, err)
 	}
 
 	return nil
