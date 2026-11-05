@@ -112,9 +112,11 @@ func subAppNames(ctx context.Context, kubeClient client.Client, parentAppName st
 	return names, nil
 }
 
-// Values returns the cs-applications values: the Codesphere umbrella chart version and values OMS builds,
-// with the config's csApps block merged over them. Sub applications other than codesphere umbrella get
-// their values only from csApps; for permanent config for a new app, extend the config appropriately.
+// Values returns the cs-applications values: the Codesphere umbrella chart version and the values
+// OMS builds from the config, with the config's csApps block merged over them. The built global
+// values go to the top level, which the chart shares with every sub application. Other values reach
+// a sub application only through csApps; for permanent config for a new app, extend the config
+// appropriately.
 func Values(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName string) (map[string]any, error) {
 	chart, ok := csBom.GetChart(codesphereComponent)
 	if !ok {
@@ -126,8 +128,12 @@ func Values(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName string) (m
 		return nil, fmt.Errorf("failed to build the Codesphere values: %w", err)
 	}
 
+	global := codesphereValues["global"]
+	delete(codesphereValues, "global")
+
 	built := map[string]any{
 		"namespace": codesphereNamespace,
+		"global":    global,
 		"applications": map[string]any{
 			codesphereComponent: map[string]any{
 				"enabled":      true,
@@ -141,21 +147,15 @@ func Values(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName string) (m
 
 	// Set after the csApps merge, which must not undo them.
 	return values.MergeOverride(merged, map[string]any{
-		"applications": map[string]any{
-			codesphereComponent: map[string]any{
-				"valuesObject": map[string]any{
-					"global": map[string]any{
-						// TODO(nate): Remove (default to true) once the legacy/non-argo install path is gone.
-						"externalSecrets": true,
-						// TODO(nate): Remove (default to true) once the legacy/non-argo install path is gone.
-						"argoCd":                     true,
-						"externalSecretsVaultSecret": vaultSecretName,
-						// ESO only re-reads the vault when an ExternalSecret changes, so a new trigger on
-						// every deploy makes a changed vault reach the release in that deploy.
-						"externalSecretsSyncTrigger": rand.Text(),
-					},
-				},
-			},
+		"global": map[string]any{
+			// TODO(nate): Remove (default to true) once the legacy/non-argo install path is gone.
+			"externalSecrets": true,
+			// TODO(nate): Remove (default to true) once the legacy/non-argo install path is gone.
+			"argoCd":                     true,
+			"externalSecretsVaultSecret": vaultSecretName,
+			// ESO only re-reads the vault when an ExternalSecret changes, so a new trigger on every
+			// deploy makes a changed vault reach the release in that deploy.
+			"externalSecretsSyncTrigger": rand.Text(),
 		},
 	}), nil
 }
