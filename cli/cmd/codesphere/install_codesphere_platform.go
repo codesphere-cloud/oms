@@ -138,5 +138,5 @@ func AddInstallCodespherePlatformCmd(codesphere *cobra.Command, opts *InstallCod
 	}
 
 	util.AddCmd(codesphere, platform.cmd)
-	platform.cmd.RunE = platform.RunE
+	platform.cmd.RunE = util.CancelOnSignal(platform.RunE)
 }

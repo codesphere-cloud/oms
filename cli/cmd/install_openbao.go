@@ -154,7 +154,7 @@ func AddInstallOpenBaoCmd(install *cobra.Command, opts *util.GlobalOptions) {
 
 	util.AddCmd(install, openbao.cmd)
 
-	openbao.cmd.RunE = openbao.RunE
+	openbao.cmd.RunE = util.CancelOnSignal(openbao.RunE)
 }
 
 // validateOpenBaoPrereqs checks that required external tools are available.

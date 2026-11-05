@@ -92,5 +92,5 @@ func AddInstallCodesphereInfraCmd(codesphere *cobra.Command, opts *InstallCodesp
 	}
 
 	util.AddCmd(codesphere, infra.cmd)
-	infra.cmd.RunE = infra.RunE
+	infra.cmd.RunE = util.CancelOnSignal(infra.RunE)
 }

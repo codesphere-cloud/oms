@@ -4,11 +4,8 @@
 package cmd
 
 import (
-	"context"
 	"log"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/cli/cmd/apikey"
@@ -91,13 +88,7 @@ func Execute() {
 	//Disable printing timestamps on log lines
 	log.SetFlags(0)
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	// Restore default signal handling once cancelled, so a second signal terminates
-	// commands that do not observe the context.
-	context.AfterFunc(ctx, stop)
-	err := GetRootCmd().ExecuteContext(ctx)
-
-	stop()
+	err := GetRootCmd().Execute()
 	if err != nil {
 		os.Exit(1)
 	}
