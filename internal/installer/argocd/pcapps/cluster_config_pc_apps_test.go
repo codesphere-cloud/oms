@@ -5,7 +5,6 @@ package pcapps_test
 
 import (
 	"github.com/codesphere-cloud/oms/internal/installer/argocd/pcapps"
-	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/util"
 	. "github.com/onsi/ginkgo/v2"
@@ -14,9 +13,8 @@ import (
 
 var _ = Describe("ClusterConfigPcAppsValues", func() {
 	var (
-		config     files.RootConfig
-		vault      *files.InstallVault
-		packageBOM *bom.Config
+		config files.RootConfig
+		vault  *files.InstallVault
 	)
 
 	BeforeEach(func() {
@@ -25,37 +23,18 @@ var _ = Describe("ClusterConfigPcAppsValues", func() {
 			{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: "registry-user"}},
 			{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: "registry-password"}},
 		}}
-		packageBOM = &bom.Config{Components: map[string]bom.ComponentConfig{"pc-applications": {Files: map[string]bom.FileRef{"chart": {OciRef: "ghcr.io/codesphere-cloud/charts/pc-applications:0.374.0"}}}}}
 	})
-	It("keeps the TS installer in charge for older packages", func() {
-		packageBOM.Components["cluster-config"] = bom.ComponentConfig{Files: map[string]bom.FileRef{"chart": {OciRef: "ghcr.io/codesphere-cloud/charts/cluster-config:1.9.0"}}}
-		values, err := pcapps.ClusterConfigPcAppsValues(&config, nil, packageBOM)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(values).To(BeNil())
-	})
-	It("enables Argo when the packaged BOM retains only cluster-config images", func() {
-		packageBOM.Components["cluster-config"] = bom.ComponentConfig{ContainerImages: map[string]string{"reflector": "ghcr.io/codesphere-cloud/docker/emberstack/kubernetes-reflector:10.0.60"}}
-		values, err := pcapps.ClusterConfigPcAppsValues(&config, vault, packageBOM)
+	It("supplies mirror credentials without enabling the application", func() {
+		values, err := pcapps.ClusterConfigPcAppsValues(&config, vault)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(values).To(Equal(files.ChartValues{"applications": files.ChartValues{"cluster-config": files.ChartValues{
-			"enabled": true, "valuesObject": files.ChartValues{"registryCredentials": files.ChartValues{"registry": "mirror.example", "username": "registry-user", "password": "registry-password"}},
+			"valuesObject": files.ChartValues{"registryCredentials": files.ChartValues{"registry": "mirror.example", "username": "registry-user", "password": "registry-password"}},
 		}}}))
-	})
-	It("supplies mirror credentials when dependency expansion retains the Argo-managed chart", func() {
-		packageBOM.Components["pc-applications"] = bom.ComponentConfig{Files: map[string]bom.FileRef{"chart": {OciRef: "ghcr.io/codesphere-cloud/charts/pc-applications:0.385.0"}}}
-		packageBOM.Components["cluster-config"] = bom.ComponentConfig{Files: map[string]bom.FileRef{"chart": {OciRef: "ghcr.io/codesphere-cloud/charts/cluster-config:1.16.7"}}}
-		values, err := pcapps.ClusterConfigPcAppsValues(&config, vault, packageBOM)
-		Expect(err).NotTo(HaveOccurred())
-
-		app := values["applications"].(files.ChartValues)["cluster-config"].(files.ChartValues)
-		Expect(app["enabled"]).To(BeTrue())
-		credentials := app["valuesObject"].(files.ChartValues)["registryCredentials"]
-		Expect(credentials).To(Equal(files.ChartValues{"registry": "mirror.example", "username": "registry-user", "password": "registry-password"}))
 	})
 
 	It("preserves component overrides and lets explicit pcApps values win", func() {
 		config.Cluster.ClusterConfig = &files.ChartOverrideConfig{Override: files.ChartOverride{"registryCredentials": map[string]any{"username": "legacy-override"}, "workspacesNamespace": "custom-workspaces"}}
-		values, err := pcapps.ClusterConfigPcAppsValues(&config, vault, packageBOM)
+		values, err := pcapps.ClusterConfigPcAppsValues(&config, vault)
 		Expect(err).NotTo(HaveOccurred())
 
 		app := values["applications"].(files.ChartValues)["cluster-config"].(files.ChartValues)
@@ -69,7 +48,7 @@ var _ = Describe("ClusterConfigPcAppsValues", func() {
 	})
 	It("rejects a missing registry password without exposing the registry username", func() {
 		vault.GetSecret(files.SecretRegistryPassword).Fields.Password = ""
-		_, err := pcapps.ClusterConfigPcAppsValues(&config, vault, packageBOM)
+		_, err := pcapps.ClusterConfigPcAppsValues(&config, vault)
 		Expect(err).To(MatchError(ContainSubstring("registry password is required")))
 		Expect(err.Error()).NotTo(ContainSubstring("registry-user"))
 	})
