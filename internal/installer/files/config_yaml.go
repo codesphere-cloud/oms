@@ -441,11 +441,12 @@ type ACMEDNS01Solver struct {
 }
 
 type GatewayConfig struct {
-	GatewayAPI  *GatewayAPIConfig `yaml:"gatewayApi,omitempty"`
-	ServiceType string            `yaml:"serviceType"`
-	Annotations map[string]string `yaml:"annotations,omitempty"`
-	IPAddresses []string          `yaml:"ipAddresses,omitempty"`
-	Override    ChartOverride     `yaml:"override,omitempty"`
+	NodeSelector map[string]string `yaml:"nodeSelector,omitempty"`
+	GatewayAPI   *GatewayAPIConfig `yaml:"gatewayApi,omitempty"`
+	ServiceType  string            `yaml:"serviceType"`
+	Annotations  map[string]string `yaml:"annotations,omitempty"`
+	IPAddresses  []string          `yaml:"ipAddresses,omitempty"`
+	Override     ChartOverride     `yaml:"override,omitempty"`
 }
 
 // GatewayAPIConfig switches the gateway to the Gateway API. Use defaults to true when Enabled is set.
@@ -529,6 +530,8 @@ type MetalLBBGPConfig struct {
 const WorkspacePVCStorageFlag = "workspace-pvc-storage"
 
 type CodesphereConfig struct {
+	WorkspaceHostingCustomCertificate *CustomCertificate `yaml:"workspaceHostingCustomCertificate,omitempty"`
+
 	Domain                     string                   `yaml:"domain"`
 	WorkspaceHostingBaseDomain string                   `yaml:"workspaceHostingBaseDomain"`
 	PublicIP                   string                   `yaml:"publicIp"`

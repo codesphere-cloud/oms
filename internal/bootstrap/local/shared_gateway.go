@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/codesphere-cloud/oms/internal/installer/chartvalues"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -145,7 +146,7 @@ func edgeEnvoyProxySpec() map[string]any {
 				"envoyService":                   map[string]any{"name": edgeName, "type": "ClusterIP"},
 				"envoyDeployment": map[string]any{
 					"name": edgeName, "replicas": int64(1),
-					"pod": map[string]any{"imagePullSecrets": []any{map[string]any{"name": "docker-regcred"}}},
+					"pod": map[string]any{"imagePullSecrets": chartvalues.RegistryPullSecrets()},
 					"container": map[string]any{
 						"image": "ghcr.io/codesphere-cloud/docker/envoyproxy/envoy:distroless-v1.37.1@sha256:db9573e5ea4fc00fed0fa22cd1bf57eaba8f3bd5dd085ecb8fe37dedfe11fa51",
 					},

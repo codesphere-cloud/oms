@@ -18,6 +18,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
+	"github.com/codesphere-cloud/oms/internal/installer/chartvalues"
 	k8s "github.com/codesphere-cloud/oms/internal/util"
 	"helm.sh/helm/v4/pkg/chart/common/util"
 	"helm.sh/helm/v4/pkg/kube"
@@ -34,8 +35,6 @@ const DefaultNamespace = "argocd"
 
 // DefaultRepoURL is used only for an explicit upstream version override.
 const DefaultRepoURL = "https://argoproj.github.io/argo-helm"
-
-const imagePullSecretName = "docker-regcred"
 
 // PackagedChartName identifies the Codesphere wrapper chart and its BOM component.
 const PackagedChartName = "argocd"
@@ -186,7 +185,7 @@ func (a *Installer) Install() error {
 
 	if pullSecret != nil {
 		defaults = util.MergeTables(defaults, map[string]any{
-			"global": map[string]any{"imagePullSecrets": []any{map[string]any{"name": pullSecret.Name}}},
+			"global": map[string]any{"imagePullSecrets": chartvalues.RegistryPullSecrets()},
 		})
 	}
 
@@ -359,7 +358,7 @@ func (a *Installer) imagePullSecret() (*corev1.Secret, error) {
 	}
 
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: imagePullSecretName, Namespace: DefaultNamespace},
+		ObjectMeta: metav1.ObjectMeta{Name: chartvalues.RegistryPullSecretName, Namespace: DefaultNamespace},
 		Type:       corev1.SecretTypeDockerConfigJson,
 		Data:       map[string][]byte{corev1.DockerConfigJsonKey: config},
 	}, nil
