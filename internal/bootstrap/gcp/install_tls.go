@@ -115,7 +115,18 @@ func (b *GCPBootstrapper) issueInstallCertificate(config files.RootConfig, secre
 
 	name := fmt.Sprintf("oms-%x", sha256.Sum256([]byte(strings.Join(domains, ",")+acme.Acme.Server+dnsProject)))[:20]
 
-	args := []string{"run", "--rm", "--network", "host", "-v", cacheDir + ":/etc/letsencrypt:Z", "docker.io/certbot/dns-google:v5.8.0", "certonly", "--non-interactive", "--agree-tos", "--dns-google", "--dns-google-project", dnsProject, "--email", acme.Acme.Email, "--server", acme.Acme.Server, "--cert-name", name, "--keep-until-expiring"}
+	args := []string{
+		"run", "--rm",
+		"--network", "host",
+		"-v", cacheDir + ":/etc/letsencrypt:Z",
+		"docker.io/certbot/dns-google:v5.8.0",
+		"certonly", "--non-interactive", "--agree-tos",
+		"--dns-google", "--dns-google-project", dnsProject,
+		"--email", acme.Acme.Email,
+		"--server", acme.Acme.Server,
+		"--cert-name", name,
+		"--keep-until-expiring",
+	}
 	if acme.Acme.EABKeyID != "" {
 		key := secrets.GetSecret(files.SecretAcmeEabMacKey)
 		if key == nil || key.Fields == nil || key.Fields.Password == "" {
