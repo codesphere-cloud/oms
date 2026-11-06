@@ -40,7 +40,6 @@ func ClusterConfigPcAppsValues(config *files.RootConfig, vault *files.InstallVau
 	return files.ChartValues{
 		"applications": files.ChartValues{
 			"cluster-config": files.ChartValues{
-				"enabled":      true,
 				"valuesObject": chartValues,
 			},
 		},
