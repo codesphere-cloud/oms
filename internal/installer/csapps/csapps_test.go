@@ -197,7 +197,7 @@ var _ = Describe("Install", func() {
 		Expect(app.Finalizers).To(ConsistOf(argo.ResourcesFinalizerName))
 	})
 
-	It("full config -> the Codesphere chart version, and the built global values shared at the top level", func() {
+	It("full config -> the Codesphere chart version, and the built global values at the top level", func() {
 		cfg := fullConfig("pr-1")
 
 		values := appliedValues(cfg)
@@ -218,7 +218,7 @@ var _ = Describe("Install", func() {
 		Expect(at(values, "applications", "codesphere", "valuesObject")).To(Equal(asJSON(expected)))
 	})
 
-	It("override with a key outside global -> only in the Codesphere values, not shared", func() {
+	It("override with a key outside global -> only in the Codesphere values, not in global", func() {
 		cfg := fullConfig("pr-1")
 		cfg.Codesphere.Override = map[string]any{"ideService": map[string]any{"replicas": 3}}
 
