@@ -6,21 +6,35 @@ package pcapps
 import (
 	"fmt"
 
+	"github.com/Masterminds/semver/v3"
+
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 // ClusterConfigPcAppsValues hands cluster configuration to ArgoCD after the
-// package removes the legacy TS chart. Older package BOMs retain that chart file,
-// while new BOMs can still contain an image-only entry from chart dependencies.
+// package hands the chart to ArgoCD. Dependency expansion can retain the chart
+// in new BOMs too; pc-applications 0.385.0 enables its Argo application by default.
 func ClusterConfigPcAppsValues(config *files.RootConfig, vault *files.InstallVault, packageBOM *bom.Config) (files.ChartValues, error) {
 	if packageBOM == nil {
 		return nil, nil
 	}
 
 	if _, legacy := packageBOM.Components["cluster-config"].Files["chart"]; legacy {
-		return nil, nil
+		chart, ok := packageBOM.GetChart("pc-applications")
+		if !ok {
+			return nil, nil
+		}
+
+		version, err := semver.NewVersion(chart.Tag())
+		if err != nil {
+			return nil, fmt.Errorf("parsing pc-applications chart version: %w", err)
+		}
+
+		if version.LessThan(semver.MustParse("0.385.0")) {
+			return nil, nil
+		}
 	}
 
 	if vault == nil {

@@ -41,6 +41,18 @@ var _ = Describe("ClusterConfigPcAppsValues", func() {
 			"enabled": true, "valuesObject": files.ChartValues{"registryCredentials": files.ChartValues{"registry": "mirror.example", "username": "registry-user", "password": "registry-password"}},
 		}}}))
 	})
+	It("supplies mirror credentials when dependency expansion retains the Argo-managed chart", func() {
+		packageBOM.Components["pc-applications"] = bom.ComponentConfig{Files: map[string]bom.FileRef{"chart": {OciRef: "ghcr.io/codesphere-cloud/charts/pc-applications:0.385.0"}}}
+		packageBOM.Components["cluster-config"] = bom.ComponentConfig{Files: map[string]bom.FileRef{"chart": {OciRef: "ghcr.io/codesphere-cloud/charts/cluster-config:1.16.7"}}}
+		values, err := pcapps.ClusterConfigPcAppsValues(&config, vault, packageBOM)
+		Expect(err).NotTo(HaveOccurred())
+
+		app := values["applications"].(files.ChartValues)["cluster-config"].(files.ChartValues)
+		Expect(app["enabled"]).To(BeTrue())
+		credentials := app["valuesObject"].(files.ChartValues)["registryCredentials"]
+		Expect(credentials).To(Equal(files.ChartValues{"registry": "mirror.example", "username": "registry-user", "password": "registry-password"}))
+	})
+
 	It("preserves component overrides and lets explicit pcApps values win", func() {
 		config.Cluster.ClusterConfig = &files.ChartOverrideConfig{Override: files.ChartOverride{"registryCredentials": map[string]any{"username": "legacy-override"}, "workspacesNamespace": "custom-workspaces"}}
 		values, err := pcapps.ClusterConfigPcAppsValues(&config, vault, packageBOM)
