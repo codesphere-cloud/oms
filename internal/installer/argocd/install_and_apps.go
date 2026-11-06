@@ -90,7 +90,6 @@ type AppInstallerConfig struct {
 	Vault        *files.InstallVault
 	RESTConfig   *rest.Config
 	KubeClient   client.Client
-	HelmClient   installer.HelmClient
 	Installer    InstallerAPI
 	PCAppsValues []string
 }
