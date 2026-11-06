@@ -19,10 +19,6 @@ func ClusterConfigPcAppsValues(config *files.RootConfig, vault *files.InstallVau
 		return nil, nil
 	}
 
-	if _, legacy := packageBOM.Components["cluster-config"].Files["chart"]; legacy {
-		return nil, nil
-	}
-
 	if vault == nil {
 		return nil, fmt.Errorf("vault is required for cluster-config registry credentials")
 	}
@@ -46,5 +42,12 @@ func ClusterConfigPcAppsValues(config *files.RootConfig, vault *files.InstallVau
 		chartValues = util.DeepMergeMaps(chartValues, legacy.Override)
 	}
 
-	return files.ChartValues{"applications": files.ChartValues{"cluster-config": files.ChartValues{"enabled": true, "valuesObject": chartValues}}}, nil
+	return files.ChartValues{
+		"applications": files.ChartValues{
+			"cluster-config": files.ChartValues{
+				"enabled":      true,
+				"valuesObject": chartValues,
+			},
+		},
+	}, nil
 }
