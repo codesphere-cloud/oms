@@ -42,7 +42,7 @@ oms beta bootstrap-local [flags]
       --pod-cidr string                  Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.
       --preview-flags stringArray        Preview flags to enable in Codesphere installation (optional) (default [openfga-authz,secret-management,sub-path-mount,workspace-ssh,virtual-machines])
       --profile string                   Profile to apply to the install config like resources (supported: dev, minimal, prod) (default "dev")
-      --registry-url string              Registry host with optional port and repository path, without a scheme; Helm charts are pulled from <registry-url>/codesphere-cloud/charts (default "ghcr.io")
+      --registry-url string              Registry host with optional port and repository path, without a scheme; Helm charts are pulled from <registry-url>/codesphere-cloud/charts. A registry other than ghcr.io is treated as a mirror filled by 'oms copy package', which CloudNativePG and its PostgreSQL image are pulled from as well; that PostgreSQL image has to be copied there separately (default "ghcr.io")
       --registry-user string             Custom Registry username
       --secrets-file string              Path to secrets file (default: <install-dir>/prod.vault.yaml)
       --service-cidr string              Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.
