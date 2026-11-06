@@ -106,6 +106,7 @@ type RootConfig struct {
 	DefaultDataCenterID    int                           `yaml:"defaultDataCenterId,omitempty"`
 	Secrets                SecretsConfig                 `yaml:"secrets"`
 	Registry               *RegistryConfig               `yaml:"registry,omitempty"`
+	AdditionalRegistries   []AdditionalRegistryConfig    `yaml:"additionalRegistries,omitempty"`
 	Postgres               PostgresConfig                `yaml:"postgres"`
 	Ceph                   CephConfig                    `yaml:"ceph"`
 	Kubernetes             KubernetesConfig              `yaml:"kubernetes"`
@@ -269,6 +270,27 @@ type RegistryConfig struct {
 	Server              string `yaml:"server"`
 	ReplaceImagesInBom  bool   `yaml:"replaceImagesInBom"`
 	LoadContainerImages bool   `yaml:"loadContainerImages"`
+}
+
+// AdditionalRegistryConfig is a named registry the installation logs in to, independent of
+// RegistryConfig, which describes the registry the installation's images are served from. Its
+// credentials are kept in the vault under AdditionalRegistryUsernameSecret and
+// AdditionalRegistryPasswordSecret.
+type AdditionalRegistryConfig struct {
+	Name     string `yaml:"name"`
+	Registry string `yaml:"registry"`
+}
+
+// SetAdditionalRegistry adds the registry or replaces the one with the same name.
+func (c *RootConfig) SetAdditionalRegistry(registry AdditionalRegistryConfig) {
+	for i, existing := range c.AdditionalRegistries {
+		if existing.Name == registry.Name {
+			c.AdditionalRegistries[i] = registry
+			return
+		}
+	}
+
+	c.AdditionalRegistries = append(c.AdditionalRegistries, registry)
 }
 
 // WorkspaceImage is the name, without tag, that a flavor built from a Dockerfile is pushed under.
@@ -762,8 +784,12 @@ type TelemetryExport struct {
 	SpanMetrics    bool   `yaml:"spanMetrics"`
 }
 
-type ChartOverride = map[string]interface{}
-type ChartValues = map[string]interface{}
+type (
+	// ChartOverride holds Helm values a component override in the install config sets.
+	ChartOverride = map[string]interface{}
+	// ChartValues holds Helm values passed to a chart.
+	ChartValues = map[string]interface{}
+)
 
 type ImageRef struct {
 	BomRef     string `yaml:"bomRef,omitempty"`

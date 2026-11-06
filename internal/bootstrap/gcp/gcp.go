@@ -221,6 +221,10 @@ type CodesphereEnvironment struct {
 	CentralOtelSpanMetrics bool   `json:"-"`
 	LocalTraceEndpoint     string `json:"-"`
 
+	// Codesphere registry, written to the "codesphere" entry of additionalRegistries.
+	CodesphereRegistry         string `json:"-"`
+	CodesphereRegistryPassword string `json:"-"`
+
 	// Config
 	InstallConfigPath         string              `json:"-"`
 	InstallConfigTemplatePath string              `json:"-"`
