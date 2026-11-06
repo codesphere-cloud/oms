@@ -326,7 +326,7 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	b.applyPcAppsDefaults(dc)
 	b.applyManagedServiceDefaults(dc)
 
-	if err := b.applyACMEConfig(dc); err != nil {
+	if err := b.applyCertificateConfig(dc); err != nil {
 		return err
 	}
 
@@ -533,11 +533,24 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	return nil
 }
 
-// applyACMEConfig configures the ACME certificate issuer, including the DNS-01
+// applyCertificateConfig uses the existing ingress CA for airgapped installations.
+// Connected installations use ACME, including the DNS-01
 // solver override for Cloud DNS and, when the Google ACME issuer is used, the
 // Google Public CA EAB credentials for the default and the custom-domains ACME
 // accounts.
-func (b *GCPBootstrapper) applyACMEConfig(dc *datacenter.DataCenter) error {
+func (b *GCPBootstrapper) applyCertificateConfig(dc *datacenter.DataCenter) error {
+	if b.Env.Airgapped {
+		dc.InstallConfig.Codesphere.CertIssuer = &files.CertIssuerConfig{Type: files.CertIssuerTypeSelfSigned}
+		dc.InstallConfig.Cluster.Certificates.Override = util.DeepMergeMaps(dc.InstallConfig.Cluster.Certificates.Override, files.ChartOverride{
+			"issuers": files.ChartOverride{
+				"acme":            files.ChartOverride{"enabled": false},
+				"letsEncryptHttp": files.ChartOverride{"enabled": false},
+			},
+		})
+
+		return nil
+	}
+
 	dnsProject := b.Env.DNSProjectID
 	if dnsProject == "" {
 		dnsProject = b.Env.ProjectID
