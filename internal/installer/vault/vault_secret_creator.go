@@ -25,6 +25,17 @@ const (
 	VaultSecretName      = "cs-vault"
 )
 
+// PasswordKey is the key of the secret holding the password of a vault entry with fields, and so
+// the property a consumer such as an ExternalSecret reads it by.
+func PasswordKey(entry string) string {
+	return entry + ".password"
+}
+
+// UsernameKey is the key of the secret holding the username of a vault entry with fields.
+func UsernameKey(entry string) string {
+	return entry + ".username"
+}
+
 type VaultSecretCreator struct {
 	client client.Client
 }
@@ -120,9 +131,9 @@ func vaultToSecretData(vault *files.InstallVault) (map[string][]byte, error) {
 		if entry.File != nil {
 			data[entry.Name] = []byte(entry.File.Content)
 		} else if entry.Fields != nil {
-			data[entry.Name+".password"] = []byte(entry.Fields.Password)
+			data[PasswordKey(entry.Name)] = []byte(entry.Fields.Password)
 			if entry.Fields.Username != "" {
-				data[entry.Name+".username"] = []byte(entry.Fields.Username)
+				data[UsernameKey(entry.Name)] = []byte(entry.Fields.Username)
 			}
 		}
 	}
