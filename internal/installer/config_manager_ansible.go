@@ -37,20 +37,9 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 		g.Config = &files.RootConfig{}
 	}
 
-	data, err := os.ReadFile(inventoryPath)
+	inventory, err := readAnsibleInventory(inventoryPath)
 	if err != nil {
-		return fmt.Errorf("failed to read Ansible inventory file: %w", err)
-	}
-
-	var inventory *ansibleInventory
-
-	err = yaml.Unmarshal(data, &inventory)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal Ansible inventory file: %w", err)
-	}
-
-	if inventory == nil {
-		return fmt.Errorf("empty Ansible inventory file")
+		return err
 	}
 
 	cephHosts, err := inventory.fetchCephHosts()
@@ -62,9 +51,9 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 		g.Config.Ceph.Hosts = cephHosts
 	}
 
-	k8sCPHosts, err := inventory.fetchK8sControlPlaneHosts()
+	k8sCPHosts, k8sWorkerHosts, err := inventory.fetchK8sHosts()
 	if err != nil {
-		return fmt.Errorf("failed to fetch k8s control plane hosts from inventory: %w", err)
+		return err
 	}
 
 	if len(k8sCPHosts) > 0 {
@@ -72,16 +61,48 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 		g.Config.Kubernetes.APIServerHost = k8sCPHosts[0].IPAddress
 	}
 
-	k8sWorkerHosts, err := inventory.fetchK8sWorkerHosts()
-	if err != nil {
-		return fmt.Errorf("failed to fetch k8s worker node hosts from inventory: %w", err)
-	}
-
 	if len(k8sWorkerHosts) > 0 {
 		g.Config.Kubernetes.Workers = k8sWorkerHosts
 	}
 
 	return nil
+}
+
+// ParseAnsibleKubernetesHosts returns the Kubernetes control plane and worker hosts of the
+// ansible inventory data. A group the inventory does not define yields no hosts.
+func ParseAnsibleKubernetesHosts(data []byte) (controlPlanes, workers []files.K8sNode, err error) {
+	inventory, err := parseAnsibleInventory(data)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return inventory.fetchK8sHosts()
+}
+
+// readAnsibleInventory reads and parses the ansible inventory file.
+func readAnsibleInventory(inventoryPath string) (*ansibleInventory, error) {
+	data, err := os.ReadFile(inventoryPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Ansible inventory file: %w", err)
+	}
+
+	return parseAnsibleInventory(data)
+}
+
+// parseAnsibleInventory parses the ansible inventory data.
+func parseAnsibleInventory(data []byte) (*ansibleInventory, error) {
+	var inventory *ansibleInventory
+
+	err := yaml.Unmarshal(data, &inventory)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal Ansible inventory file: %w", err)
+	}
+
+	if inventory == nil {
+		return nil, fmt.Errorf("empty Ansible inventory file")
+	}
+
+	return inventory, nil
 }
 
 // fetchCephHosts extracts Ceph hosts from the ansible inventory.
@@ -116,6 +137,21 @@ func (i *ansibleInventory) fetchCephHosts() ([]files.CephHost, error) {
 	}
 
 	return hosts, nil
+}
+
+// fetchK8sHosts extracts the K8s control plane and worker hosts from the ansible inventory.
+func (i *ansibleInventory) fetchK8sHosts() (controlPlanes, workers []files.K8sNode, err error) {
+	controlPlanes, err = i.fetchK8sControlPlaneHosts()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch k8s control plane hosts from inventory: %w", err)
+	}
+
+	workers, err = i.fetchK8sWorkerHosts()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch k8s worker node hosts from inventory: %w", err)
+	}
+
+	return controlPlanes, workers, nil
 }
 
 // fetchK8sControlPlaneHosts extracts K8s control plane hosts from the ansible inventory

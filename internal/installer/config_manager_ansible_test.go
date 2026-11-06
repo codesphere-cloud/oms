@@ -511,4 +511,55 @@ k8s-workers:
 			})
 		})
 	})
+
+	Describe("ParseAnsibleKubernetesHosts", func() {
+		It("returns the control plane and worker hosts sorted by host name", func() {
+			inventory := `k8s-cp:
+  hosts:
+    cs-k8s-cp-2:
+      internal_ip: 10.0.0.2
+    cs-k8s-cp-1:
+      internal_ip: 10.0.0.1
+k8s-workers:
+  hosts:
+    cs-k8s-worker-1:
+      internal_ip: 10.0.1.1
+ceph:
+  hosts:
+    cs-ceph-1:
+      internal_ip: 10.0.2.1
+`
+			controlPlanes, workers, err := installer.ParseAnsibleKubernetesHosts([]byte(inventory))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(controlPlanes).To(Equal([]files.K8sNode{{IPAddress: "10.0.0.1"}, {IPAddress: "10.0.0.2"}}))
+			Expect(workers).To(Equal([]files.K8sNode{{IPAddress: "10.0.1.1"}}))
+		})
+
+		It("returns no hosts for groups the inventory does not define", func() {
+			inventory := `k8s-workers:
+  hosts:
+    cs-k8s-worker-1:
+      internal_ip: 10.0.1.1
+`
+			controlPlanes, workers, err := installer.ParseAnsibleKubernetesHosts([]byte(inventory))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(controlPlanes).To(BeEmpty())
+			Expect(workers).To(Equal([]files.K8sNode{{IPAddress: "10.0.1.1"}}))
+		})
+
+		It("fails for a host without internal_ip", func() {
+			inventory := `k8s-cp:
+  hosts:
+    cs-k8s-cp-1:
+      ansible_host: 10.0.0.1
+`
+			_, _, err := installer.ParseAnsibleKubernetesHosts([]byte(inventory))
+			Expect(err).To(MatchError(ContainSubstring("missing internal_ip for k8s host 'cs-k8s-cp-1'")))
+		})
+
+		It("fails for an empty inventory", func() {
+			_, _, err := installer.ParseAnsibleKubernetesHosts([]byte(""))
+			Expect(err).To(MatchError(ContainSubstring("empty Ansible inventory file")))
+		})
+	})
 })
