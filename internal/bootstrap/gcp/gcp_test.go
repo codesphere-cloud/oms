@@ -2593,7 +2593,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			certificate, key, err := cert.GenerateSelfSignedCertKey("cs.example.com", nil, []string{"*.cs.example.com", "ws.example.com", "*.ws.example.com"})
 			Expect(err).NotTo(HaveOccurred())
 
-			config := []byte("codesphere:\n  domain: cs.example.com\n  workspaceHostingBaseDomain: ws.example.com\n  certIssuer:\n    acme:\n      server: https://acme.example.com\n      email: admin@example.com\n      eabKeyId: account-id\n")
+			config := []byte("codesphere:\n  domain: cs.example.com\n  workspaceHostingBaseDomain: ws.example.com\n  certIssuer:\n    acme:\n      server: https://acme.example.com\n      email: admin@example.com\n      eabKeyId: account-id\n  workspaceImages:\n    agent: ghcr.io/example/agent:test\noperations:\n  codesphere: master\n")
 			secrets := &files.InstallVault{}
 			secrets.SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: "eab-mac-key"}})
 

@@ -11,7 +11,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.yaml.in/yaml/v4"
+	"go.yaml.in/yaml/v3"
 	"k8s.io/client-go/util/cert"
 )
 
