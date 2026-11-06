@@ -30,11 +30,9 @@ func ConfigureCustomTLS(config map[string]any, cert, key []byte, secrets *files.
 	}}}}
 	updates := map[string]any{
 		"codesphere": map[string]any{
-			// The native chart reads the vault key directly; OMS resolves it into
-			// the temporary config for the legacy installer.
+			// OMS resolves the vault key into the temporary TS installer config until
+			// the frontend gateway is migrated to PC Apps.
 			"customCertificate": map[string]any{"cert": string(cert), "key": ""},
-			// Retain account settings while using supplied certificates instead of
-			// external issuance for these gateways.
 			"certIssuer": map[string]any{"type": "self-signed", "acme": map[string]any{"enabled": false}},
 		},
 		"cluster": map[string]any{
