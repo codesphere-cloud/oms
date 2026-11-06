@@ -54,7 +54,7 @@ var _ = Describe("ClusterConfigPcAppsValues", func() {
 		})
 
 		It("enables each registry with its credentials from the vault", func() {
-			values, err := pcapps.ClusterConfigPcAppsValues(&config, vault, packageBOM)
+			values, err := pcapps.ClusterConfigPcAppsValues(&config, vault)
 			Expect(err).NotTo(HaveOccurred())
 
 			chart := values["applications"].(files.ChartValues)["cluster-config"].(files.ChartValues)["valuesObject"].(files.ChartValues)
@@ -70,14 +70,14 @@ var _ = Describe("ClusterConfigPcAppsValues", func() {
 		It("rejects a registry without a username", func() {
 			vault.GetSecret("codesphereRegistryUsername").Fields.Password = ""
 
-			_, err := pcapps.ClusterConfigPcAppsValues(&config, vault, packageBOM)
+			_, err := pcapps.ClusterConfigPcAppsValues(&config, vault)
 			Expect(err).To(MatchError(ContainSubstring("username of additional registry codesphere is required")))
 		})
 
 		It("rejects a registry without a password", func() {
 			vault.GetSecret("codesphereRegistryPassword").Fields.Password = ""
 
-			_, err := pcapps.ClusterConfigPcAppsValues(&config, vault, packageBOM)
+			_, err := pcapps.ClusterConfigPcAppsValues(&config, vault)
 			Expect(err).To(MatchError(ContainSubstring("password of additional registry codesphere is required")))
 		})
 	})
