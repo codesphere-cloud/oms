@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
@@ -61,30 +60,19 @@ var _ = Describe("jumpbox bootstrap TLS", func() {
 
 		fw.EXPECT().ReadFile("config.yaml").RunAndReturn(func(string) ([]byte, error) { return config, nil })
 		store.EXPECT().Load().Return(secrets, nil).Maybe()
-		fw.EXPECT().MkdirAll(opts.CacheDir, os.FileMode(0700)).Return(nil).Maybe()
-		fw.EXPECT().Chmod(opts.CacheDir, os.FileMode(0700)).Return(nil).Maybe()
 	})
 
-	expectCertificateRead := func() {
-		fw.EXPECT().ReadFile(mock.MatchedBy(func(p string) bool {
-			return strings.HasPrefix(p, opts.CacheDir+"/live/oms-") && strings.HasSuffix(p, "/fullchain.pem")
-		})).Return(cert, nil)
-		fw.EXPECT().ReadFile(mock.MatchedBy(func(p string) bool {
-			return strings.HasPrefix(p, opts.CacheDir+"/live/oms-") && strings.HasSuffix(p, "/privkey.pem")
-		})).Return(key, nil)
-	}
 	expectSave := func() {
 		store.EXPECT().Save(secrets).Return(nil)
 		fw.EXPECT().Chmod(opts.ConfigPath, os.FileMode(0600)).Return(nil)
 		fw.EXPECT().WriteFile(opts.ConfigPath, mock.Anything, os.FileMode(0600)).Run(func(_ string, b []byte, _ os.FileMode) { written = b }).Return(nil)
 	}
 	expectIssue := func() {
-		runner.EXPECT().Run(mock.Anything).Run(func(args []string) { arguments = args }).Return(nil)
+		runner.EXPECT().Issue(mock.Anything, opts.CacheDir, mock.Anything).RunAndReturn(func(args []string, _, _ string) ([]byte, []byte, error) { arguments = args; return cert, key, nil })
 	}
 
 	It("issues wildcard certificates using jumpbox ADC and configures both gateways without leaking keys", func() {
 		expectIssue()
-		expectCertificateRead()
 		expectSave()
 		Expect(installer.EnsureBootstrapTLS(opts, fw, store, runner)).To(Succeed())
 		Expect(arguments).To(ContainElements("--network", "host", "--dns-google", "--dns-google-project", "dns-project", "--keep-until-expiring", "https://acme-staging-v02.api.letsencrypt.org/directory", "*.cs.example.com", "*.ws.example.com"))
@@ -110,7 +98,6 @@ var _ = Describe("jumpbox bootstrap TLS", func() {
 	})
 	It("reuses the same cached certificate and accepts its own templated config on retries", func() {
 		expectIssue()
-		expectCertificateRead()
 		expectSave()
 		Expect(installer.EnsureBootstrapTLS(opts, fw, store, runner)).To(Succeed())
 
@@ -125,35 +112,31 @@ var _ = Describe("jumpbox bootstrap TLS", func() {
 
 		secrets.SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: "eab-mac-key"}})
 		expectIssue()
-		expectCertificateRead()
 		expectSave()
 		Expect(installer.EnsureBootstrapTLS(opts, fw, store, runner)).To(Succeed())
 		Expect(arguments).To(ContainElements("--eab-kid", "account-id", "--eab-hmac-key", "eab-mac-key"))
 		Expect(string(written)).NotTo(ContainSubstring("eab-mac-key"))
 	})
 	It("does not modify config or vault if issuance fails", func() {
-		runner.EXPECT().Run(mock.Anything).Return(fmt.Errorf("DNS validation failed"))
+		runner.EXPECT().Issue(mock.Anything, opts.CacheDir, mock.Anything).Return(nil, nil, fmt.Errorf("DNS validation failed"))
 		Expect(installer.EnsureBootstrapTLS(opts, fw, store, runner)).To(MatchError(ContainSubstring("DNS validation failed")))
 	})
 	It("rejects an incomplete wildcard certificate before saving anything", func() {
 		cert, key = bootstrapCertificate([]string{"cs.example.com", "ws.example.com"})
 
 		expectIssue()
-		expectCertificateRead()
 		Expect(installer.EnsureBootstrapTLS(opts, fw, store, runner)).To(MatchError(ContainSubstring("does not cover *.cs.example.com")))
 	})
 	It("rejects a certificate whose private key does not match", func() {
 		_, key = bootstrapCertificate([]string{"cs.example.com"})
 
 		expectIssue()
-		expectCertificateRead()
 		Expect(installer.EnsureBootstrapTLS(opts, fw, store, runner)).To(MatchError(ContainSubstring("invalid bootstrap TLS certificate/key pair")))
 	})
 	It("requires extra data center domains on the certificate", func() {
 		opts.Domains = []string{"2.cs.example.com", "*.2.cs.example.com"}
 
 		expectIssue()
-		expectCertificateRead()
 		Expect(installer.EnsureBootstrapTLS(opts, fw, store, runner)).To(MatchError(ContainSubstring("does not cover *.2.cs.example.com")))
 	})
 })

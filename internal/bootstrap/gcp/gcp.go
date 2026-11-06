@@ -1368,19 +1368,8 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
 
 func (b *GCPBootstrapper) runInstallCommand(dc *datacenter.DataCenter, packageFilename string) error {
 	if b.Env.Airgapped {
-		dnsProject := b.Env.DNSProjectID
-		if dnsProject == "" {
-			dnsProject = b.Env.ProjectID
-		}
-
-		command := fmt.Sprintf("oms install bootstrap-tls --config %s --vault %s --vault-priv-key %s --dns-project %s", shellQuote(dc.RemoteConfigPath), shellQuote(dc.RemoteVaultPath()), shellQuote(dc.RemoteAgeKeyPath()), shellQuote(dnsProject))
-		if b.Env.MultiDC {
-			domain := dc.PlatformDomain(b.Env.BaseDomain)
-			command += " --domain " + shellQuote(domain+",*."+domain)
-		}
-
-		if err := b.Env.Jumpbox.RunSSHCommand("root", command); err != nil {
-			return fmt.Errorf("failed to prepare jumpbox TLS certificates: %w", err)
+		if err := b.stlog.Step(dc.StepName("Prepare install certificates"), func() error { return b.prepareInstallTLS(dc) }); err != nil {
+			return fmt.Errorf("preparing install certificates: %w", err)
 		}
 	}
 

@@ -28,18 +28,8 @@ type BootstrapTLSVault interface {
 // CertbotRunner is the external process boundary for jumpbox DNS-01 issuance.
 //
 //mockery:generate: true
-type CertbotRunner interface{ Run(args []string) error }
-
-// PodmanCertbotRunner uses the jumpbox container runtime and its GCP identity.
-type PodmanCertbotRunner struct{}
-
-// Run executes Certbot without logging its potentially sensitive EAB arguments.
-func (PodmanCertbotRunner) Run(args []string) error {
-	if err := util.RunCommand("podman", args, ""); err != nil {
-		return fmt.Errorf("running Certbot container: %w", err)
-	}
-
-	return nil
+type CertbotRunner interface {
+	Issue(args []string, cacheDir, name string) (certificate, key []byte, err error)
 }
 
 // BootstrapTLSOptions selects the data center and persistent jumpbox ACME cache.
@@ -83,13 +73,6 @@ func EnsureBootstrapTLS(opts BootstrapTLSOptions, fw util.FileIO, store Bootstra
 	}
 
 	name := fmt.Sprintf("oms-%x", sha256.Sum256([]byte(strings.Join(domains, ",")+acme.Acme.Server+opts.DNSProject)))[:20]
-	if err := fw.MkdirAll(opts.CacheDir, 0700); err != nil {
-		return fmt.Errorf("creating ACME cache: %w", err)
-	}
-
-	if err := fw.Chmod(opts.CacheDir, 0700); err != nil {
-		return fmt.Errorf("protecting ACME cache: %w", err)
-	}
 
 	args := []string{"run", "--rm", "--network", "host", "-v", opts.CacheDir + ":/etc/letsencrypt:Z", "docker.io/certbot/dns-google:v5.8.0", "certonly", "--non-interactive", "--agree-tos", "--dns-google", "--dns-google-project", opts.DNSProject, "--email", acme.Acme.Email, "--server", acme.Acme.Server, "--cert-name", name, "--keep-until-expiring"}
 	if acme.Acme.EABKeyID != "" {
@@ -105,18 +88,9 @@ func EnsureBootstrapTLS(opts BootstrapTLSOptions, fw util.FileIO, store Bootstra
 		args = append(args, "-d", domain)
 	}
 
-	if err := runner.Run(args); err != nil {
+	cert, key, err := runner.Issue(args, opts.CacheDir, name)
+	if err != nil {
 		return fmt.Errorf("issuing jumpbox DNS-01 certificate: %w", err)
-	}
-
-	cert, err := fw.ReadFile(filepath.Join(opts.CacheDir, "live", name, "fullchain.pem"))
-	if err != nil {
-		return fmt.Errorf("reading issued certificate: %w", err)
-	}
-
-	key, err := fw.ReadFile(filepath.Join(opts.CacheDir, "live", name, "privkey.pem"))
-	if err != nil {
-		return fmt.Errorf("reading issued certificate key: %w", err)
 	}
 
 	if err := validateBootstrapCertificate(cert, key, domains); err != nil {

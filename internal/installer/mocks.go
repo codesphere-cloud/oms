@@ -175,53 +175,84 @@ func (_m *MockCertbotRunner) EXPECT() *MockCertbotRunner_Expecter {
 	return &MockCertbotRunner_Expecter{mock: &_m.Mock}
 }
 
-// Run provides a mock function for the type MockCertbotRunner
-func (_mock *MockCertbotRunner) Run(args []string) error {
-	ret := _mock.Called(args)
+// Issue provides a mock function for the type MockCertbotRunner
+func (_mock *MockCertbotRunner) Issue(args []string, cacheDir string, name string) ([]byte, []byte, error) {
+	ret := _mock.Called(args, cacheDir, name)
 
 	if len(ret) == 0 {
-		panic("no return value specified for Run")
+		panic("no return value specified for Issue")
 	}
 
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func([]string) error); ok {
-		r0 = returnFunc(args)
-	} else {
-		r0 = ret.Error(0)
+	var r0 []byte
+	var r1 []byte
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func([]string, string, string) ([]byte, []byte, error)); ok {
+		return returnFunc(args, cacheDir, name)
 	}
-	return r0
+	if returnFunc, ok := ret.Get(0).(func([]string, string, string) []byte); ok {
+		r0 = returnFunc(args, cacheDir, name)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]byte)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func([]string, string, string) []byte); ok {
+		r1 = returnFunc(args, cacheDir, name)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).([]byte)
+		}
+	}
+	if returnFunc, ok := ret.Get(2).(func([]string, string, string) error); ok {
+		r2 = returnFunc(args, cacheDir, name)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
 }
 
-// MockCertbotRunner_Run_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Run'
-type MockCertbotRunner_Run_Call struct {
+// MockCertbotRunner_Issue_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Issue'
+type MockCertbotRunner_Issue_Call struct {
 	*mock.Call
 }
 
-// Run is a helper method to define mock.On call
+// Issue is a helper method to define mock.On call
 //   - args []string
-func (_e *MockCertbotRunner_Expecter) Run(args any) *MockCertbotRunner_Run_Call {
-	return &MockCertbotRunner_Run_Call{Call: _e.mock.On("Run", args)}
+//   - cacheDir string
+//   - name string
+func (_e *MockCertbotRunner_Expecter) Issue(args any, cacheDir any, name any) *MockCertbotRunner_Issue_Call {
+	return &MockCertbotRunner_Issue_Call{Call: _e.mock.On("Issue", args, cacheDir, name)}
 }
 
-func (_c *MockCertbotRunner_Run_Call) Run(run func(args []string)) *MockCertbotRunner_Run_Call {
+func (_c *MockCertbotRunner_Issue_Call) Run(run func(args []string, cacheDir string, name string)) *MockCertbotRunner_Issue_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 []string
 		if args[0] != nil {
 			arg0 = args[0].([]string)
 		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
 		run(
 			arg0,
+			arg1,
+			arg2,
 		)
 	})
 	return _c
 }
 
-func (_c *MockCertbotRunner_Run_Call) Return(err error) *MockCertbotRunner_Run_Call {
-	_c.Call.Return(err)
+func (_c *MockCertbotRunner_Issue_Call) Return(certificate []byte, key []byte, err error) *MockCertbotRunner_Issue_Call {
+	_c.Call.Return(certificate, key, err)
 	return _c
 }
 
-func (_c *MockCertbotRunner_Run_Call) RunAndReturn(run func(args []string) error) *MockCertbotRunner_Run_Call {
+func (_c *MockCertbotRunner_Issue_Call) RunAndReturn(run func(args []string, cacheDir string, name string) ([]byte, []byte, error)) *MockCertbotRunner_Issue_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -6,7 +6,6 @@ package codesphere
 
 import (
 	"os"
-	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/installer"
@@ -33,13 +32,9 @@ var _ = Describe("bootstrap TLS install config compatibility", func() {
 
 		opts := installer.BootstrapTLSOptions{ConfigPath: "config.yaml", DNSProject: "dns-project", CacheDir: "/root/oms-acme"}
 		fw.EXPECT().ReadFile(opts.ConfigPath).Return(config, nil)
-		fw.EXPECT().MkdirAll(opts.CacheDir, os.FileMode(0700)).Return(nil)
-		fw.EXPECT().Chmod(opts.CacheDir, os.FileMode(0700)).Return(nil)
-		fw.EXPECT().ReadFile(mock.MatchedBy(func(path string) bool { return strings.HasSuffix(path, "/fullchain.pem") })).Return(certificate, nil)
-		fw.EXPECT().ReadFile(mock.MatchedBy(func(path string) bool { return strings.HasSuffix(path, "/privkey.pem") })).Return(key, nil)
 		store.EXPECT().Load().Return(secrets, nil)
 		store.EXPECT().Save(secrets).Return(nil)
-		runner.EXPECT().Run(mock.Anything).Return(nil)
+		runner.EXPECT().Issue(mock.Anything, opts.CacheDir, mock.Anything).Return(certificate, key, nil)
 
 		var written []byte
 
