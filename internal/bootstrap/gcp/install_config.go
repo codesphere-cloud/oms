@@ -318,6 +318,11 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 		"cloud.google.com/load-balancer-ipv4": dc.PublicGatewayIP,
 	}
 
+	// Set the reserved IP when Helm creates the service, before the cloud controller
+	// sees it. Support both ingress-nginx and the Gateway API chart services.
+	dc.InstallConfig.Cluster.Gateway.Override = gatewayIPOverride(dc.InstallConfig.Cluster.Gateway.Override, dc.GatewayIP)
+	dc.InstallConfig.Cluster.PublicGateway.Override = gatewayIPOverride(dc.InstallConfig.Cluster.PublicGateway.Override, dc.PublicGatewayIP)
+
 	b.applyPcAppsDefaults(dc)
 	b.applyManagedServiceDefaults(dc)
 
@@ -1128,4 +1133,11 @@ func (b *GCPBootstrapper) verifySecondaryDataCenterSecrets(primary, dc *datacent
 	}
 
 	return nil
+}
+
+func gatewayIPOverride(existing files.ChartOverride, ip string) files.ChartOverride {
+	return util.DeepMergeMaps(existing, files.ChartOverride{
+		"ingress-nginx": map[string]any{"controller": map[string]any{"service": map[string]any{"loadBalancerIP": ip}}},
+		"gateway":       map[string]any{"proxy": map[string]any{"service": map[string]any{"loadBalancerIP": ip}}},
+	})
 }

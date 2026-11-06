@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/version"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"time"
 )
 
 // NewMockConfigManager creates a new instance of MockConfigManager. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -1230,6 +1231,81 @@ func (_c *MockHelmClient_UpgradeChart_Call) Return(err error) *MockHelmClient_Up
 }
 
 func (_c *MockHelmClient_UpgradeChart_Call) RunAndReturn(run func(ctx context.Context, cfg ChartConfig, opts UpgradeChartOptions) error) *MockHelmClient_UpgradeChart_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// WaitForResources provides a mock function for the type MockHelmClient
+func (_mock *MockHelmClient) WaitForResources(ctx context.Context, apiVersion string, kind string, names []string, timeout time.Duration) error {
+	ret := _mock.Called(ctx, apiVersion, kind, names, timeout)
+
+	if len(ret) == 0 {
+		panic("no return value specified for WaitForResources")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, []string, time.Duration) error); ok {
+		r0 = returnFunc(ctx, apiVersion, kind, names, timeout)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockHelmClient_WaitForResources_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'WaitForResources'
+type MockHelmClient_WaitForResources_Call struct {
+	*mock.Call
+}
+
+// WaitForResources is a helper method to define mock.On call
+//   - ctx context.Context
+//   - apiVersion string
+//   - kind string
+//   - names []string
+//   - timeout time.Duration
+func (_e *MockHelmClient_Expecter) WaitForResources(ctx any, apiVersion any, kind any, names any, timeout any) *MockHelmClient_WaitForResources_Call {
+	return &MockHelmClient_WaitForResources_Call{Call: _e.mock.On("WaitForResources", ctx, apiVersion, kind, names, timeout)}
+}
+
+func (_c *MockHelmClient_WaitForResources_Call) Run(run func(ctx context.Context, apiVersion string, kind string, names []string, timeout time.Duration)) *MockHelmClient_WaitForResources_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 []string
+		if args[3] != nil {
+			arg3 = args[3].([]string)
+		}
+		var arg4 time.Duration
+		if args[4] != nil {
+			arg4 = args[4].(time.Duration)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+		)
+	})
+	return _c
+}
+
+func (_c *MockHelmClient_WaitForResources_Call) Return(err error) *MockHelmClient_WaitForResources_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockHelmClient_WaitForResources_Call) RunAndReturn(run func(ctx context.Context, apiVersion string, kind string, names []string, timeout time.Duration) error) *MockHelmClient_WaitForResources_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -2880,6 +2956,78 @@ func (_c *MockRegistryPolicyClient_Create_Call) Return(err error) *MockRegistryP
 }
 
 func (_c *MockRegistryPolicyClient_Create_Call) RunAndReturn(run func(context1 context.Context, object client.Object, createOptions ...client.CreateOption) error) *MockRegistryPolicyClient_Create_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Delete provides a mock function for the type MockRegistryPolicyClient
+func (_mock *MockRegistryPolicyClient) Delete(context1 context.Context, object client.Object, deleteOptions ...client.DeleteOption) error {
+	var tmpRet mock.Arguments
+	if len(deleteOptions) > 0 {
+		tmpRet = _mock.Called(context1, object, deleteOptions)
+	} else {
+		tmpRet = _mock.Called(context1, object)
+	}
+	ret := tmpRet
+
+	if len(ret) == 0 {
+		panic("no return value specified for Delete")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, client.Object, ...client.DeleteOption) error); ok {
+		r0 = returnFunc(context1, object, deleteOptions...)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockRegistryPolicyClient_Delete_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Delete'
+type MockRegistryPolicyClient_Delete_Call struct {
+	*mock.Call
+}
+
+// Delete is a helper method to define mock.On call
+//   - context1 context.Context
+//   - object client.Object
+//   - deleteOptions ...client.DeleteOption
+func (_e *MockRegistryPolicyClient_Expecter) Delete(context1 any, object any, deleteOptions ...any) *MockRegistryPolicyClient_Delete_Call {
+	return &MockRegistryPolicyClient_Delete_Call{Call: _e.mock.On("Delete",
+		append([]any{context1, object}, deleteOptions...)...)}
+}
+
+func (_c *MockRegistryPolicyClient_Delete_Call) Run(run func(context1 context.Context, object client.Object, deleteOptions ...client.DeleteOption)) *MockRegistryPolicyClient_Delete_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 client.Object
+		if args[1] != nil {
+			arg1 = args[1].(client.Object)
+		}
+		var arg2 []client.DeleteOption
+		var variadicArgs []client.DeleteOption
+		if len(args) > 2 {
+			variadicArgs = args[2].([]client.DeleteOption)
+		}
+		arg2 = variadicArgs
+		run(
+			arg0,
+			arg1,
+			arg2...,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRegistryPolicyClient_Delete_Call) Return(err error) *MockRegistryPolicyClient_Delete_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockRegistryPolicyClient_Delete_Call) RunAndReturn(run func(context1 context.Context, object client.Object, deleteOptions ...client.DeleteOption) error) *MockRegistryPolicyClient_Delete_Call {
 	_c.Call.Return(run)
 	return _c
 }
