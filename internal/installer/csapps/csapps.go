@@ -114,9 +114,9 @@ func subAppNames(ctx context.Context, kubeClient client.Client, parentAppName st
 
 // parentAppValues returns the cs-applications values: the Codesphere umbrella chart version and the values
 // OMS builds from the config, with the config's csApps block merged over them. The built global
-// values go to the top level, which the chart shares with every sub application. Other values reach
-// a sub application only through csApps; for permanent config for a new app, extend the config
-// appropriately.
+// values go to the top level, which the chart maps to each sub application's own values. Other
+// values reach a sub application only through csApps; for permanent config for a new app, extend
+// the config appropriately.
 func parentAppValues(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName string) (map[string]any, error) {
 	chart, ok := csBom.GetChart(csUmbrellaComponent)
 	if !ok {
