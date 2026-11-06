@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
+	"k8s.io/utils/ptr"
 )
 
 var _ = Describe("Installconfig & Secrets", func() {
@@ -459,6 +460,21 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(cloudDns["project"]).To(Equal(bs.Env.DNSProjectID))
 
 				Expect(bs.Env.InstallConfig.Codesphere.OpenBao).To(BeNil())
+			})
+			It("keeps the OpenFGA block of a single data center as configured", func() {
+				configured := &files.OpenFgaConfig{Deploy: ptr.To(false), APIURL: "https://openfga.example.org"}
+				csEnv.InstallConfig.Codesphere.OpenFga = configured
+
+				icg.EXPECT().GenerateSecrets().Return(nil)
+				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+				err := bs.UpdateInstallConfig()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(bs.Env.InstallConfig.Codesphere.OpenFga).To(Equal(configured))
 			})
 			It("uses the configured datacenter name", func() {
 				csEnv.DatacenterName = "staging"

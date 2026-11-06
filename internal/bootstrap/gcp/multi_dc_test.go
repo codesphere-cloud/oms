@@ -29,6 +29,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
+	"k8s.io/utils/ptr"
 )
 
 // realConfigManager returns an install config manager that keeps its files in memory, so tests
@@ -416,6 +417,7 @@ var _ = Describe("Multi-DC bootstrap", func() {
 			files.SecretDomainAuthPrivateKey,
 			files.SecretMounterHmacSecret,
 			files.SecretMongoDbPasswordEncryptionKey,
+			files.SecretOpenFgaPresharedKey,
 		}
 		for _, svc := range codesphere.PostgresServices {
 			shared = append(shared, files.PostgresUserSecretName(svc.Name), files.PostgresPasswordSecretName(svc.Name))
@@ -455,6 +457,39 @@ var _ = Describe("Multi-DC bootstrap", func() {
 				Expect(problem).NotTo(ContainSubstring("postgres"), "data center %d", dc.ID)
 			}
 		}
+	})
+
+	It("serves one OpenFGA from the primary data center to every data center", func() {
+		expectBootstrapMocks("test-project-12345")
+
+		Expect(bs.Bootstrap()).To(Succeed())
+
+		primary, secondary := bs.Env.DataCenters[0], bs.Env.DataCenters[1]
+		Expect(primary.InstallConfig.Codesphere.OpenFga).To(Equal(&files.OpenFgaConfig{
+			Expose: &files.OpenFgaExposeConfig{Enabled: true, Host: "openfga.1.cs.example.com"},
+		}))
+		Expect(secondary.InstallConfig.Codesphere.OpenFga).To(Equal(&files.OpenFgaConfig{
+			Deploy: ptr.To(false),
+			APIURL: "https://openfga.1.cs.example.com",
+		}))
+	})
+
+	It("leaves running and backing up OpenFGA to the primary data center", func() {
+		expectBootstrapMocks("test-project-12345")
+
+		Expect(bs.Bootstrap()).To(Succeed())
+
+		primary, secondary := bs.Env.DataCenters[0], bs.Env.DataCenters[1]
+		Expect(primary.InstallConfig.Codesphere.OpenfgaBackups).NotTo(BeNil())
+		primaryApplications := primary.InstallConfig.PcApps["applications"].(map[string]interface{})
+		Expect(primaryApplications).To(HaveKey("openfga"))
+		Expect(secondary.InstallConfig.Codesphere.OpenfgaBackups).To(BeNil())
+
+		data, err := secondary.InstallConfig.Marshal()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(data)).NotTo(ContainSubstring("openfga-backup"))
+		applications, _ := secondary.InstallConfig.PcApps["applications"].(map[string]interface{})
+		Expect(applications).NotTo(HaveKey("openfga"))
 	})
 
 	It("installs a separate k0s cluster per data center", func() {
