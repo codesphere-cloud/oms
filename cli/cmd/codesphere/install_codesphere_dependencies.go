@@ -217,13 +217,15 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 			return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
 		}
 		install = argocdinstaller.NewAppInstaller(argocdinstaller.AppInstallerConfig{
-			Config:       cfg,
-			Vault:        installVault,
-			RESTConfig:   restConfig,
-			KubeClient:   kubeClient,
-			HelmClient:   argoCDInstall.Helm,
-			Installer:    argoCDInstall,
-			PCAppsValues: opts.PCAppsValues,
+			Config:          cfg,
+			Vault:           installVault,
+			RESTConfig:      restConfig,
+			KubeClient:      kubeClient,
+			HelmClient:      argoCDInstall.Helm,
+			Installer:       argoCDInstall,
+			PCAppsValues:    opts.PCAppsValues,
+			InstallerConfig: opts.InstallerConfig,
+			SkipSteps:       opts.SkipSteps,
 		})
 		return nil
 	}); err != nil {
