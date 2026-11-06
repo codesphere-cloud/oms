@@ -21,7 +21,7 @@ oms beta bootstrap-gcp [flags]
 
 ```
       --acme-staging                              Use the Let's Encrypt staging ACME endpoint (certificates are not browser-trusted)
-      --airgapped                                 Set up an airgapped installation: run a local container registry on the jumpbox, copy the package images into it and point the install config at it. k0s is installed from the k0s airgap image bundle. Firewall rules block internet egress of all VMs except the jumpbox, and the nodes install OS packages (e.g. Docker, LVM tools) through a package proxy on the jumpbox. Selects the local-container registry type and fails if another --registry-type is given. (default: false)
+      --airgapped                                 Set up an airgapped installation: run a local container registry on the jumpbox, copy the package images into it and point the install config at it. k0s is installed from the k0s airgap image bundle. Firewall rules block internet egress of all VMs except the jumpbox, and the nodes install OS packages (e.g. Docker, LVM tools) through a package proxy on the jumpbox. Uses the generated self-signed ingress CA instead of ACME for certificates. Selects the local-container registry type and fails if another --registry-type is given. (default: false)
       --azure-devops-app-client-id string         Azure DevOps App Client ID (optional)
       --azure-devops-app-client-secret string     Azure DevOps App Client Secret (optional)
       --base-domain string                        Base domain for Codesphere (required)
