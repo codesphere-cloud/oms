@@ -65,7 +65,7 @@ require (
 	k8s.io/apiserver v0.37.0
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab
-	sigs.k8s.io/controller-runtime v0.24.1
+	sigs.k8s.io/controller-runtime v0.25.2
 	sigs.k8s.io/gateway-api v1.7.0
 	sigs.k8s.io/yaml v1.6.0
 )
@@ -343,7 +343,7 @@ require (
 	github.com/golangci/swaggoswag v0.0.0-20250504205917-77f2aca3143e // indirect
 	github.com/golangci/unconvert v0.0.0-20250410112200-a129a6e6413e // indirect
 	github.com/google/btree v1.1.3 // indirect
-	github.com/google/cel-go v0.29.0 // indirect
+	github.com/google/cel-go v0.29.2 // indirect
 	github.com/google/certificate-transparency-go v1.3.3 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
@@ -667,7 +667,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20260821135717-be32def86098 // indirect
 	k8s.io/kubectl v0.37.0 // indirect
 	k8s.io/kubernetes v1.36.1 // indirect
-	k8s.io/streaming v0.36.4 // indirect
+	k8s.io/streaming v0.37.0 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 	mvdan.cc/gofumpt v0.11.0 // indirect
 	mvdan.cc/unparam v0.0.0-20260823230713-2fa3d841b0c8 // indirect
