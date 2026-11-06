@@ -364,37 +364,6 @@ Review the generated files and ensure they describe the actual infrastructure:
 
 Use only annotations supported by the selected load-balancer implementation, or omit annotations when the implementation honors `loadBalancerIP` directly.
 
-### Supply a custom platform certificate
-
-To use your own platform TLS certificate, put its PEM certificate chain in `config.yaml` and leave the private key empty:
-
-```yaml
-codesphere:
-  customCertificate:
-    cert: |
-      -----BEGIN CERTIFICATE-----
-      ...
-      -----END CERTIFICATE-----
-    key: ""
-```
-
-Add the corresponding private key as a file entry in the existing `secrets` list in `prod.vault.yaml`:
-
-```yaml
-secrets:
-  - name: customCertificateKey
-    file:
-      name: tls.key
-      content: |
-        -----BEGIN PRIVATE KEY-----
-        ...
-        -----END PRIVATE KEY-----
-```
-
-For an already encrypted vault, edit it with SOPS using the installation's age identity. Keep the other entries in the vault. Supply this vault and identity to `oms install codesphere` as shown below. OMS copies the key into the temporary configuration required by the legacy installer; the persistent install config retains the empty key. Existing nonempty inline keys take precedence.
-
-The certificate must cover the platform hostname. Workspace gateway certificates are configured separately; this entry does not configure their certificates or schedule renewal of your custom certificate.
-
 ## 10. Encrypt and place the secrets
 
 Generate an age identity on the jumpbox and make it readable only by root:
