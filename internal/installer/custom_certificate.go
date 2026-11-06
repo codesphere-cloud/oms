@@ -33,7 +33,7 @@ func ConfigureCustomTLS(config map[string]any, cert, key []byte, secrets *files.
 			// OMS resolves the vault key into the temporary TS installer config until
 			// the frontend gateway is migrated to PC Apps.
 			"customCertificate": map[string]any{"cert": string(cert), "key": ""},
-			"certIssuer": map[string]any{"type": "self-signed", "acme": map[string]any{"enabled": false}},
+			"certIssuer":        map[string]any{"type": "self-signed", "acme": map[string]any{"enabled": false}},
 		},
 		"cluster": map[string]any{
 			"certificates": map[string]any{"override": map[string]any{"issuers": map[string]any{
