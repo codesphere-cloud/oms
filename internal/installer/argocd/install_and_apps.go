@@ -143,8 +143,9 @@ func currentSourceDeployed(app *argov1alpha1.Application) (bool, error) {
 		return false, nil
 	}
 
-	// The sync only writes OperationState. Sync and Health status come from the next comparison, so
-	// until then they still describe the cluster before this sync.
+	// Sync and Health status come from Argo CD's last comparison, done at ReconciledAt, not from the
+	// sync. Until a comparison runs after the sync, they still describe the old resources, e.g. Healthy
+	// for the pods being replaced.
 	reconciledAt, finishedAt := app.Status.ReconciledAt, operation.FinishedAt
 
 	return reconciledAt != nil && finishedAt != nil && reconciledAt.After(finishedAt.Time), nil
