@@ -25,6 +25,12 @@ import (
 )
 
 var _ = Describe("WaitForAppFreshlySyncedAndHealthy", func() {
+	var (
+		syncFinishedAt = metav1.NewTime(time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC))
+		beforeSync     = metav1.NewTime(syncFinishedAt.Add(-time.Second))
+		afterSync      = metav1.NewTime(syncFinishedAt.Add(time.Second))
+	)
+
 	source := func(values string) argov1alpha1.ApplicationSource {
 		return argov1alpha1.ApplicationSource{
 			RepoURL:        "ghcr.io/codesphere-cloud/charts",
@@ -115,7 +121,7 @@ var _ = Describe("WaitForAppFreshlySyncedAndHealthy", func() {
 		Expect(wait(app)).To(Succeed())
 	})
 
-	It("out of sync after the sync of the current source succeeded -> done, drift does not block", func() {
+	It("out of sync, compared after the sync of the current source succeeded -> done, drift does not block", func() {
 		app := application(
 			source(`{"trigger":"b"}`),
 			source(`{"trigger":"b"}`),
@@ -125,9 +131,28 @@ var _ = Describe("WaitForAppFreshlySyncedAndHealthy", func() {
 		app.Status.OperationState = &argov1alpha1.OperationState{
 			Phase:      synccommon.OperationSucceeded,
 			SyncResult: &argov1alpha1.SyncOperationResult{Source: source(`{"trigger":"b"}`)},
+			FinishedAt: &syncFinishedAt,
 		}
+		app.Status.ReconciledAt = &afterSync
 
 		Expect(wait(app)).To(Succeed())
+	})
+
+	It("out of sync, the sync of the current source succeeded after the last comparison -> keeps waiting", func() {
+		app := application(
+			source(`{"trigger":"b"}`),
+			source(`{"trigger":"b"}`),
+			health.HealthStatusHealthy,
+			argov1alpha1.SyncStatusCodeOutOfSync,
+		)
+		app.Status.OperationState = &argov1alpha1.OperationState{
+			Phase:      synccommon.OperationSucceeded,
+			SyncResult: &argov1alpha1.SyncOperationResult{Source: source(`{"trigger":"b"}`)},
+			FinishedAt: &syncFinishedAt,
+		}
+		app.Status.ReconciledAt = &beforeSync
+
+		Expect(wait(app)).To(MatchError(ContainSubstring("timed out")))
 	})
 
 	It("out of sync, the last succeeded sync was of an earlier source -> keeps waiting", func() {

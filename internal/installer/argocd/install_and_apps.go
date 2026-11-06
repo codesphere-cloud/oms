@@ -19,6 +19,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 	jsonpatch "github.com/evanphx/json-patch/v5"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
@@ -139,11 +140,17 @@ func currentSourceDeployed(app *argov1alpha1.Application) (bool, error) {
 		return false, err
 	}
 
-	if freshlySynced && operation.Phase == synccommon.OperationSucceeded {
-		return true, nil
+	if !freshlySynced || operation.Phase != synccommon.OperationSucceeded {
+		return false, nil
 	}
 
-	return false, nil
+	// The sync only writes OperationState. Sync and Health status come from the next comparison, so
+	// until then they still describe the cluster before this sync.
+	return comparedAfter(app.Status.ReconciledAt, operation.FinishedAt), nil
+}
+
+func comparedAfter(reconciledAt, finishedAt *metav1.Time) bool {
+	return reconciledAt != nil && finishedAt != nil && reconciledAt.After(finishedAt.Time)
 }
 
 // sameSource compares two sources the way Argo CD may record them in the status. Argo CD writes the
