@@ -6,6 +6,7 @@ package gcp
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"slices"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
@@ -119,7 +121,7 @@ func (b *GCPBootstrapper) ensureInstallConfig(dc *datacenter.DataCenter) error {
 }
 
 func (b *GCPBootstrapper) loadVaultForConfigTemplating(dc *datacenter.DataCenter) error {
-	if err := dc.ConfigManager.LoadVaultFromUnecryptedFile(dc.SecretsFilePath); err != nil {
+	if err := dc.ConfigManager.LoadVaultFromFileOrCreate(dc.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault from file: %w", err)
 	}
 
@@ -190,9 +192,9 @@ func (b *GCPBootstrapper) recoverVault(dc *datacenter.DataCenter) error {
 	return nil
 }
 
-// UpdateInstallConfig writes the bootstrapped infrastructure into the primary data center's
-// install config. Secondary data centers go through updateInstallConfig directly, after their
-// config and vault have been derived from the primary's.
+// UpdateInstallConfig applies the environment to the primary data center's install config and
+// vault, writes both locally and uploads them to the jumpbox. Secondary data centers go through
+// updateInstallConfig directly, after their config and vault have been derived from the primary's.
 func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	if err := b.ensureDataCenters(); err != nil {
 		return err
@@ -518,16 +520,64 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
+	return b.copyConfigAndVaultToJumpbox(dc)
+}
+
+func (b *GCPBootstrapper) copyConfigAndVaultToJumpbox(dc *datacenter.DataCenter) error {
+	vaultTransferPath, err := b.vaultTransferPath(dc)
+	if err != nil {
+		return err
+	}
+
 	// CopyFile creates the destination directory, so a secondary data center's secrets
 	// directory does not need to exist yet.
-	err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, dc.InstallConfigPath, dc.RemoteConfigPath)
-	if err != nil {
+	if err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, dc.InstallConfigPath, dc.RemoteConfigPath); err != nil {
 		return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
 	}
 
-	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, dc.SecretsFilePath, dc.RemoteVaultPath())
-	if err != nil {
+	if err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, vaultTransferPath, dc.RemoteVaultPath()); err != nil {
 		return fmt.Errorf("failed to copy secrets file to jumpbox: %w", err)
+	}
+
+	return nil
+}
+
+// vaultTransferPath returns the local vault file to upload to the jumpbox. An encrypted vault is
+// uploaded as a plaintext copy, which the jumpbox re-encrypts with its own key; the copy is
+// recorded for removeVaultTransferCopy.
+func (b *GCPBootstrapper) vaultTransferPath(dc *datacenter.DataCenter) (string, error) {
+	if b.Env.VaultType != vault.TypeSOPS {
+		return dc.SecretsFilePath, nil
+	}
+
+	transferPath, err := b.fw.CreateTemp(filepath.Dir(dc.SecretsFilePath), filepath.Base(dc.SecretsFilePath)+".plain*")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary vault transfer file: %w", err)
+	}
+
+	b.vaultTransferCopy = transferPath
+
+	if err := dc.ConfigManager.WriteUnencryptedVault(transferPath, true); err != nil {
+		return "", errors.Join(
+			fmt.Errorf("failed to write unencrypted vault for jumpbox transfer: %w", err),
+			b.removeVaultTransferCopy(),
+		)
+	}
+
+	return transferPath, nil
+}
+
+// removeVaultTransferCopy reports a failed removal because the file holds every secret in the clear.
+func (b *GCPBootstrapper) removeVaultTransferCopy() error {
+	transferPath := b.vaultTransferCopy
+	if transferPath == "" {
+		return nil
+	}
+
+	b.vaultTransferCopy = ""
+
+	if err := b.fw.Remove(transferPath); err != nil {
+		return fmt.Errorf("failed to remove unencrypted vault transfer file %s: %w", transferPath, err)
 	}
 
 	return nil
@@ -983,7 +1033,7 @@ func (b *GCPBootstrapper) EnsureSecrets() error {
 }
 
 func (b *GCPBootstrapper) ensureSecrets(dc *datacenter.DataCenter) error {
-	if err := dc.ConfigManager.LoadVaultFromUnecryptedFile(dc.SecretsFilePath); err != nil {
+	if err := dc.ConfigManager.LoadVaultFromFileOrCreate(dc.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file: %w", err)
 	}
 
@@ -1043,9 +1093,12 @@ func (b *GCPBootstrapper) decryptVault(dc *datacenter.DataCenter, dst string) er
 }
 
 // writeDataCenterConfig writes the data center's install config and vault, then places the
-// encrypted vault and its age identity on the jumpbox.
-func (b *GCPBootstrapper) writeDataCenterConfig(dc *datacenter.DataCenter) error {
-	err := b.stlog.Step(dc.StepName("Update install config"), func() error {
+// encrypted vault and its age identity on the jumpbox. The plaintext transfer copy is removed
+// last, so a failed removal never keeps the jumpbox vault in plaintext.
+func (b *GCPBootstrapper) writeDataCenterConfig(dc *datacenter.DataCenter) (err error) {
+	defer func() { err = errors.Join(err, b.removeVaultTransferCopy()) }()
+
+	err = b.stlog.Step(dc.StepName("Update install config"), func() error {
 		return b.updateInstallConfig(dc)
 	})
 	if err != nil {

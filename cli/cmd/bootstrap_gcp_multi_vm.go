@@ -71,6 +71,7 @@ func (c *BootstrapGcpCmd) addMultiNodeBootstrapFlags() {
 	flags.BoolVar(&c.CodesphereEnv.CreateTestUser, "create-test-user", false, "Create a test user with API token on the bootstrapped instance for smoke testing (default: false)")
 	flags.StringVar(&c.CodesphereEnv.InstallConfigPath, "install-config", "config.yaml", "Path to install config file (optional)")
 	flags.StringVar(&c.CodesphereEnv.SecretsFilePath, "secrets-file", "prod.vault.yaml", "Path to secrets files (optional)")
+	flags.StringVar(&c.CodesphereEnv.AgeKey, "age-key", "", "Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)")
 	flags.IntVar(&c.CodesphereEnv.DatacenterID, "datacenter-id", 1, "Datacenter ID (default: 1)")
 	flags.StringVar(&c.CodesphereEnv.DatacenterName, "datacenter-name", "dev", "Datacenter name (default: dev)")
 	flags.BoolVar(&c.CodesphereEnv.MultiDC, "multi-dc", false, "Bootstrap two data centers that share one PostgreSQL server but run separate Kubernetes and Ceph clusters. Doubles the Ceph and k0s nodes to 14 VMs (~100 vCPUs) and reserves 6 static IPs, so the region's CPU quota may need raising. Cannot be combined with --datacenter-id. (default: false)")
