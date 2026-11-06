@@ -23,11 +23,58 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
+	"go.yaml.in/yaml/v3"
 	"net/http"
 	"net/http/httptest"
 )
 
 var _ = Describe("prepareInstallConfig", func() {
+	readMergedConfig := func(path string) map[string]any {
+		data, err := os.ReadFile(path)
+		Expect(err).NotTo(HaveOccurred())
+
+		var merged map[string]any
+		Expect(yaml.Unmarshal(data, &merged)).To(Succeed())
+
+		return merged
+	}
+
+	It("with the legacy barman key in a config, the merged file has it under managedServiceBackends", func() {
+		dir := GinkgoT().TempDir()
+		basePath := filepath.Join(dir, "base.yaml")
+		Expect(os.WriteFile(basePath, []byte("cluster:\n  BarmanCloudPluginConfig:\n    enabled: false\n    override:\n      plugin-barman-cloud:\n        replicaCount: 2\n"), 0600)).To(Succeed())
+
+		effectiveOpts, _, cleanup, err := prepareInstallConfig(&InstallCodesphereOpts{Configs: []string{basePath}}, installer.NewConfig())
+		Expect(err).NotTo(HaveOccurred())
+
+		defer cleanup()
+
+		merged := readMergedConfig(effectiveOpts.ConfigPath)
+		Expect(merged["cluster"]).NotTo(HaveKey("BarmanCloudPluginConfig"))
+		Expect(merged["managedServiceBackends"]).To(HaveKeyWithValue("barmanCloudPlugin", map[string]any{
+			"enabled":  true,
+			"override": map[string]any{"plugin-barman-cloud": map[string]any{"replicaCount": 2}},
+		}))
+	})
+
+	It("with the legacy barman key in the base and the new key in an overlay, the merged file keeps the overlay", func() {
+		dir := GinkgoT().TempDir()
+		basePath := filepath.Join(dir, "base.yaml")
+		overlayPath := filepath.Join(dir, "overlay.yaml")
+
+		Expect(os.WriteFile(basePath, []byte("cluster:\n  BarmanCloudPluginConfig:\n    enabled: true\n"), 0600)).To(Succeed())
+		Expect(os.WriteFile(overlayPath, []byte("managedServiceBackends:\n  barmanCloudPlugin:\n    enabled: false\n"), 0600)).To(Succeed())
+
+		effectiveOpts, _, cleanup, err := prepareInstallConfig(&InstallCodesphereOpts{Configs: []string{basePath, overlayPath}}, installer.NewConfig())
+		Expect(err).NotTo(HaveOccurred())
+
+		defer cleanup()
+
+		merged := readMergedConfig(effectiveOpts.ConfigPath)
+		Expect(merged["cluster"]).NotTo(HaveKey("BarmanCloudPluginConfig"))
+		Expect(merged["managedServiceBackends"]).To(Equal(map[string]any{"barmanCloudPlugin": map[string]any{"enabled": false}}))
+	})
+
 	DescribeTable("merges legacy and object selections", func(base, overlay, version, hash string) {
 		dir := GinkgoT().TempDir()
 		basePath := filepath.Join(dir, "base.yaml")
