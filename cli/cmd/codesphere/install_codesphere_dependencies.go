@@ -229,7 +229,10 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 	}); err != nil {
 		return err
 	}
-	if err := stlog.Substep("Install ArgoCD", install.InstallArgoCD); err != nil {
+
+	if err := stlog.Substep("Install ArgoCD", func() error {
+		return install.InstallArgoCD(ctx)
+	}); err != nil {
 		return err
 	}
 	if err := stlog.Substep("Sync vault secret", func() error {
@@ -281,5 +284,5 @@ func AddInstallCodesphereDepenciesCmd(codesphere *cobra.Command, opts *InstallCo
 	}
 
 	util.AddCmd(codesphere, deps.cmd)
-	deps.cmd.RunE = deps.RunE
+	deps.cmd.RunE = util.CancelOnSignal(deps.RunE)
 }

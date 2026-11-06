@@ -106,7 +106,7 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	}
 
 	if infraInstaller.HasExecutableSteps(cfg) {
-		if err := installCodesphereInfra(effectiveOpts, c.Env); err != nil {
+		if err := installCodesphereInfra(ctx, effectiveOpts, c.Env); err != nil {
 			return err
 		}
 	}
@@ -175,7 +175,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 
 	util.AddCmd(install, codesphere.cmd)
 
-	codesphere.cmd.RunE = codesphere.RunE
+	codesphere.cmd.RunE = util.CancelOnSignal(codesphere.RunE)
 
 	AddInstallCodesphereInfraCmd(codesphere.cmd, codesphere.Opts)
 	AddInstallCodesphereDepenciesCmd(codesphere.cmd, codesphere.Opts)

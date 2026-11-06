@@ -23,7 +23,8 @@ type InstallCodesphereInfraCmd struct {
 	Env  env.Env
 }
 
-func (c *InstallCodesphereInfraCmd) RunE(_ *cobra.Command, _ []string) error {
+// RunE installs the infrastructure phase using the command context, which is cancelled on SIGINT or SIGTERM.
+func (c *InstallCodesphereInfraCmd) RunE(cmd *cobra.Command, _ []string) error {
 	if c.Opts.LocalComponents {
 		return fmt.Errorf("--local-components requires install codesphere dependencies or install codesphere platform")
 	}
@@ -41,16 +42,17 @@ func (c *InstallCodesphereInfraCmd) RunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	return installCodesphereInfra(effectiveOpts, c.Env)
+	return installCodesphereInfra(cmd.Context(), effectiveOpts, c.Env)
 }
 
-func installCodesphereInfra(opts *InstallCodesphereOpts, env env.Env) error {
+func installCodesphereInfra(ctx context.Context, opts *InstallCodesphereOpts, env env.Env) error {
 	workdir := env.GetOmsWorkdir()
 	pm := installer.NewPackage(workdir, opts.Package)
 	cm := installer.NewConfig()
-	im := system.NewImage(context.Background())
+	im := system.NewImage(ctx)
 
 	ci := &installer.CodesphereInstaller{
+		Context:          ctx,
 		ConfigPath:       opts.ConfigPath,
 		VaultPath:        opts.Vault,
 		PrivKey:          opts.PrivKey,
@@ -90,5 +92,5 @@ func AddInstallCodesphereInfraCmd(codesphere *cobra.Command, opts *InstallCodesp
 	}
 
 	util.AddCmd(codesphere, infra.cmd)
-	infra.cmd.RunE = infra.RunE
+	infra.cmd.RunE = util.CancelOnSignal(infra.RunE)
 }

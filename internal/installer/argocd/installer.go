@@ -150,7 +150,7 @@ func NewInstaller(cfg InstallerConfig, bomConfig *bom.Config) (*Installer, error
 
 // Install is the top-level orchestrator. It delegates every Helm interaction
 // to the HelmClient interface, keeping this function short and testable.
-func (a *Installer) Install() error {
+func (a *Installer) Install(ctx context.Context) error {
 	if err := installer.ValidateChartRepositoryURL(a.RepoURL); err != nil {
 		return fmt.Errorf("validating ArgoCD chart repository: %w", err)
 	}
@@ -160,8 +160,6 @@ func (a *Installer) Install() error {
 	} else {
 		log.Println("Installing/Upgrading ArgoCD helm chart (latest version)")
 	}
-
-	ctx := context.Background()
 
 	vals, err := a.chartLoader().LoadValues(a.ValueFiles)
 	if err != nil {
