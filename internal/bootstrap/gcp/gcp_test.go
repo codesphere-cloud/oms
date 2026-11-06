@@ -2593,12 +2593,12 @@ var _ = Describe("GCP Bootstrapper", func() {
 			certificate, key, err := cert.GenerateSelfSignedCertKey("cs.example.com", nil, []string{"*.cs.example.com", "ws.example.com", "*.ws.example.com"})
 			Expect(err).NotTo(HaveOccurred())
 
-			config := []byte("codesphere:\n  domain: cs.example.com\n  workspaceHostingBaseDomain: ws.example.com\n  certIssuer:\n    acme:\n      server: https://acme.example.com\n      email: admin@example.com\n")
+			config := []byte("codesphere:\n  domain: cs.example.com\n  workspaceHostingBaseDomain: ws.example.com\n  certIssuer:\n    acme:\n      server: https://acme.example.com\n      email: admin@example.com\n      eabKeyId: account-id\n")
 			secrets := &files.InstallVault{}
+			secrets.SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: "eab-mac-key"}})
 
 			fw.EXPECT().ReadFile("fake-config-file").Return(config, nil)
 			icg.EXPECT().GetVault().Return(secrets)
-			icg.EXPECT().SetVault(secrets).Return()
 			icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
 			fw.EXPECT().Chmod("fake-config-file", os.FileMode(0600)).Return(nil)
 			fw.EXPECT().WriteFile("fake-config-file", mock.Anything, os.FileMode(0600)).Run(func(_ string, data []byte, _ os.FileMode) {
@@ -2608,7 +2608,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(c string) bool { return strings.Contains(c, "oms download package") })).Return(nil).Once()
 			mirrored := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(c string) bool { return strings.HasPrefix(c, "oms copy package") })).Return(nil).Once()
 			issued := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(c string) bool {
-				return strings.Contains(c, "podman 'run'") && strings.Contains(c, "'--dns-google-project' 'public-dns-project'")
+				return strings.Contains(c, "podman 'run'") && strings.Contains(c, "'--dns-google-project' 'public-dns-project'") && strings.Contains(c, "'--eab-kid' 'account-id' '--eab-hmac-key' 'eab-mac-key'")
 			})).Return(nil).Once().NotBefore(mirrored)
 			fw.EXPECT().CreateTemp("", "oms-bootstrap-tls-*").Return("cert-download", nil).Once()
 			fw.EXPECT().CreateTemp("", "oms-bootstrap-tls-*").Return("key-download", nil).Once()

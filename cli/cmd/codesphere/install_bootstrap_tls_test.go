@@ -5,43 +5,30 @@
 package codesphere
 
 import (
-	"os"
-
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
-	"github.com/codesphere-cloud/oms/internal/util"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/stretchr/testify/mock"
 	"go.yaml.in/yaml/v4"
 	"k8s.io/client-go/util/cert"
 )
 
 var _ = Describe("bootstrap TLS install config compatibility", func() {
 	It("repairs the old key template and passes the Codesphere secret-reference validation", func() {
-		fw := util.NewMockFileIO(GinkgoT())
-		store := installer.NewMockBootstrapTLSVault(GinkgoT())
-		runner := installer.NewMockCertbotRunner(GinkgoT())
 		certificate, key, err := cert.GenerateSelfSignedCertKey("cs.example.com", nil, []string{"*.cs.example.com", "ws.example.com", "*.ws.example.com"})
 		Expect(err).NotTo(HaveOccurred())
 
 		config := []byte("codesphere:\n  domain: cs.example.com\n  workspaceHostingBaseDomain: ws.example.com\n  customCertificate:\n    cert: old-certificate\n    key: '{{ secret \"customCertificateKey\" \"file.content\" }}'\n  certIssuer:\n    type: self-signed\n    acme:\n      enabled: false\n      email: test@example.com\n      server: https://acme-staging-v02.api.letsencrypt.org/directory\n")
 		secrets := &files.InstallVault{}
 
-		opts := installer.BootstrapTLSOptions{ConfigPath: "config.yaml", DNSProject: "dns-project", CacheDir: "/root/oms-acme"}
-		fw.EXPECT().ReadFile(opts.ConfigPath).Return(config, nil)
-		store.EXPECT().Load().Return(secrets, nil)
-		store.EXPECT().Save(secrets).Return(nil)
-		runner.EXPECT().Issue(mock.Anything, opts.CacheDir, mock.Anything).Return(certificate, key, nil)
-
-		var written []byte
-
-		fw.EXPECT().Chmod(opts.ConfigPath, os.FileMode(0600)).Return(nil)
-		fw.EXPECT().WriteFile(opts.ConfigPath, mock.Anything, os.FileMode(0600)).Run(func(_ string, data []byte, _ os.FileMode) { written = data }).Return(nil)
-
-		Expect(installer.EnsureBootstrapTLS(opts, fw, store, runner)).To(Succeed())
+		var configMap map[string]any
+		Expect(yaml.Unmarshal(config, &configMap)).To(Succeed())
+		updated, err := installer.ConfigureCustomTLS(configMap, certificate, key, secrets, []string{"cs.example.com", "*.cs.example.com", "ws.example.com", "*.ws.example.com"})
+		Expect(err).NotTo(HaveOccurred())
+		written, err := yaml.Marshal(updated)
+		Expect(err).NotTo(HaveOccurred())
 		// Use the installer's marker rendering and validation on the actual bootstrap
 		// output, rather than only proving that generic YAML template rendering works.
 		marked, err := configtemplating.RenderWithSecretResolver(written, func(string, ...string) (string, error) { return secretRefMarker, nil })
