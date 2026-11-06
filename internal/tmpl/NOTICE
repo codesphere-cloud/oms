@@ -23,9 +23,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/auth/oauth2adapt
  
 ----------
 Module: cloud.google.com/go/compute
-Version: v1.74.1
+Version: v1.75.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.74.1/compute/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.75.0/compute/LICENSE
  
 ----------
 Module: cloud.google.com/go/compute/metadata
@@ -299,9 +299,9 @@ License URL: https://github.com/cloudnative-pg/machinery/blob/v0.5.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
-Version: v1.61.0
+Version: v1.62.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.61.0/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.62.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -1175,9 +1175,9 @@ License URL: https://github.com/robfig/cron/blob/bc59245fe10e/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20261104182314-7c69f415636f
+Version: v0.0.0-20261106043618-faa5e4dffda9
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/7c69f415636f/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/faa5e4dffda9/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate

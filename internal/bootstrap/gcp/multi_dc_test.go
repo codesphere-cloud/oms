@@ -499,8 +499,11 @@ var _ = Describe("Multi-DC bootstrap", func() {
 		nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.MatchedBy(func(command string) bool {
 			return strings.HasPrefix(command, "oms install k0s ")
 		})).Run(func(_ *node.Node, _ string, command string) { k0sInstalls = append(k0sInstalls, command) }).Return(nil)
-		nodeClient.EXPECT().RunCommand(mock.Anything, "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil).Twice()
+		nodeClient.EXPECT().RunCommand(mock.Anything, "root", k0sAPIReadyCommand).Return(nil).Twice()
+		nodeClient.EXPECT().RunCommand(mock.Anything, "root", k0sNodeWaitCommand).Return(nil).Twice()
 
+		nodeClient.EXPECT().RunCommand(mock.Anything, "root", "/root/configure-k0s.sh").Return(nil).Twice()
+		nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.MatchedBy(func(command string) bool { return strings.Contains(command, "# Fetch on the connected jumpbox") })).Return(nil).Twice()
 		Expect(bs.EnsureK0s()).To(Succeed())
 		Expect(k0sInstalls).To(HaveExactElements(ContainSubstring("--install-config /etc/codesphere/config-dc2.yaml ")))
 	})

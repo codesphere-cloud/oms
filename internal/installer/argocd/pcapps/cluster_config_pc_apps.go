@@ -6,23 +6,13 @@ package pcapps
 import (
 	"fmt"
 
-	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-// ClusterConfigPcAppsValues hands cluster configuration to ArgoCD after the
-// package removes the legacy TS chart. Older package BOMs retain that chart file,
-// while new BOMs can still contain an image-only entry from chart dependencies.
-func ClusterConfigPcAppsValues(config *files.RootConfig, vault *files.InstallVault, packageBOM *bom.Config) (files.ChartValues, error) {
-	if packageBOM == nil {
-		return nil, nil
-	}
-
-	if _, legacy := packageBOM.Components["cluster-config"].Files["chart"]; legacy {
-		return nil, nil
-	}
-
+// ClusterConfigPcAppsValues supplies registry credentials and component overrides.
+// The packaged chart controls whether the application exists and is enabled.
+func ClusterConfigPcAppsValues(config *files.RootConfig, vault *files.InstallVault) (files.ChartValues, error) {
 	if vault == nil {
 		return nil, fmt.Errorf("vault is required for cluster-config registry credentials")
 	}

@@ -1536,7 +1536,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 		Describe("Valid EnsureFirewallRules", func() {
 			It("creates the base rules and blocks internet egress of all VMs but the jumpbox when airgapped", func() {
 				csEnv.Airgapped = true
-
+				gc.EXPECT().EnsurePrivateGoogleAccess(csEnv.ProjectID, csEnv.Region, csEnv.ProjectID+"-vpc", csEnv.ProjectID+"-"+csEnv.Region+"-subnet").Return(nil)
+				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
+					return r.GetName() == "allow-google-apis-egress" && r.GetPriority() == 800 && slices.Equal(r.GetTargetTags(), []string{"k0s"}) && slices.Equal(r.GetDestinationRanges(), []string{"199.36.153.8/30"}) && slices.Equal(r.GetAllowed()[0].Ports, []string{"443"})
+				})).Return(nil)
 				expectBaseRules()
 				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
 					return r.GetName() == "allow-jumpbox-egress" &&
@@ -1602,7 +1605,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("fails when the egress deny rule creation fails", func() {
 				csEnv.Airgapped = true
-
+				gc.EXPECT().EnsurePrivateGoogleAccess(csEnv.ProjectID, csEnv.Region, csEnv.ProjectID+"-vpc", csEnv.ProjectID+"-"+csEnv.Region+"-subnet").Return(nil)
+				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
+					return r.GetName() == "allow-google-apis-egress" && r.GetPriority() == 800 && slices.Equal(r.GetTargetTags(), []string{"k0s"}) && slices.Equal(r.GetDestinationRanges(), []string{"199.36.153.8/30"}) && slices.Equal(r.GetAllowed()[0].Ports, []string{"443"})
+				})).Return(nil)
 				expectBaseRules()
 				expectRules("allow-jumpbox-egress", "allow-internal-egress")
 				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
@@ -2515,6 +2521,15 @@ var _ = Describe("GCP Bootstrapper", func() {
 			nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 		})
 
+		It("assigns reserved gateway IPs at service creation in both gateway modes", func() {
+			Expect(bs.UpdateInstallConfig()).To(Succeed())
+			gateway := bs.Env.InstallConfig.Cluster.Gateway.Override
+			publicGateway := bs.Env.InstallConfig.Cluster.PublicGateway.Override
+
+			Expect(gateway["gateway"]).To(Equal(map[string]any{"proxy": map[string]any{"service": map[string]any{"loadBalancerIP": csEnv.GatewayIP}}}))
+			Expect(publicGateway["gateway"]).To(Equal(map[string]any{"proxy": map[string]any{"service": map[string]any{"loadBalancerIP": csEnv.PublicGatewayIP}}}))
+			Expect(gateway["ingress-nginx"]).To(Equal(map[string]any{"controller": map[string]any{"service": map[string]any{"loadBalancerIP": csEnv.GatewayIP}}}))
+		})
 		It("serves the applications' charts from a mirrored registry", func() {
 			bs.Env.RegistryType = gcp.RegistryTypeLocalContainer
 			bs.Env.InstallConfig.Registry.Server = "10.0.0.1"
@@ -2572,6 +2587,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			icg.EXPECT().GetSecretFilePath().Return("/etc/codesphere/secrets/prod.vault.yaml").Maybe()
 		})
+
 		Describe("Valid InstallCodesphere", func() {
 			Context("Direct GitHub access", func() {
 				BeforeEach(func() {
@@ -2747,6 +2763,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 	})
 
 	Describe("InstallK0sAndCodesphere", func() {
+		BeforeEach(func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(c string) bool { return strings.Contains(c, "# Fetch on the connected jumpbox") })).Return(nil).Maybe()
+		})
 		var vault *files.InstallVault
 
 		const installCommand = "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -s kubernetes,load-container-images"
@@ -2786,14 +2805,15 @@ var _ = Describe("GCP Bootstrapper", func() {
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download k0s --version v1.31.14+k0s.0").Return(nil)
 		}
 
-		It("given a controller without configured k0s, when Codesphere is installed, then k0s is installed first and configured afterwards", func() {
+		It("given a controller without configured k0s, when Codesphere is installed, then k0s is installed and configured before Codesphere", func() {
 			expectConfigScriptUploaded()
 			expectK0sChecks(errK0sNotConfigured)
 			expectK0sDownloaded()
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(isK0sInstall)).Return(nil)
-			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil)
-			install := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand).Return(nil)
-			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(nil).NotBefore(install.Call)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", k0sAPIReadyCommand).Return(nil).Once()
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", k0sNodeWaitCommand).Return(nil)
+			configured := nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand).Return(nil).NotBefore(configured.Call)
 
 			Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
 		})
@@ -2802,10 +2822,13 @@ var _ = Describe("GCP Bootstrapper", func() {
 			expectConfigScriptUploaded()
 			expectK0sChecks(nil, nil, nil)
 
-			wait := nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", k0sAPIReadyCommand).Return(nil).Once()
+			wait := nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", k0sNodeWaitCommand).Return(nil)
 			install := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand).Return(nil)
 			install.NotBefore(wait.Call)
-			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(nil).NotBefore(install.Call)
+
+			configured := nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(nil)
+			wait.NotBefore(configured.Call)
 
 			Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
 		})
@@ -2975,6 +2998,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 	Describe("EnsureK0s", func() {
 		BeforeEach(func() {
+			nodeClient.EXPECT().RunCommand(mock.Anything, "root", "/root/configure-k0s.sh").Return(nil).Maybe()
 			csEnv.K0sVersion = "v1.31.14+k0s.0"
 			csEnv.Airgapped = true
 
@@ -2991,9 +3015,14 @@ var _ = Describe("GCP Bootstrapper", func() {
 			nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
 			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.Anything).
-				Run(func(_ *node.Node, _ string, command string) { jumpboxCommands = append(jumpboxCommands, command) }).
+				Run(func(_ *node.Node, _ string, command string) {
+					if strings.HasPrefix(command, "oms ") {
+						jumpboxCommands = append(jumpboxCommands, command)
+					}
+				}).
 				Return(nil)
-			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", k0sAPIReadyCommand).Return(nil).Once()
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", k0sNodeWaitCommand).Return(nil)
 
 			Expect(bs.EnsureK0s()).To(Succeed())
 			Expect(jumpboxCommands).To(Equal([]string{
@@ -3015,7 +3044,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 				nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.Anything).
 					RunAndReturn(func(_ *node.Node, _ string, command string) error {
-						jumpboxCommands = append(jumpboxCommands, command)
+						if strings.HasPrefix(command, "oms ") {
+							jumpboxCommands = append(jumpboxCommands, command)
+						}
 						if strings.HasPrefix(command, prefix) {
 							return fmt.Errorf("step error")
 						}
@@ -3049,9 +3080,14 @@ var _ = Describe("GCP Bootstrapper", func() {
 			nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
 			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.Anything).
-				Run(func(_ *node.Node, _ string, command string) { jumpboxCommands = append(jumpboxCommands, command) }).
+				Run(func(_ *node.Node, _ string, command string) {
+					if strings.HasPrefix(command, "oms ") {
+						jumpboxCommands = append(jumpboxCommands, command)
+					}
+				}).
 				Return(nil)
-			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", k0sAPIReadyCommand).Return(nil).Once()
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", k0sNodeWaitCommand).Return(nil)
 
 			Expect(bs.EnsureK0s()).To(Succeed())
 			Expect(jumpboxCommands).To(Equal([]string{
@@ -3062,22 +3098,49 @@ var _ = Describe("GCP Bootstrapper", func() {
 	})
 
 	Describe("WaitForK0sNodes", func() {
-		const command = "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m"
+		const command = k0sNodeWaitCommand
 
 		It("waits for every node before installing cluster components", func() {
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", k0sAPIReadyCommand).Return(nil).Once()
 			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", command).Return(nil)
 
 			Expect(bs.WaitForK0sNodes()).To(Succeed())
 		})
 
 		It("reports nodes that fail to become ready", func() {
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", k0sAPIReadyCommand).Return(nil).Once()
 			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", command).Return(fmt.Errorf("timeout"))
 
 			Expect(bs.WaitForK0sNodes()).To(MatchError(ContainSubstring("k0s nodes did not become ready")))
 		})
+		It("retries the controller API after restart before checking node readiness", func() {
+			refused := nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", k0sAPIReadyCommand).Return(errK0sNotConfigured).Once()
+			ready := nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", k0sAPIReadyCommand).Return(nil).Once().NotBefore(refused)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", command).Return(nil).Once().NotBefore(ready)
+			started := bs.Time.Now()
+			Expect(bs.WaitForK0sNodes()).To(Succeed())
+			Expect(bs.Time.Now().Sub(started)).To(Equal(5 * time.Second))
+		})
+		It("bounds API startup retries and keeps the last failure in the error", func() {
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", k0sAPIReadyCommand).Return(fmt.Errorf("connection refused: %w", errK0sNotConfigured))
+			started := bs.Time.Now()
+			err := bs.WaitForK0sNodes()
+			Expect(err).To(MatchError(ContainSubstring("k0s API did not become ready within 5m0s")))
+			Expect(err).To(MatchError(ContainSubstring("connection refused")))
+			Expect(bs.Time.Now().Sub(started)).To(Equal(5 * time.Minute))
+		})
+		It("reports SSH failures without retrying or attempting a node wait", func() {
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", k0sAPIReadyCommand).Return(fmt.Errorf("failed to get client: SSH authentication failed")).Once()
+			started := bs.Time.Now()
+			Expect(bs.WaitForK0sNodes()).To(MatchError(ContainSubstring("SSH authentication failed")))
+			Expect(bs.Time.Now()).To(Equal(started))
+		})
 	})
 
 	Describe("RunK0sConfigScript", func() {
+		BeforeEach(func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(c string) bool { return strings.Contains(c, "# Fetch on the connected jumpbox") })).Return(nil).Maybe()
+		})
 		It("runs the script on the first control plane node", func() {
 			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(nil)
 
@@ -3090,6 +3153,30 @@ var _ = Describe("GCP Bootstrapper", func() {
 			err := bs.RunK0sConfigScript()
 			Expect(err).To(MatchError(ContainSubstring("failed to run k0s config script")))
 			Expect(err).To(MatchError(ContainSubstring("exit status 1")))
+		})
+	})
+
+	Describe("cloud controller staging", func() {
+		It("stages airgap dependencies from the jumpbox before enabling the node cloud provider", func() {
+			csEnv.Airgapped = true
+
+			var cloudCommand string
+
+			staged := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.Anything).Run(func(_ *node.Node, _ string, c string) { cloudCommand = c }).Return(nil).Once()
+			nodeClient.EXPECT().RunCommand(mock.Anything, "root", "/root/configure-k0s.sh").Return(nil).NotBefore(staged).Once()
+			Expect(bs.RunK0sConfigScript()).To(Succeed())
+			Expect(cloudCommand).To(ContainSubstring("curl --fail --location --retry 3 https://raw.githubusercontent.com/"))
+			Expect(cloudCommand).To(ContainSubstring("podman save --format docker-archive"))
+			Expect(cloudCommand).To(ContainSubstring("k0s ctr -n k8s.io images import -"))
+			Expect(cloudCommand).To(ContainSubstring("imagePullPolicy: IfNotPresent"))
+			Expect(cloudCommand).To(ContainSubstring("hostNetwork: true"))
+			Expect(cloudCommand).To(ContainSubstring("dnsPolicy: Default"))
+			Expect(cloudCommand).To(ContainSubstring("create configmap cloud-config --from-file=cloud.conf -n kube-system --dry-run=client -o yaml"))
+			Expect(cloudCommand).NotTo(ContainSubstring("patch svc"))
+		})
+		It("stops before changing node services when jumpbox staging fails", func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.Anything).Return(fmt.Errorf("image download failed")).Once()
+			Expect(bs.RunK0sConfigScript()).To(MatchError(ContainSubstring("failed to configure cloud controller from jumpbox")))
 		})
 	})
 
@@ -3118,12 +3205,12 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})
 
 				It("given a natively installed k0s, when the script is generated, then it calls the k0s binary on the PATH", func() {
-					Expect(script).To(ContainSubstring(`KUBECTL="k0s kubectl"`))
+					Expect(script).To(ContainSubstring(`alias kubectl="k0s kubectl"`))
 					Expect(script).NotTo(ContainSubstring("/etc/codesphere/deps/kubernetes"))
 				})
 
 				It("given any failing command, when the script runs, then it exits with an error", func() {
-					Expect(script).To(HavePrefix("#!/bin/bash\n\nset -eo pipefail\n"))
+					Expect(script).To(HavePrefix("#!/bin/bash\nset -eo pipefail\n"))
 					Expect(script).NotTo(ContainSubstring("set +e"))
 				})
 
@@ -3132,8 +3219,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 					Expect(script).To(ContainSubstring("systemctl restart k0scontroller; }"))
 				})
 
-				It("given a rerun on an existing cluster, when the script runs, then the cloud-config configmap is applied instead of created", func() {
-					Expect(script).To(ContainSubstring("create configmap cloud-config --from-file=cloud.conf -n kube-system --dry-run=client -o yaml | $KUBECTL apply -f -"))
+				It("keeps cluster resources and internet downloads out of the node script", func() {
+					Expect(script).NotTo(ContainSubstring("https://"))
+					Expect(script).NotTo(ContainSubstring("patch svc"))
+					Expect(script).NotTo(ContainSubstring("cloud-config"))
 				})
 			})
 		})

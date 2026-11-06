@@ -25,7 +25,7 @@ replace (
 
 require (
 	cloud.google.com/go/artifactregistry v1.28.1
-	cloud.google.com/go/compute v1.74.1
+	cloud.google.com/go/compute v1.75.0
 	cloud.google.com/go/iam v1.15.1
 	cloud.google.com/go/resourcemanager v1.18.1
 	cloud.google.com/go/serviceusage v1.16.1
@@ -34,7 +34,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/argoproj/argo-cd/v3 v3.5.7
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
-	github.com/codesphere-cloud/cs-go v1.61.0
+	github.com/codesphere-cloud/cs-go v1.62.0
 	github.com/creativeprojects/go-selfupdate v1.7.0
 	github.com/distribution/reference v0.6.0
 	github.com/getsops/sops/v3 v3.13.3
@@ -47,7 +47,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.34.0
 	github.com/onsi/gomega v1.44.0
 	github.com/pkg/sftp v1.13.12
-	github.com/rook/rook/pkg/apis v0.0.0-20261104182314-7c69f415636f
+	github.com/rook/rook/pkg/apis v0.0.0-20261106043618-faa5e4dffda9
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v3 v3.0.6
