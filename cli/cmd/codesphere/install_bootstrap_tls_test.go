@@ -28,7 +28,7 @@ var _ = Describe("bootstrap TLS install config compatibility", func() {
 		certificate, key, err := cert.GenerateSelfSignedCertKey("cs.example.com", nil, []string{"*.cs.example.com", "ws.example.com", "*.ws.example.com"})
 		Expect(err).NotTo(HaveOccurred())
 
-		config := []byte("codesphere:\n  domain: cs.example.com\n  workspaceHostingBaseDomain: ws.example.com\n  customCertificate:\n    cert: old-certificate\n    key: old-key\n  certIssuer:\n    type: self-signed\n    acme:\n      enabled: false\n      email: test@example.com\n      server: https://acme-staging-v02.api.letsencrypt.org/directory\n")
+		config := []byte("codesphere:\n  domain: cs.example.com\n  workspaceHostingBaseDomain: ws.example.com\n  customCertificate:\n    cert: old-certificate\n    key: '{{ secret \"customCertificateKey\" \"file.content\" }}'\n  certIssuer:\n    type: self-signed\n    acme:\n      enabled: false\n      email: test@example.com\n      server: https://acme-staging-v02.api.letsencrypt.org/directory\n")
 		secrets := &files.InstallVault{}
 
 		opts := installer.BootstrapTLSOptions{ConfigPath: "config.yaml", DNSProject: "dns-project", CacheDir: "/root/oms-acme"}
@@ -64,5 +64,9 @@ var _ = Describe("bootstrap TLS install config compatibility", func() {
 		Expect(yaml.Unmarshal(rendered, &cfg)).To(Succeed())
 		Expect(cfg.Codesphere.CustomCertificate.Cert).To(Equal(string(certificate)))
 		Expect(cfg.Codesphere.CustomCertificate.Key).To(BeEmpty())
+
+		Expect(installer.ResolveLegacyCertificateKey(raw, vault.NewVaultTemplatingSecretStore(secrets))).To(Succeed())
+		certificateValues := raw["codesphere"].(map[string]any)["customCertificate"].(map[string]any)
+		Expect(certificateValues["key"]).To(Equal(string(key)))
 	})
 })
