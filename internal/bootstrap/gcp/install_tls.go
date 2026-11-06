@@ -56,9 +56,11 @@ func (v bootstrapTLSVault) Load() (*files.InstallVault, error) { return v.manage
 
 func (v bootstrapTLSVault) Save(secrets *files.InstallVault) error {
 	v.manager.SetVault(secrets)
+
 	if err := v.manager.WriteVault(v.path, true); err != nil {
 		return fmt.Errorf("saving local certificate vault: %w", err)
 	}
+
 	return nil
 }
 
