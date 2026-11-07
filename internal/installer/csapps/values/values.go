@@ -51,7 +51,7 @@ func Build(cfg *files.RootConfig, b *bom.Config) (map[string]any, error) {
 		return nil, fmt.Errorf("failed to read the release image tag: %w", err)
 	}
 
-	values := mergeOverride(map[string]any{"global": global}, cfg.Codesphere.Override)
+	values := MergeOverride(map[string]any{"global": global}, cfg.Codesphere.Override)
 
 	// The image tag wins over the override to match the old pc-installer. Likely reason: the installer
 	// only mirrors the BOM's images, so a tag from the override may not exist in the registry.
