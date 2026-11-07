@@ -65,6 +65,8 @@ type InstallCodesphereOpts struct {
 	PCAppsValues         []string
 	// Name of the k8s secret containing the entire vault; source for ESO.
 	VaultSecretName string
+	// InstallerConfig is the merged install config decoded generically, set by prepareInstallConfig.
+	InstallerConfig map[string]any
 }
 
 func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
@@ -329,6 +331,7 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 
 	effectiveOpts := *opts
 	effectiveOpts.ConfigPath = mergedPath
+	effectiveOpts.InstallerConfig = merged
 	effectiveOpts.Configs = append([]string(nil), configFiles...)
 
 	return &effectiveOpts, cfg, cleanup, nil
