@@ -32,11 +32,13 @@ require (
 	filippo.io/age v1.3.2
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/Masterminds/semver/v3 v3.5.0
+	github.com/argoproj/argo-cd/gitops-engine v0.7.1-0.20250908182407-97ad5b59a627
 	github.com/argoproj/argo-cd/v3 v3.5.7
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
 	github.com/codesphere-cloud/cs-go v1.62.1
 	github.com/creativeprojects/go-selfupdate v1.7.0
 	github.com/distribution/reference v0.6.0
+	github.com/evanphx/json-patch/v5 v5.9.11
 	github.com/getsops/sops/v3 v3.13.3
 	github.com/go-logr/stdr v1.2.2
 	github.com/golang-jwt/jwt/v5 v5.3.1
@@ -144,7 +146,6 @@ require (
 	github.com/alingse/nilnesserr v0.2.0 // indirect
 	github.com/anchore/go-macholibre v0.1.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
-	github.com/argoproj/argo-cd/gitops-engine v0.7.1-0.20250908182407-97ad5b59a627 // indirect
 	github.com/argoproj/pkg/v2 v2.0.1 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/ashanbrown/forbidigo/v2 v2.3.1 // indirect
@@ -262,7 +263,6 @@ require (
 	github.com/envoyproxy/go-control-plane/envoy v1.39.1-0.20260819172001-e6e3fd93e4be // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.3.3 // indirect
 	github.com/ettle/strcase v0.2.0 // indirect
-	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20210407135951-1de76d718b3f // indirect
 	github.com/extism/go-sdk v1.7.1 // indirect
 	github.com/fatih/camelcase v1.0.0 // indirect
