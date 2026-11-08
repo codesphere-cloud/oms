@@ -74,6 +74,8 @@ type LocalBootstrapper struct {
 	ageRecipient string
 	// ageKeyPath is the filesystem path to the age private key file.
 	ageKeyPath string
+	// envAgeKeyFile is the key file materialized from SOPS_AGE_KEY; removed when Bootstrap returns.
+	envAgeKeyFile string
 	// helmClient installs prerequisite operators before the dependencies phase.
 	helmClient         installer.HelmClient
 	installerBundleDir string
@@ -100,6 +102,7 @@ type CodesphereEnvironment struct {
 	ExistingConfigUsed   bool                `json:"-"`
 	InstallConfigPath    string              `json:"-"`
 	SecretsFilePath      string              `json:"-"`
+	AgeKey               string              `json:"-"`
 	InstallConfig        *files.RootConfig   `json:"-"`
 	Vault                *files.InstallVault `json:"-"`
 	K0s                  bool                `json:"-"`
@@ -125,8 +128,11 @@ func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kube
 	}
 }
 
-func (b *LocalBootstrapper) Bootstrap() error {
-	err := b.stlog.Step("Ensure install config", b.EnsureInstallConfig)
+// Bootstrap prepares the local cluster and runs the Codesphere installer against it.
+func (b *LocalBootstrapper) Bootstrap() (err error) {
+	defer func() { err = errors.Join(err, b.removeEnvAgeKeyFile()) }()
+
+	err = b.stlog.Step("Ensure install config", b.EnsureInstallConfig)
 	if err != nil {
 		return fmt.Errorf("failed to ensure install config: %w", err)
 	}
@@ -570,7 +576,8 @@ func (b *LocalBootstrapper) loadVaultForConfigTemplating() error {
 	if !b.fw.Exists(b.Env.SecretsFilePath) {
 		return nil
 	}
-	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+
+	if err := b.icg.LoadVaultFromFileOrCreate(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file for config templating: %w", err)
 	}
 	return nil
@@ -581,7 +588,8 @@ func (b *LocalBootstrapper) EnsureSecrets() error {
 		b.Env.Vault = b.icg.GetVault()
 		return nil
 	}
-	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+
+	if err := b.icg.LoadVaultFromFileOrCreate(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file: %w", err)
 	}
 	b.Env.Vault = b.icg.GetVault()
@@ -589,15 +597,42 @@ func (b *LocalBootstrapper) EnsureSecrets() error {
 }
 
 func (b *LocalBootstrapper) ResolveAgeKey() error {
-	recipient, keyPath, err := sops.ResolveAgeKey("", filepath.Dir(b.Env.SecretsFilePath))
+	dir := filepath.Dir(b.Env.SecretsFilePath)
+
+	recipient, keyPath, err := sops.ResolveAgeKey(b.Env.AgeKey, dir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve age key: %w", err)
 	}
+
+	// An empty path means the key came from SOPS_AGE_KEY, but the installer needs a key file.
+	if keyPath == "" {
+		keyPath, err = sops.MaterializeEnvAgeKey(b.fw, dir)
+		if err != nil {
+			return fmt.Errorf("failed to write the age key for the installer: %w", err)
+		}
+
+		b.envAgeKeyFile = keyPath
+	}
+
 	b.ageRecipient = recipient
 	b.ageKeyPath = keyPath
-	if keyPath != "" {
-		fmt.Printf("Using age key: %s\n", keyPath)
+	fmt.Printf("Using age key: %s\n", keyPath)
+
+	return nil
+}
+
+func (b *LocalBootstrapper) removeEnvAgeKeyFile() error {
+	keyPath := b.envAgeKeyFile
+	if keyPath == "" {
+		return nil
 	}
+
+	b.envAgeKeyFile = ""
+
+	if err := b.fw.Remove(keyPath); err != nil {
+		return fmt.Errorf("failed to remove materialized age key file %s: %w", keyPath, err)
+	}
+
 	return nil
 }
 

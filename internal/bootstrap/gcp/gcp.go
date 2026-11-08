@@ -22,6 +22,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/testuser"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -105,7 +106,8 @@ type GCPBootstrapper struct {
 	Time      util.Time
 	GCPClient GCPClientManager
 	// Environment
-	Env *CodesphereEnvironment
+	Env               *CodesphereEnvironment
+	vaultTransferCopy string
 	// SSH command runner
 	NodeClient         node.NodeClient
 	PortalClient       portal.Portal
@@ -228,6 +230,8 @@ type CodesphereEnvironment struct {
 	InstallVaultPath          string              `json:"-"`
 	InstallVaultPrivKey       string              `json:"-"`
 	SecretsFilePath           string              `json:"-"`
+	VaultType                 vault.Type          `json:"-"`
+	AgeKey                    string              `json:"-"`
 	InstallConfig             *files.RootConfig   `json:"-"`
 	Secrets                   *files.InstallVault `json:"-"`
 
