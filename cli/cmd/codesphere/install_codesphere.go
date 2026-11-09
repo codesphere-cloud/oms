@@ -287,6 +287,11 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 		}
 		merged = intutil.DeepMergeMaps(merged, partial)
 	}
+	// The PC installer reads the merged file, not cfg, so a legacy key has to move in the map.
+	if err := files.MigrateLegacyBarmanCloudPluginKey(merged); err != nil {
+		cleanup()
+		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to migrate merged config.yaml: %w", err)
+	}
 
 	if opts.Registry != "" {
 		registry, err := installer.NormalizeRegistry(opts.Registry)
