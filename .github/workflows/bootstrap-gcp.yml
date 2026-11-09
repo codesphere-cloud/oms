@@ -203,8 +203,6 @@ jobs:
             --azure-devops-app-client-secret="$AZURE_DEVOPS_APP_CLIENT_SECRET" \
             --registry-user="$REGISTRY_USER" \
             --github-pat="$REGISTRY_PAT" \
-            --github-team-org=codesphere-cloud \
-            --github-team-slug=dev \
             --openbao-uri="$OPENBAO_URI" \
             --openbao-password="$OPENBAO_PASSWORD" \
             --central-otel-username="$CENTRAL_OTEL_USERNAME" \
