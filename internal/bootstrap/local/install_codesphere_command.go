@@ -12,7 +12,6 @@ import (
 	cmdutil "github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
-	"github.com/spf13/cobra"
 )
 
 // RunInstallCodesphereCommand runs the dependency and platform phases after
@@ -69,15 +68,12 @@ func (b *LocalBootstrapper) RunInstallCodesphereCommand() (err error) {
 	}
 
 	opts := b.localInstallCodesphereOptions(bundleDir, configPath, vaultPath, privKeyPath, configDir)
-	command := &cobra.Command{}
-	command.SetContext(b.ctx)
-
 	commandEnv := env.NewEnv()
 
 	dependencies := &codesphere.InstallCodesphereDepenciesCmd{Opts: opts, Env: commandEnv}
 
 	if err := b.stlog.Substep("Install dependencies", func() error {
-		return dependencies.RunE(command, nil)
+		return dependencies.Run(b.ctx)
 	}); err != nil {
 		return fmt.Errorf("oms install codesphere dependencies failed: %w", err)
 	}
@@ -85,7 +81,7 @@ func (b *LocalBootstrapper) RunInstallCodesphereCommand() (err error) {
 	platform := &codesphere.InstallCodespherePlatformCmd{Opts: opts, Env: commandEnv}
 
 	if err := b.stlog.Substep("Install Codesphere", func() error {
-		return platform.RunE(command, nil)
+		return platform.Run(b.ctx)
 	}); err != nil {
 		return fmt.Errorf("oms install codesphere platform failed: %w", err)
 	}

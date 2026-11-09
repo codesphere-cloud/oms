@@ -12,21 +12,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// CancelOnSignal wraps a RunE so that the command context is cancelled on SIGINT or SIGTERM.
-// Only wrap commands that observe cmd.Context(): signals are intercepted while run executes,
+// CancelOnSignal adapts run to a Cobra RunE whose context is cancelled on SIGINT or SIGTERM.
+// Only use it for runs that observe ctx: signals are intercepted while run executes,
 // and default handling is restored after the first signal so a second one terminates the process.
-func CancelOnSignal(run func(cmd *cobra.Command, args []string) error) func(cmd *cobra.Command, args []string) error {
-	return func(cmd *cobra.Command, args []string) error {
-		parent := cmd.Context()
-
-		ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
+func CancelOnSignal(run func(ctx context.Context) error) func(cmd *cobra.Command, args []string) error {
+	return func(cmd *cobra.Command, _ []string) error {
+		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		defer cmd.SetContext(parent)
 
 		context.AfterFunc(ctx, stop)
 
-		cmd.SetContext(ctx)
-
-		return run(cmd, args)
+		return run(ctx)
 	}
 }

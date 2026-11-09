@@ -68,14 +68,14 @@ type InstallCodesphereOpts struct {
 	VaultSecretName string
 }
 
-func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
+// Run installs all Codesphere phases selected by the options; cancelling ctx stops the installation.
+func (c *InstallCodesphereCmd) Run(ctx context.Context) error {
 	if c.Opts.LocalComponents {
 		return fmt.Errorf("--local-components requires install codesphere dependencies or install codesphere platform")
 	}
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
-	ctx := cmd.Context()
 	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err
@@ -178,7 +178,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 
 	util.AddCmd(install, codesphere.cmd)
 
-	codesphere.cmd.RunE = util.CancelOnSignal(codesphere.RunE)
+	codesphere.cmd.RunE = util.CancelOnSignal(codesphere.Run)
 
 	AddInstallCodesphereInfraCmd(codesphere.cmd, codesphere.Opts)
 	AddInstallCodesphereDepenciesCmd(codesphere.cmd, codesphere.Opts)

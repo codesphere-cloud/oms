@@ -27,7 +27,8 @@ type InstallCodespherePlatformCmd struct {
 	Env  env.Env
 }
 
-func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) error {
+// Run installs the Codesphere platform phase; cancelling ctx stops the installation.
+func (c *InstallCodespherePlatformCmd) Run(ctx context.Context) error {
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
@@ -41,11 +42,11 @@ func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) erro
 	}
 	defer cleanup()
 
-	if err := ensureCodespherePackageForVersion(cmd.Context(), effectiveOpts, cfg, c.Env); err != nil {
+	if err := ensureCodespherePackageForVersion(ctx, effectiveOpts, cfg, c.Env); err != nil {
 		return err
 	}
 
-	return installCodespherePlatform(cmd.Context(), effectiveOpts, cfg, c.Env)
+	return installCodespherePlatform(ctx, effectiveOpts, cfg, c.Env)
 }
 
 func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, env env.Env) error {
@@ -137,5 +138,5 @@ func AddInstallCodespherePlatformCmd(codesphere *cobra.Command, opts *InstallCod
 	}
 
 	util.AddCmd(codesphere, platform.cmd)
-	platform.cmd.RunE = util.CancelOnSignal(platform.RunE)
+	platform.cmd.RunE = util.CancelOnSignal(platform.Run)
 }
