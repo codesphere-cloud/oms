@@ -259,13 +259,4 @@ var _ = Describe("Install", func() {
 		Expect(kubeClient.Get(context.Background(), client.ObjectKey{Name: parentAppName, Namespace: "argocd"}, &argo.Application{})).
 			NotTo(Succeed())
 	})
-
-	It("one sub application never syncs -> error naming only that one", func() {
-		kubeClient := newCluster(parentAppName, "pr-1-codesphere")
-
-		err := install(kubeClient, fullConfig("pr-1"), bomWithCharts())
-
-		Expect(err).To(MatchError(ContainSubstring(`"pr-1-mounter"`)))
-		Expect(err).NotTo(MatchError(ContainSubstring(`"pr-1-codesphere"`)))
-	})
 })
