@@ -62,9 +62,9 @@ func (i *Image) PushImage(tag string) error {
 func (i *Image) runCommand(cmdDir string, args ...string) error {
 	var cmd *exec.Cmd
 	if isCommandAvailable("docker") {
-		cmd = exec.CommandContext(i.ctx, "docker", args...)
+		cmd = CommandContext(i.ctx, "docker", args...)
 	} else if isCommandAvailable("podman") {
-		cmd = exec.CommandContext(i.ctx, "podman", args...)
+		cmd = CommandContext(i.ctx, "podman", args...)
 	} else {
 		return fmt.Errorf("neither 'docker' nor 'podman' command is available")
 	}

@@ -4,6 +4,7 @@
 package installer
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,7 +35,7 @@ func TestLocalComponentsUseSharedStepSelection(t *testing.T) {
 	}
 
 	config := files.RootConfig{Operations: &files.OperationsConfig{Skip: []string{"codesphere"}}}
-	if err := ci.runLocalComponents(NewPackage(dir, bundle), config); err != nil {
+	if err := ci.runLocalComponents(context.Background(), NewPackage(dir, bundle), config); err != nil {
 		t.Fatal(err)
 	}
 

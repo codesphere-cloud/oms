@@ -52,7 +52,6 @@ func installCodesphereInfra(ctx context.Context, opts *InstallCodesphereOpts, en
 	im := system.NewImage(ctx)
 
 	ci := &installer.CodesphereInstaller{
-		Context:          ctx,
 		ConfigPath:       opts.ConfigPath,
 		VaultPath:        opts.Vault,
 		PrivKey:          opts.PrivKey,
@@ -63,7 +62,7 @@ func installCodesphereInfra(ctx context.Context, opts *InstallCodesphereOpts, en
 		DirectConnection: opts.DirectConnection,
 		AutoApprove:      opts.AutoApprove,
 	}
-	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
+	if err := ci.Install(ctx, pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install infra: %w", err)
 	}
 	return nil

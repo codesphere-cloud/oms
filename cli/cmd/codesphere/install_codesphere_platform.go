@@ -88,9 +88,8 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		LocalComponents:   opts.LocalComponents,
 		LocalConfigDir:    opts.LocalConfigDir,
 		SkipImageBuilding: opts.LocalComponents,
-		Context:           ctx,
 	}
-	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
+	if err := ci.Install(ctx, pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install platform: %w", err)
 	}
 	return nil
