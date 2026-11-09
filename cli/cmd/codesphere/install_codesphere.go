@@ -84,6 +84,7 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	if err := ensureCodespherePackageForVersion(effectiveOpts, cfg, c.Env); err != nil {
 		return err
 	}
+	laterOpts := laterPhaseOpts(effectiveOpts)
 
 	infraInstaller := &installer.CodesphereInstaller{
 		SkipSteps:    c.Opts.SkipSteps,
@@ -91,12 +92,12 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 		Verbose:      c.Opts.Verbose,
 	}
 	dependenciesInstaller := &installer.CodesphereInstaller{
-		SkipSteps:    append(sharedInstallCodesphereSteps(), c.Opts.SkipSteps...),
+		SkipSteps:    laterOpts.SkipSteps,
 		AllowedSteps: installer.DependenciesSteps,
 		Verbose:      c.Opts.Verbose,
 	}
 	platformInstaller := &installer.CodesphereInstaller{
-		SkipSteps:    append(sharedInstallCodesphereSteps(), c.Opts.SkipSteps...),
+		SkipSteps:    laterOpts.SkipSteps,
 		AllowedSteps: installer.PlatformSteps,
 		Verbose:      c.Opts.Verbose,
 	}
@@ -112,7 +113,7 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	}
 
 	if dependenciesInstaller.HasExecutableSteps(cfg) || !installer.IsStepSkipped(cfg, c.Opts.SkipSteps, installer.ArgoCDStep) {
-		if err := installCodesphereDepencies(ctx, laterPhaseOpts(effectiveOpts), cfg, c.Env); err != nil {
+		if err := installCodesphereDepencies(ctx, laterOpts, cfg, c.Env); err != nil {
 			return err
 		}
 	}
@@ -121,7 +122,7 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	return installCodespherePlatform(ctx, laterPhaseOpts(effectiveOpts), cfg, c.Env)
+	return installCodespherePlatform(ctx, laterOpts, cfg, c.Env)
 }
 
 func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
