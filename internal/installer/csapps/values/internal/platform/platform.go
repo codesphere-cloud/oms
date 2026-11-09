@@ -35,6 +35,13 @@ var serviceImages = map[string]string{
 	"workspace_service":  "workspace-service",
 }
 
+// optionalServices may be missing from the BOM.
+// error-page-server moved to pc-applications,
+// and a package whose chart no longer deploys it leaves out its image.
+var optionalServices = map[string]bool{
+	"error_page_server": true,
+}
+
 // Platform are the images of the services and platform components.
 type Platform struct {
 	Services               Services               `yaml:"services"`
@@ -93,6 +100,10 @@ func servicesValues(imgs images.Images) (Services, error) {
 	var errs []error
 
 	for _, service := range slices.Sorted(maps.Keys(serviceImages)) {
+		if optionalServices[service] && !imgs.Has(serviceImages[service]) {
+			continue
+		}
+
 		image, err := imgs.Name(serviceImages[service])
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to resolve the %s image: %w", service, err))
