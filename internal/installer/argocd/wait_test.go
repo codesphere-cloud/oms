@@ -223,3 +223,67 @@ var _ = Describe("WaitForAppFreshlySyncedAndHealthy", func() {
 		Expect(err).NotTo(MatchError(ContainSubstring("timed out")))
 	})
 })
+
+var _ = Describe("WaitForSubAppsFreshlySyncedAndHealthy", func() {
+	const parentName = "pr-1-cs-applications"
+
+	subAppResource := func(name string) argov1alpha1.ResourceStatus {
+		return argov1alpha1.ResourceStatus{Group: "argoproj.io", Kind: "Application", Namespace: "argocd", Name: name}
+	}
+
+	application := func(name string, healthStatus health.HealthStatusCode, resources ...argov1alpha1.ResourceStatus) *argov1alpha1.Application {
+		source := argov1alpha1.ApplicationSource{RepoURL: "ghcr.io/codesphere-cloud/charts", Chart: name, TargetRevision: "1.0.0"}
+
+		return &argov1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "argocd"},
+			Spec:       argov1alpha1.ApplicationSpec{Source: &source},
+			Status: argov1alpha1.ApplicationStatus{
+				Health:    argov1alpha1.AppHealthStatus{Status: healthStatus},
+				Sync:      argov1alpha1.SyncStatus{Status: argov1alpha1.SyncStatusCodeSynced, ComparedTo: argov1alpha1.ComparedTo{Source: source}},
+				Resources: resources,
+			},
+		}
+	}
+
+	parent := application(
+		parentName,
+		health.HealthStatusHealthy,
+		argov1alpha1.ResourceStatus{Kind: "ConfigMap", Namespace: "argocd", Name: "pr-1-config"},
+		subAppResource("pr-1-codesphere"),
+		subAppResource("pr-1-mounter"),
+	)
+
+	wait := func(objects ...client.Object) error {
+		scheme := runtime.NewScheme()
+		Expect(argov1alpha1.AddToScheme(scheme)).To(Succeed())
+		kubeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+
+		return argocd.WaitForSubAppsFreshlySyncedAndHealthy(ctx, kubeClient, parentName)
+	}
+
+	It("all sub applications synced and healthy -> done", func() {
+		Expect(wait(
+			parent,
+			application("pr-1-codesphere", health.HealthStatusHealthy),
+			application("pr-1-mounter", health.HealthStatusHealthy),
+		)).To(Succeed())
+	})
+
+	It("one sub application degraded -> error naming only that one", func() {
+		err := wait(
+			parent,
+			application("pr-1-codesphere", health.HealthStatusHealthy),
+			application("pr-1-mounter", health.HealthStatusDegraded),
+		)
+
+		Expect(err).To(MatchError(ContainSubstring(`"pr-1-mounter"`)))
+		Expect(err).NotTo(MatchError(ContainSubstring(`"pr-1-codesphere"`)))
+	})
+
+	It("parent missing -> read error", func() {
+		Expect(wait()).To(MatchError(ContainSubstring(`failed to read ArgoCD Application "pr-1-cs-applications"`)))
+	})
+})

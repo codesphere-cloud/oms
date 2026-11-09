@@ -49,6 +49,7 @@ type AppOfApps struct {
 	namespace      string // destination namespace of the app-of-apps
 	valuesFiles    []string
 	valuesOverride map[string]interface{}
+	finalizers     []string
 	client         client.Client
 }
 
@@ -60,6 +61,8 @@ type AppOfAppsConfig struct {
 	Namespace      string // destination namespace of the app-of-apps
 	ValuesFiles    []string
 	ValuesOverride map[string]interface{}
+	// DeleteResourcesWithApp makes deleting the Application delete everything ArgoCD deployed from it.
+	DeleteResourcesWithApp bool
 }
 
 // NewAppOfAppsFromBom creates an installer for the chart in the BOM component.
@@ -88,6 +91,11 @@ func NewAppOfAppsFromBom(c client.Client, bomConfig *bom.Config, cfg AppOfAppsCo
 		return nil, fmt.Errorf("%s chart not found in BOM", cfg.Component)
 	}
 
+	var finalizers []string
+	if cfg.DeleteResourcesWithApp {
+		finalizers = []string{argov1alpha1.ResourcesFinalizerName}
+	}
+
 	return &AppOfApps{
 		name:           cfg.Name,
 		chart:          path.Base(reference.Path(chart)),
@@ -96,6 +104,7 @@ func NewAppOfAppsFromBom(c client.Client, bomConfig *bom.Config, cfg AppOfAppsCo
 		namespace:      cfg.Namespace,
 		valuesFiles:    cfg.ValuesFiles,
 		valuesOverride: cfg.ValuesOverride,
+		finalizers:     finalizers,
 		client:         c,
 	}, nil
 }
@@ -163,8 +172,9 @@ func (p *AppOfApps) createApplication(repoURL string, vals map[string]interface{
 			Kind:       argov1alpha1.ApplicationSchemaGroupVersionKind.Kind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      p.name,
-			Namespace: ociCredentialNamespace,
+			Name:       p.name,
+			Namespace:  ociCredentialNamespace,
+			Finalizers: p.finalizers,
 		},
 		Spec: argov1alpha1.ApplicationSpec{
 			Project: argoAppProject,
@@ -227,6 +237,10 @@ func (p *AppOfApps) Install(ctx context.Context) error {
 	if _, err := controllerutil.CreateOrUpdate(ctx, p.client, current, func() error {
 		current.TypeMeta = app.TypeMeta
 		current.Spec = app.Spec
+		for _, finalizer := range app.Finalizers {
+			controllerutil.AddFinalizer(current, finalizer)
+		}
+
 		return nil
 	}); err != nil {
 		return fmt.Errorf("applying ArgoCD Application %q failed: %w", p.name, err)
