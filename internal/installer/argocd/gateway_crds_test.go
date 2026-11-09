@@ -36,21 +36,21 @@ var _ = Describe("Gateway CRD readiness", func() {
 
 	It("delegates the required CRDs to the Helm waiter", func() {
 		expectWait(nil)
-		Expect(argocd.NewAppInstaller(cfg).WaitForGatewayCRDs(context.Background(), nil)).To(Succeed())
+		Expect(argocd.NewAppInstaller(cfg).WaitForGatewayCRDs(context.Background())).To(Succeed())
 	})
 	It("skips waiting when both gateways disable Gateway API", func() {
 		cfg.Config.Cluster.Gateway.GatewayAPI = &files.GatewayAPIConfig{Enabled: false}
 		cfg.Config.Cluster.PublicGateway.GatewayAPI = &files.GatewayAPIConfig{Enabled: false}
-		Expect(argocd.NewAppInstaller(cfg).WaitForGatewayCRDs(context.Background(), nil)).To(Succeed())
+		Expect(argocd.NewAppInstaller(cfg).WaitForGatewayCRDs(context.Background())).To(Succeed())
 	})
 	It("waits when only the public gateway uses Gateway API", func() {
 		cfg.Config.Cluster.Gateway.GatewayAPI = &files.GatewayAPIConfig{Enabled: false}
 
 		expectWait(nil)
-		Expect(argocd.NewAppInstaller(cfg).WaitForGatewayCRDs(context.Background(), nil)).To(Succeed())
+		Expect(argocd.NewAppInstaller(cfg).WaitForGatewayCRDs(context.Background())).To(Succeed())
 	})
 	It("propagates Helm readiness failures", func() {
 		expectWait(fmt.Errorf("timed out"))
-		Expect(argocd.NewAppInstaller(cfg).WaitForGatewayCRDs(context.Background(), nil)).To(MatchError(ContainSubstring("timed out")))
+		Expect(argocd.NewAppInstaller(cfg).WaitForGatewayCRDs(context.Background())).To(MatchError(ContainSubstring("timed out")))
 	})
 })

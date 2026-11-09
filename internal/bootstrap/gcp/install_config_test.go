@@ -922,6 +922,54 @@ var _ = Describe("Installconfig & Secrets", func() {
 				})
 			})
 
+			Context("When the installation is airgapped", func() {
+				BeforeEach(func() {
+					csEnv.Airgapped = true
+
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+				})
+
+				It("uses the self-signed issuer and disables ACME without requesting EAB credentials", func() {
+					csEnv.GoogleACMEIssuer = true
+
+					Expect(bs.UpdateInstallConfig()).To(Succeed())
+
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Type).To(Equal(files.CertIssuerTypeSelfSigned))
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme).To(BeNil())
+					issuers := bs.Env.InstallConfig.Cluster.Certificates.Override["issuers"].(map[string]interface{})
+					Expect(issuers["acme"].(map[string]interface{})["enabled"]).To(BeFalse())
+					Expect(issuers["letsEncryptHttp"].(map[string]interface{})["enabled"]).To(BeFalse())
+				})
+
+				It("replaces recovered ACME settings while preserving the ingress CA and unrelated overrides", func() {
+					csEnv.InstallConfig.Codesphere.CertIssuer = &files.CertIssuerConfig{
+						Type: files.CertIssuerTypeACME,
+						Acme: &files.ACMEConfig{Enabled: true},
+					}
+					csEnv.InstallConfig.Cluster.Certificates.CA.CertPem = "existing-ca"
+					csEnv.InstallConfig.Cluster.Certificates.Override = files.ChartOverride{
+						"issuers": files.ChartOverride{
+							"acme":            files.ChartOverride{"enabled": true},
+							"letsEncryptHttp": files.ChartOverride{"enabled": true},
+						},
+						"customValue": "preserved",
+					}
+
+					Expect(bs.UpdateInstallConfig()).To(Succeed())
+
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Type).To(Equal(files.CertIssuerTypeSelfSigned))
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme).To(BeNil())
+					Expect(bs.Env.InstallConfig.Cluster.Certificates.CA.CertPem).To(Equal("existing-ca"))
+					Expect(bs.Env.InstallConfig.Cluster.Certificates.Override["customValue"]).To(Equal("preserved"))
+					issuers := bs.Env.InstallConfig.Cluster.Certificates.Override["issuers"].(map[string]interface{})
+					Expect(issuers["acme"].(map[string]interface{})["enabled"]).To(BeFalse())
+					Expect(issuers["letsEncryptHttp"].(map[string]interface{})["enabled"]).To(BeFalse())
+				})
+			})
+
 			Context("When Google ACME issuer is enabled", func() {
 				BeforeEach(func() {
 					csEnv.GoogleACMEIssuer = true
