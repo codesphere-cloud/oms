@@ -6,11 +6,12 @@ package argocd
 import (
 	"context"
 	"fmt"
+	"log"
 )
 
 // WaitForGatewayCRDs waits for API definitions, rather than controllers whose
 // startup depends on PriorityClasses created later by cluster setup.
-func (i *AppInstaller) WaitForGatewayCRDs(ctx context.Context, logf LogFunc) error {
+func (i *AppInstaller) WaitForGatewayCRDs(ctx context.Context) error {
 	gateway := i.cfg.Config.Cluster.Gateway.GatewayAPI
 
 	publicGateway := i.cfg.Config.Cluster.PublicGateway.GatewayAPI
@@ -28,9 +29,7 @@ func (i *AppInstaller) WaitForGatewayCRDs(ctx context.Context, logf LogFunc) err
 		"httproutes.gateway.networking.k8s.io",
 		"envoyproxies.gateway.envoyproxy.io",
 	}
-	if logf != nil {
-		logf("Waiting for Gateway CRDs to be ready: %v", names)
-	}
+	log.Printf("Waiting for Gateway CRDs to be ready: %v", names)
 
 	if err := i.cfg.HelmClient.WaitForResources(ctx, "apiextensions.k8s.io/v1", "CustomResourceDefinition", names, applicationReadyTimeout); err != nil {
 		return fmt.Errorf("waiting for Gateway CRDs: %w", err)
