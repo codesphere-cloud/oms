@@ -8,6 +8,10 @@
 name: Bootstrap GCP
 
 on:
+  # Test changes to this workflow before they can block a release.
+  pull_request:
+    paths:
+      - .github/workflows/bootstrap-gcp.yml
   workflow_call:
     inputs:
       install_version:
@@ -103,14 +107,15 @@ jobs:
       - name: Resolve Codesphere version
         id: version
         env:
-          GH_TOKEN: ${{ secrets.MONOREPO_READ_TOKEN }}
+          OMS_PORTAL_API_KEY: ${{ secrets.PC_INSTALLER_TEST_OMS_PORTAL_API_KEY }}
           INSTALL_VERSION: ${{ inputs.install_version }}
         run: |
           set -euo pipefail
+          # Resolve against the OMS portal, where the bootstrap downloads the package from.
+          # Internal builds (master, branches) are hidden; only codesphere-vX.Y.Z releases match.
           if [ -z "$INSTALL_VERSION" ]; then
-            INSTALL_VERSION=$(gh release list --repo codesphere-cloud/codesphere-monorepo --limit 200 \
-                --exclude-drafts --exclude-pre-releases --json tagName --jq '.[].tagName' \
-              | grep -E '^codesphere-v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
+            PACKAGES=$(./oms list packages)
+            INSTALL_VERSION=$(grep -oE 'codesphere-v[0-9]+\.[0-9]+\.[0-9]+' <<< "$PACKAGES" | sort -V | tail -n1 || true)
           fi
           if [ -z "$INSTALL_VERSION" ]; then
             echo "::error::Could not resolve the latest official Codesphere release."
@@ -143,7 +148,8 @@ jobs:
         shell: bash
         env:
           INSTALL_VERSION: ${{ steps.version.outputs.install_version }}
-          PROJECT_TTL: ${{ inputs.ttl }}
+          # pull_request runs have no inputs, so fall back to the default here.
+          PROJECT_TTL: ${{ inputs.ttl || '2h' }}
           OMS_PORTAL_API_KEY: ${{ secrets.PC_INSTALLER_TEST_OMS_PORTAL_API_KEY }}
           OMS_CS_TEST_USER_PASSWORD: ${{ secrets.OMS_CS_TEST_USER_PASSWORD }}
           OMS_CS_TEST_USER_PASSWORD_HASHED: ${{ secrets.OMS_CS_TEST_USER_PASSWORD_HASHED }}
