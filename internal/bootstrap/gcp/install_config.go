@@ -201,6 +201,48 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	return b.updateInstallConfig(b.primaryDC())
 }
 
+// DefaultCodesphereRegistry is the Codesphere registry installations log in to unless development
+// overrides it.
+const DefaultCodesphereRegistry = "registry.codesphere.com"
+
+// CodesphereRegistryName is the name of the Codesphere registry in additionalRegistries, which
+// also prefixes its vault entries.
+const CodesphereRegistryName = "codesphere"
+
+// CodesphereRegistryUsername is the user every installation logs in to the Codesphere registry
+// with; the OMS portal API key is its password.
+const CodesphereRegistryUsername = "oms-gcp-bootstrap@codesphere.com"
+
+// applyCodesphereRegistry adds the Codesphere registry to additionalRegistries and its
+// credentials to the vault. Every installation logs in to the Codesphere registry, so both the
+// registry and its password must be given. The username is always 'oms-gcp-bootstrap@codesphere.com'.
+func (b *GCPBootstrapper) applyCodesphereRegistry(dc *datacenter.DataCenter) error {
+	if b.Env.CodesphereRegistry == "" {
+		return fmt.Errorf("codesphere registry is not set")
+	}
+
+	if b.Env.CodesphereRegistryPassword == "" {
+		return fmt.Errorf("codesphere registry password is not set")
+	}
+
+	dc.InstallConfig.SetAdditionalRegistry(files.AdditionalRegistryConfig{
+		Name:     CodesphereRegistryName,
+		Registry: b.Env.CodesphereRegistry,
+	})
+
+	vault := dc.ConfigManager.GetVault()
+	vault.SetSecret(files.SecretEntry{
+		Name:   files.AdditionalRegistryUsernameSecret(CodesphereRegistryName),
+		Fields: &files.SecretFields{Password: CodesphereRegistryUsername},
+	})
+	vault.SetSecret(files.SecretEntry{
+		Name:   files.AdditionalRegistryPasswordSecret(CodesphereRegistryName),
+		Fields: &files.SecretFields{Password: b.Env.CodesphereRegistryPassword},
+	})
+
+	return nil
+}
+
 func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	if b.Env.InstallVersion != "" {
 		dc.InstallConfig.SetCodespherePackage(b.Env.InstallVersion, b.Env.InstallHash)
@@ -222,6 +264,9 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 
 	dc.InstallConfig.Registry.LoadContainerImages = false
 	dc.InstallConfig.Registry.ReplaceImagesInBom = b.Env.RegistryType != RegistryTypeGitHub
+	if err := b.applyCodesphereRegistry(dc); err != nil {
+		return fmt.Errorf("failed to apply codesphere registry: %w", err)
+	}
 
 	// The pc-applications chart pulls the chart of every application it creates from
 	// chartsRegistry and defaults it to GHCR. Only a local container registry is filled with the

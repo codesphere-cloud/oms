@@ -380,6 +380,15 @@ func (g *InstallConfig) ValidateVault() []string {
 		}
 	}
 
+	// check if for all given additional registries in the config, we also have entries for username and password in the vault
+	for _, registry := range g.Config.AdditionalRegistries {
+		for _, required := range []string{files.AdditionalRegistryUsernameSecret(registry.Name), files.AdditionalRegistryPasswordSecret(registry.Name)} {
+			if !foundSecrets[required] {
+				errors = append(errors, fmt.Sprintf("required secret for additional registry %s missing: %s", registry.Name, required))
+			}
+		}
+	}
+
 	return errors
 }
 
