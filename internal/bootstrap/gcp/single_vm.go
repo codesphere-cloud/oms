@@ -208,7 +208,7 @@ func (b *GCPBootstrapper) provideSingleVMConfig() error {
 	issuerConfig := files.NewRootConfig()
 
 	dc.InstallConfig = &issuerConfig
-	if err := b.applyACMEConfig(dc); err != nil {
+	if err := b.applyCertificateConfig(dc); err != nil {
 		return fmt.Errorf("failed to configure Google Public CA for single VM: %w", err)
 	}
 
