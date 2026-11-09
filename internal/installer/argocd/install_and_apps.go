@@ -5,8 +5,10 @@ package argocd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	synccommon "github.com/argoproj/argo-cd/gitops-engine/pkg/sync/common"
@@ -103,6 +105,47 @@ func WaitForAppFreshlySyncedAndHealthy(ctx context.Context, kubeClient client.Cl
 	}
 
 	return nil
+}
+
+// WaitForSubAppsFreshlySyncedAndHealthy waits in parallel for every Application the parent deployed, so a failure
+// reports all sub applications that did not come up.
+func WaitForSubAppsFreshlySyncedAndHealthy(ctx context.Context, kubeClient client.Client, parentAppName string) error {
+	names, err := subAppNames(ctx, kubeClient, parentAppName)
+	if err != nil {
+		return err
+	}
+
+	waitErrs := make([]error, len(names))
+
+	var wg sync.WaitGroup
+	for i, name := range names {
+		wg.Go(func() {
+			if err := WaitForAppFreshlySyncedAndHealthy(ctx, kubeClient, name); err != nil {
+				waitErrs[i] = fmt.Errorf("failed to wait for ArgoCD Application %q: %w", name, err)
+			}
+		})
+	}
+
+	wg.Wait()
+
+	return errors.Join(waitErrs...)
+}
+
+func subAppNames(ctx context.Context, kubeClient client.Client, parentAppName string) ([]string, error) {
+	parent := &argov1alpha1.Application{}
+	if err := kubeClient.Get(ctx, client.ObjectKey{Name: parentAppName, Namespace: DefaultNamespace}, parent); err != nil {
+		return nil, fmt.Errorf("failed to read ArgoCD Application %q: %w", parentAppName, err)
+	}
+
+	var names []string
+
+	for _, resource := range parent.Status.Resources {
+		if resource.Group == argov1alpha1.SchemeGroupVersion.Group && resource.Kind == argov1alpha1.ApplicationSchemaGroupVersionKind.Kind {
+			names = append(names, resource.Name)
+		}
+	}
+
+	return names, nil
 }
 
 // currentSourceDeployed reports whether Argo CD has deployed the Application's current source.
