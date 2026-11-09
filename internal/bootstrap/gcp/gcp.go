@@ -1367,6 +1367,12 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
 }
 
 func (b *GCPBootstrapper) runInstallCommand(dc *datacenter.DataCenter, packageFilename string) error {
+	if b.Env.Airgapped {
+		if err := b.stlog.Step(dc.StepName("Prepare install certificates"), func() error { return b.prepareInstallTLS(dc) }); err != nil {
+			return fmt.Errorf("preparing install certificates: %w", err)
+		}
+	}
+
 	b.stlog.Logf("Installing Codesphere in data center %d...", dc.ID)
 
 	if err := b.Env.Jumpbox.RunSSHCommand("root", b.InstallCommand(dc, packageFilename)); err != nil {

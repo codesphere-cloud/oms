@@ -288,6 +288,13 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 		merged = intutil.DeepMergeMaps(merged, map[string]any{"registry": map[string]any{"server": registry}})
 	}
 
+	if store != nil {
+		if err := installer.ResolveLegacyCertificateKey(merged, store); err != nil {
+			cleanup()
+			return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to prepare custom certificate: %w", err)
+		}
+	}
+
 	mergedBytes, err := yaml.Marshal(merged)
 	if err != nil {
 		cleanup()

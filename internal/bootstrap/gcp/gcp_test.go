@@ -29,6 +29,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"google.golang.org/api/cloudbilling/v1"
 	"google.golang.org/api/dns/v1"
+	"k8s.io/client-go/util/cert"
 )
 
 func jumpboxMatcher(node *node.Node) bool {
@@ -2584,6 +2585,58 @@ var _ = Describe("GCP Bootstrapper", func() {
 			csEnv.ContainerRegistryURL = "10.10.0.2"
 
 			icg.EXPECT().GetSecretFilePath().Return("/etc/codesphere/secrets/prod.vault.yaml").Maybe()
+		})
+		It("issues on the jumpbox but renders and transfers certificate configuration locally before installing", func() {
+			csEnv.Airgapped = true
+			csEnv.RegistryType = gcp.RegistryTypeLocalContainer
+			csEnv.DNSProjectID = "public-dns-project"
+			certificate, key, err := cert.GenerateSelfSignedCertKey("cs.example.com", nil, []string{"*.cs.example.com", "ws.example.com", "*.ws.example.com"})
+			Expect(err).NotTo(HaveOccurred())
+
+			config := []byte("codesphere:\n  domain: cs.example.com\n  workspaceHostingBaseDomain: ws.example.com\n  certIssuer:\n    acme:\n      server: https://acme.example.com\n      email: admin@example.com\n      eabKeyId: account-id\n  workspaceImages:\n    agent: ghcr.io/example/agent:test\noperations:\n  codesphere: master\n")
+			secrets := &files.InstallVault{}
+			secrets.SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: "eab-mac-key"}})
+
+			fw.EXPECT().ReadFile("fake-config-file").Return(config, nil)
+			icg.EXPECT().GetVault().Return(secrets)
+			icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+			fw.EXPECT().Chmod("fake-config-file", os.FileMode(0600)).Return(nil)
+			fw.EXPECT().WriteFile("fake-config-file", mock.Anything, os.FileMode(0600)).Run(func(_ string, data []byte, _ os.FileMode) {
+				Expect(string(data)).To(ContainSubstring("BEGIN CERTIFICATE"))
+				Expect(string(data)).NotTo(ContainSubstring(string(key)))
+			}).Return(nil)
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(c string) bool { return strings.Contains(c, "oms download package") })).Return(nil).Once()
+			mirrored := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(c string) bool { return strings.HasPrefix(c, "oms copy package") })).Return(nil).Once()
+			issued := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(c string) bool {
+				return strings.Contains(c, "podman 'run'") && strings.Contains(c, "'--dns-google-project' 'public-dns-project'") && strings.Contains(c, "'--eab-kid' 'account-id' '--eab-hmac-key' 'eab-mac-key'")
+			})).Return(nil).Once().NotBefore(mirrored)
+			fw.EXPECT().CreateTemp("", "oms-bootstrap-tls-*").Return("cert-download", nil).Once()
+			fw.EXPECT().CreateTemp("", "oms-bootstrap-tls-*").Return("key-download", nil).Once()
+			nodeClient.EXPECT().DownloadFile(mock.MatchedBy(jumpboxMatcher), mock.MatchedBy(func(p string) bool { return strings.HasSuffix(p, "/fullchain.pem") }), "cert-download").Return(nil).Once().NotBefore(issued)
+			nodeClient.EXPECT().DownloadFile(mock.MatchedBy(jumpboxMatcher), mock.MatchedBy(func(p string) bool { return strings.HasSuffix(p, "/privkey.pem") }), "key-download").Return(nil).Once().NotBefore(issued)
+			fw.EXPECT().ReadFile("cert-download").Return(certificate, nil)
+			fw.EXPECT().ReadFile("key-download").Return(key, nil)
+			fw.EXPECT().Remove("cert-download").Return(nil)
+			fw.EXPECT().Remove("key-download").Return(nil)
+			uploaded := nodeClient.EXPECT().CopyFile(mock.MatchedBy(jumpboxMatcher), "fake-config-file", "/etc/codesphere/config.yaml").Return(nil).Once().NotBefore(issued)
+			nodeClient.EXPECT().CopyFile(mock.MatchedBy(jumpboxMatcher), "fake-secret", "/etc/codesphere/secrets/prod.vault.yaml").Return(nil).Once().NotBefore(uploaded)
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "cp /etc/codesphere/secrets/prod.vault.yaml{,.bak}").Return(nil)
+			encrypted := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(c string) bool { return strings.Contains(c, "sops --encrypt --in-place") })).Return(nil).Once()
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(c string) bool { return strings.HasPrefix(c, "oms install codesphere ") })).Return(nil).Once().NotBefore(encrypted)
+			Expect(bs.InstallCodesphere()).To(Succeed())
+			Expect(secrets.GetSecret(files.SecretCustomCertificateKey).File.Content).To(Equal(string(key)))
+		})
+
+		It("stops installation without uploading config or vault when jumpbox issuance fails", func() {
+			csEnv.Airgapped = true
+			csEnv.RegistryType = gcp.RegistryTypeLocalContainer
+			config := []byte("codesphere:\n  domain: cs.example.com\n  workspaceHostingBaseDomain: ws.example.com\n  certIssuer:\n    acme:\n      server: https://acme.example.com\n      email: admin@example.com\n")
+			fw.EXPECT().ReadFile("fake-config-file").Return(config, nil)
+			icg.EXPECT().GetVault().Return(&files.InstallVault{})
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(c string) bool { return strings.Contains(c, "oms download package") })).Return(nil)
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(c string) bool { return strings.HasPrefix(c, "oms copy package") })).Return(nil)
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(c string) bool { return strings.Contains(c, "podman 'run'") })).Return(fmt.Errorf("DNS validation failed"))
+			Expect(bs.InstallCodesphere()).To(MatchError(ContainSubstring("DNS validation failed")))
 		})
 
 		Describe("Valid InstallCodesphere", func() {

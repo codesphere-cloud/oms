@@ -518,6 +518,12 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
+	return b.copyDataCenterConfig(dc)
+}
+
+// copyDataCenterConfig shares the config/vault upload path used by initial
+// configuration and later certificate preparation.
+func (b *GCPBootstrapper) copyDataCenterConfig(dc *datacenter.DataCenter) error {
 	// CopyFile creates the destination directory, so a secondary data center's secrets
 	// directory does not need to exist yet.
 	err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, dc.InstallConfigPath, dc.RemoteConfigPath)

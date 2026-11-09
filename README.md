@@ -81,6 +81,8 @@ Use `oms beta bootstrap-gcp` or `oms beta bootstrap-gcp multi-node` for a multi-
 
 With `--airgapped`, the connected jumpbox stages cloud-controller manifests and images immediately after k0s installation, before Codesphere is installed. Nodes keep internet egress blocked; Private Google Access and a VPC-private DNS zone route Google API requests to `199.36.153.8/30`, with HTTPS allowed for k0s nodes so the cloud controller can manage load balancers. Reserved IPs are configured when the gateway Services are created.
 
+The jumpbox issues DNS-01 certificates using its Cloud DNS service account for `cs.<base-domain>`, the workspace domain and their wildcards, plus per-data-center platform names in multi-DC installations. ACME accounts and certificates are cached in `/root/oms-acme`; the local bootstrap process downloads and validates the certificate and key, updates its install config and vault, then uploads them over SSH and encrypts the vault on the jumpbox. The platform and public-gateway charts create the TLS Secrets without cluster-side ACME requests. `--acme-staging` and `--google-acme-issuer` select the same ACME servers as connected installs. Renewals are not scheduled. Rerunning bootstrap preserves the configured certificate and its key; remove `codesphere.customCertificate` to request issuance again using the ACME cache. A supplied certificate must cover the platform and workspace hostnames and their wildcards, including per-data-center platform names for multi-DC installations. Staging certificates are not browser-trusted.
+
 #### Supported Host Operating Systems
 
 Codesphere hosts installed with OMS run Ubuntu 22.04 or RHEL 9.6 (x86-64). Other RHEL releases and RHEL derivatives such as Rocky Linux or AlmaLinux are not supported.
