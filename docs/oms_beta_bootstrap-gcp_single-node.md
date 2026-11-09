@@ -19,6 +19,7 @@ oms beta bootstrap-gcp single-node [flags]
 ```
       --base-domain string               Base domain for Codesphere (required)
       --billing-account string           GCP Billing Account ID (required)
+      --codesphere-registry string       Codesphere registry server written to the "codesphere" entry of additionalRegistries in the install config; override only for development. Its password is read from OMS_PORTAL_API_KEY (default "registry.codesphere.com")
       --config stringArray               Local config.yaml file; repeat to merge in order before VM settings
       --dns-project-id string            GCP Project ID for Cloud DNS (optional)
       --dns-zone-name string             Cloud DNS Zone Name (optional) (default "oms-testing")

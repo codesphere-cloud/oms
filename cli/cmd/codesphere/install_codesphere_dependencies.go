@@ -220,6 +220,7 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 			Vault:        installVault,
 			RESTConfig:   restConfig,
 			KubeClient:   kubeClient,
+			HelmClient:   argoCDInstall.Helm,
 			Installer:    argoCDInstall,
 			PCAppsValues: opts.PCAppsValues,
 		})
@@ -242,6 +243,12 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 		return install.InstallPCApps(ctx, bomConfig)
 	}); err != nil {
 		return err
+	}
+
+	if err := stlog.Substep("Wait for Gateway CRDs", func() error {
+		return install.WaitForGatewayCRDs(ctx)
+	}); err != nil {
+		return fmt.Errorf("failed to wait for Gateway CRDs: %w", err)
 	}
 
 	return nil

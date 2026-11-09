@@ -10,8 +10,8 @@ import (
 	"helm.sh/helm/v4/pkg/chart/v2/loader"
 )
 
-// mergeOverride layers the override over base like Helm layers values files.
-func mergeOverride(base, override map[string]any) map[string]any {
+// MergeOverride layers the override over base like Helm layers values files.
+func MergeOverride(base, override map[string]any) map[string]any {
 	return loader.MergeMaps(base, copyWithStringKeys(override).(map[string]any))
 }
 

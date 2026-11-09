@@ -235,7 +235,7 @@ func (n *Node) EnsureOmsDependencies() error {
 		},
 		{
 			command: "age-keygen",
-			install: "curl -fsSL 'https://dl.filippo.io/age/latest?for=linux/amd64' -o age.tar.gz; tar -xvf age.tar.gz; sudo mv age/age* /usr/local/bin/",
+			install: "curl -fsSL 'https://dl.filippo.io/age/latest?for=linux/amd64' -o age.tar.gz && tar -xvf age.tar.gz && sudo mv age/age* /usr/local/bin/",
 		},
 	}
 

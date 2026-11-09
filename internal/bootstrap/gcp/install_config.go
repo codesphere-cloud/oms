@@ -201,6 +201,48 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	return b.updateInstallConfig(b.primaryDC())
 }
 
+// DefaultCodesphereRegistry is the Codesphere registry installations log in to unless development
+// overrides it.
+const DefaultCodesphereRegistry = "registry.codesphere.com"
+
+// CodesphereRegistryName is the name of the Codesphere registry in additionalRegistries, which
+// also prefixes its vault entries.
+const CodesphereRegistryName = "codesphere"
+
+// CodesphereRegistryUsername is the user every installation logs in to the Codesphere registry
+// with; the OMS portal API key is its password.
+const CodesphereRegistryUsername = "oms-gcp-bootstrap@codesphere.com"
+
+// applyCodesphereRegistry adds the Codesphere registry to additionalRegistries and its
+// credentials to the vault. Every installation logs in to the Codesphere registry, so both the
+// registry and its password must be given. The username is always 'oms-gcp-bootstrap@codesphere.com'.
+func (b *GCPBootstrapper) applyCodesphereRegistry(dc *datacenter.DataCenter) error {
+	if b.Env.CodesphereRegistry == "" {
+		return fmt.Errorf("codesphere registry is not set")
+	}
+
+	if b.Env.CodesphereRegistryPassword == "" {
+		return fmt.Errorf("codesphere registry password is not set")
+	}
+
+	dc.InstallConfig.SetAdditionalRegistry(files.AdditionalRegistryConfig{
+		Name:     CodesphereRegistryName,
+		Registry: b.Env.CodesphereRegistry,
+	})
+
+	vault := dc.ConfigManager.GetVault()
+	vault.SetSecret(files.SecretEntry{
+		Name:   files.AdditionalRegistryUsernameSecret(CodesphereRegistryName),
+		Fields: &files.SecretFields{Password: CodesphereRegistryUsername},
+	})
+	vault.SetSecret(files.SecretEntry{
+		Name:   files.AdditionalRegistryPasswordSecret(CodesphereRegistryName),
+		Fields: &files.SecretFields{Password: b.Env.CodesphereRegistryPassword},
+	})
+
+	return nil
+}
+
 func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	if b.Env.InstallVersion != "" {
 		dc.InstallConfig.SetCodespherePackage(b.Env.InstallVersion, b.Env.InstallHash)
@@ -222,6 +264,9 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 
 	dc.InstallConfig.Registry.LoadContainerImages = false
 	dc.InstallConfig.Registry.ReplaceImagesInBom = b.Env.RegistryType != RegistryTypeGitHub
+	if err := b.applyCodesphereRegistry(dc); err != nil {
+		return fmt.Errorf("failed to apply codesphere registry: %w", err)
+	}
 
 	// The pc-applications chart pulls the chart of every application it creates from
 	// chartsRegistry and defaults it to GHCR. Only a local container registry is filled with the
@@ -318,10 +363,15 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 		"cloud.google.com/load-balancer-ipv4": dc.PublicGatewayIP,
 	}
 
+	// Set the reserved IP when Helm creates the service, before the cloud controller
+	// sees it. Support both ingress-nginx and the Gateway API chart services.
+	dc.InstallConfig.Cluster.Gateway.Override = gatewayIPOverride(dc.InstallConfig.Cluster.Gateway.Override, dc.GatewayIP)
+	dc.InstallConfig.Cluster.PublicGateway.Override = gatewayIPOverride(dc.InstallConfig.Cluster.PublicGateway.Override, dc.PublicGatewayIP)
+
 	b.applyPcAppsDefaults(dc)
 	b.applyManagedServiceDefaults(dc)
 
-	if err := b.applyACMEConfig(dc); err != nil {
+	if err := b.applyCertificateConfig(dc); err != nil {
 		return err
 	}
 
@@ -528,11 +578,24 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	return nil
 }
 
-// applyACMEConfig configures the ACME certificate issuer, including the DNS-01
+// applyCertificateConfig uses the existing ingress CA for airgapped installations.
+// Connected installations use ACME, including the DNS-01
 // solver override for Cloud DNS and, when the Google ACME issuer is used, the
 // Google Public CA EAB credentials for the default and the custom-domains ACME
 // accounts.
-func (b *GCPBootstrapper) applyACMEConfig(dc *datacenter.DataCenter) error {
+func (b *GCPBootstrapper) applyCertificateConfig(dc *datacenter.DataCenter) error {
+	if b.Env.Airgapped {
+		dc.InstallConfig.Codesphere.CertIssuer = &files.CertIssuerConfig{Type: files.CertIssuerTypeSelfSigned}
+		dc.InstallConfig.Cluster.Certificates.Override = util.DeepMergeMaps(dc.InstallConfig.Cluster.Certificates.Override, files.ChartOverride{
+			"issuers": files.ChartOverride{
+				"acme":            files.ChartOverride{"enabled": false},
+				"letsEncryptHttp": files.ChartOverride{"enabled": false},
+			},
+		})
+
+		return nil
+	}
+
 	dnsProject := b.Env.DNSProjectID
 	if dnsProject == "" {
 		dnsProject = b.Env.ProjectID
@@ -1128,4 +1191,11 @@ func (b *GCPBootstrapper) verifySecondaryDataCenterSecrets(primary, dc *datacent
 	}
 
 	return nil
+}
+
+func gatewayIPOverride(existing files.ChartOverride, ip string) files.ChartOverride {
+	return util.DeepMergeMaps(existing, files.ChartOverride{
+		"ingress-nginx": map[string]any{"controller": map[string]any{"service": map[string]any{"loadBalancerIP": ip}}},
+		"gateway":       map[string]any{"proxy": map[string]any{"service": map[string]any{"loadBalancerIP": ip}}},
+	})
 }
