@@ -45,7 +45,8 @@ var _ = Describe("EnsureCodespherePrerequisites", func() {
 		service := &corev1.Service{}
 		Expect(kubeClient.Get(context.Background(), ctrlclient.ObjectKey{Name: "error-page-server", Namespace: "codesphere"}, service)).To(Succeed())
 		Expect(service.Spec.Ports).To(HaveLen(1))
-		Expect(service.Spec.Ports[0].Port).To(Equal(int32(8080)))
+		Expect(service.Spec.Ports[0].Port).To(Equal(int32(8083)))
+		Expect(service.Spec.Ports[0].Name).To(Equal("web"))
 	})
 
 	It("leaves existing resources untouched", func() {

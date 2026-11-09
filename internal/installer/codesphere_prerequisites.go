@@ -17,6 +17,10 @@ import (
 const (
 	codesphereNamespace       = "codesphere"
 	dummyErrorPageServiceName = "error-page-server"
+	// dummyErrorPageServicePort matches the Service of the error-page-server chart,
+	// so when pc-applications takes the Service over,
+	// ArgoCD's server-side apply finds the same port instead of adding a second one.
+	dummyErrorPageServicePort = 8083
 )
 
 // EnsureCodespherePrerequisites creates the resources required before the
@@ -53,8 +57,9 @@ func EnsureCodespherePrerequisites(ctx context.Context, kubeClient ctrlclient.Cl
 			Spec: corev1.ServiceSpec{
 				Type: corev1.ServiceTypeClusterIP,
 				Ports: []corev1.ServicePort{{
-					Port:       8080,
-					TargetPort: intstr.FromInt32(8080),
+					Name:       "web",
+					Port:       dummyErrorPageServicePort,
+					TargetPort: intstr.FromInt32(dummyErrorPageServicePort),
 				}},
 				Selector: map[string]string{"app": dummyErrorPageServiceName},
 			},

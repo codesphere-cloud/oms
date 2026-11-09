@@ -289,7 +289,7 @@ func (i *AppInstaller) SyncVaultSecret(ctx context.Context) error {
 // InstallPCApps creates or updates the pc-applications app-of-apps ArgoCD
 // Application using the chart version from the supplied installer BOM.
 func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config) error {
-	values, err := i.getPcAppsValues()
+	values, err := i.getPcAppsValues(bomConfig)
 	if err != nil {
 		return err
 	}
@@ -313,20 +313,25 @@ func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config)
 	return nil
 }
 
-// getPcAppsValues collects the base values for some apps from the config (OpenFGA, Rook) and merges these with
-// explicit pcApps block in the config.yaml.
+// getPcAppsValues collects the base values for some apps from the config (OpenFGA, Rook, error-page-server)
+// and merges these with explicit pcApps block in the config.yaml.
 // The pcApps block in the config.yaml and --pc-apps-values always win over derived values from the config.yaml.
 // Returns a ChartValues map
-func (i *AppInstaller) getPcAppsValues() (files.ChartValues, error) {
+func (i *AppInstaller) getPcAppsValues(bomConfig *bom.Config) (files.ChartValues, error) {
 	clusterConfigValues, err := pcapps.ClusterConfigPcAppsValues(&i.cfg.Config, i.cfg.Vault)
 	if err != nil {
 		return nil, fmt.Errorf("configuring cluster-config application: %w", err)
 	}
 	openFGAppValues := pcapps.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault)
 	rookCephAppValues := pcapps.RookCephPcAppsValues(&i.cfg.Config)
+	errorPageServerValues, err := pcapps.ErrorPageServerPcAppsValues(&i.cfg.Config, bomConfig)
+	if err != nil {
+		return nil, fmt.Errorf("configuring error-page-server application: %w", err)
+	}
 
 	values := util.DeepMergeMaps(openFGAppValues, rookCephAppValues)
 	values = util.DeepMergeMaps(values, clusterConfigValues)
+	values = util.DeepMergeMaps(values, errorPageServerValues)
 	values = util.DeepMergeMaps(values, i.cfg.Config.PcApps)
 
 	return values, nil
