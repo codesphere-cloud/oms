@@ -721,7 +721,7 @@ License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.
 Module: github.com/googleapis/gax-go/v2
 Version: v2.27.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/gax-go/blob/v2.27.0/LICENSE
+License URL: https://github.com/googleapis/gax-go/blob/v2.27.0/v2/LICENSE
  
 ----------
 Module: github.com/gorilla/websocket
