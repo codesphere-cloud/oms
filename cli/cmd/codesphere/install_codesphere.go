@@ -4,6 +4,7 @@
 package codesphere
 
 import (
+	"context"
 	"fmt"
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"maps"
@@ -81,7 +82,7 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	}
 	defer cleanup()
 
-	if err := ensureCodespherePackageForVersion(effectiveOpts, cfg, c.Env); err != nil {
+	if err := ensureCodespherePackageForVersion(ctx, effectiveOpts, cfg, c.Env); err != nil {
 		return err
 	}
 
@@ -416,7 +417,7 @@ func readConfigWithSecretMarkers(configPath string) (map[string]any, error) {
 
 // ensureCodespherePackageForVersion preserves explicit packages and resolves config-selected
 // packages before any installation phase starts.
-func ensureCodespherePackageForVersion(opts *InstallCodesphereOpts, cfg files.RootConfig, environment env.Env) error {
+func ensureCodespherePackageForVersion(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, environment env.Env) error {
 	if opts.Package != "" {
 		return nil
 	}
@@ -426,7 +427,7 @@ func ensureCodespherePackageForVersion(opts *InstallCodesphereOpts, cfg files.Ro
 		return fmt.Errorf("failed to resolve install package version: %w", err)
 	}
 
-	opts.Package, err = portal.EnsureCodespherePackage(portal.NewPortalClient(), environment.GetOmsWorkdir(), version, cfg.Operations.Codesphere.Hash, "installer-lite.tar.gz", false)
+	opts.Package, err = portal.EnsureCodespherePackage(ctx, portal.NewPortalClient(), environment.GetOmsWorkdir(), version, cfg.Operations.Codesphere.Hash, "installer-lite.tar.gz", false)
 	if err != nil {
 		return fmt.Errorf("failed to prepare install package: %w", err)
 	}
