@@ -59,26 +59,26 @@ $ oms install k0s --single --package <file>
 ### Options
 
 ```
-      --config string           Path to an existing k0sctl config to apply, e.g. created with 'oms init k0s-config'
-  -f, --force                   Force new download and installation
-  -h, --help                    help for k0s
-      --install-config string   Path to Codesphere install-config file to generate the k0sctl config from
-      --k0sctl-version string   Version of k0sctl to use (default "v0.33.1")
-      --no-download             Skip downloading k0s binary
-  -p, --package string          Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from
-      --single                  Install a single-node controller and worker on this machine
-      --ssh-key-path string     SSH private key path for remote installation
-      --vault string            Path to prod.vault.yaml to save the kubeconfig into (optional)
-      --vault-priv-key string   Path to the age private key to decrypt the vault (optional, for SOPS-encrypted vaults)
-      --vault-type string       Vault storage type (sops or plain) (default "sops")
-  -v, --version string          Version of k0s to install (default "v1.36.5+k0s.0")
-  -y, --yes                     Overwrite an existing generated k0sctl config without asking
+      --config string              Path to an existing k0sctl config to apply, e.g. created with 'oms init k0s-config'
+  -f, --force[=true|false]         Force new download and installation
+  -h, --help[=true|false]          help for k0s
+      --install-config string      Path to Codesphere install-config file to generate the k0sctl config from
+      --k0sctl-version string      Version of k0sctl to use (default "v0.33.1")
+      --no-download[=true|false]   Skip downloading k0s binary
+  -p, --package string             Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from
+      --single[=true|false]        Install a single-node controller and worker on this machine
+      --ssh-key-path string        SSH private key path for remote installation
+      --vault string               Path to prod.vault.yaml to save the kubeconfig into (optional)
+      --vault-priv-key string      Path to the age private key to decrypt the vault (optional, for SOPS-encrypted vaults)
+      --vault-type string          Vault storage type (sops or plain) (default "sops")
+  -v, --version string             Version of k0s to install (default "v1.36.5+k0s.0")
+  -y, --yes[=true|false]           Overwrite an existing generated k0sctl config without asking
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

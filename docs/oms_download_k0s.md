@@ -38,18 +38,18 @@ $ oms download k0s --airgapped --path <file>
 ### Options
 
 ```
-      --airgapped               Also download the airgap image bundle for that version
-  -f, --force                   Force download even if k0s binary exists
-  -h, --help                    help for k0s
-      --k0sctl-version string   Version of k0sctl to download (default "v0.33.1")
-      --path string             File to save the airgap image bundle to (requires --airgapped; default: the OMS cache)
-  -v, --version string          Version of k0s to download (default "v1.36.5+k0s.0")
+      --airgapped[=true|false]   Also download the airgap image bundle for that version
+  -f, --force[=true|false]       Force download even if k0s binary exists
+  -h, --help[=true|false]        help for k0s
+      --k0sctl-version string    Version of k0sctl to download (default "v0.33.1")
+      --path string              File to save the airgap image bundle to (requires --airgapped; default: the OMS cache)
+  -v, --version string           Version of k0s to download (default "v1.36.5+k0s.0")
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

@@ -13,13 +13,13 @@ oms licenses [flags]
 ### Options
 
 ```
-  -h, --help   help for licenses
+  -h, --help[=true|false]   help for licenses
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

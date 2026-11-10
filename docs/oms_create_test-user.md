@@ -24,20 +24,20 @@ oms create test-user [flags]
 
 ```
       --datacenter-id int          Datacenter ID for the created test team (default 1)
-  -h, --help                       help for test-user
+  -h, --help[=true|false]          help for test-user
       --postgres-db string         PostgreSQL database name (default "codesphere")
       --postgres-host string       PostgreSQL host address (required)
       --postgres-password string   PostgreSQL password (required)
       --postgres-port int          PostgreSQL port (default 5432)
       --postgres-user string       PostgreSQL username (default "postgres")
-      --seed-authz                 Queue the OpenFGA membership tuple for the created team (required when the installation enforces openfga-authz)
+      --seed-authz[=true|false]    Queue the OpenFGA membership tuple for the created team (required when the installation enforces openfga-authz)
       --ssl-mode string            PostgreSQL SSL mode (default "disable")
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO
