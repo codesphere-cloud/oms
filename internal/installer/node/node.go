@@ -65,19 +65,19 @@ func NewSSHNodeClient(quiet bool) *SSHNodeClient {
 
 func (r *SSHNodeClient) RunCommand(n *Node, username string, command string) error {
 	var (
-		jumpboxIp string
+		jumpboxIP string
 		ip        string
 	)
 
 	if n.Jumpbox != nil {
-		jumpboxIp = n.Jumpbox.ExternalIP
+		jumpboxIP = n.Jumpbox.ExternalIP
 		ip = n.InternalIP
 	} else {
-		jumpboxIp = ""
+		jumpboxIP = ""
 		ip = n.ExternalIP
 	}
 
-	client, err := n.getOrCreateClient(jumpboxIp, ip, username)
+	client, err := n.getOrCreateClient(jumpboxIP, ip, username)
 	if err != nil {
 		return fmt.Errorf("failed to get client: %w", err)
 	}
@@ -88,7 +88,7 @@ func (r *SSHNodeClient) RunCommand(n *Node, username string, command string) err
 		// Connection might be stale, try to reconnect
 		n.invalidateClient(username)
 
-		client, err = n.getOrCreateClient(jumpboxIp, ip, username)
+		client, err = n.getOrCreateClient(jumpboxIP, ip, username)
 		if err != nil {
 			return fmt.Errorf("failed to reconnect client: %w", err)
 		}
@@ -179,17 +179,17 @@ func (n *Node) GetName() string {
 
 func (c *SSHNodeClient) WaitReady(node *Node, timeout time.Duration) error {
 	start := time.Now()
-	jumpboxIp := ""
+	jumpboxIP := ""
 
 	nodeIp := node.ExternalIP
 	if node.Jumpbox != nil {
-		jumpboxIp = node.Jumpbox.ExternalIP
+		jumpboxIP = node.Jumpbox.ExternalIP
 		nodeIp = node.InternalIP
 	}
 
 	for {
 		// Try to get or create a cached client
-		_, err := node.getOrCreateClient(jumpboxIp, nodeIp, jumpboxUser)
+		_, err := node.getOrCreateClient(jumpboxIP, nodeIp, jumpboxUser)
 		if err == nil {
 			// Connection successful and cached
 			return nil
@@ -464,7 +464,7 @@ func (n *Node) configureSysctlLines(lines []string) error {
 }
 
 // getOrCreateClient returns a cached SSH client or creates a new one if not cached.
-func (n *Node) getOrCreateClient(jumpboxIp string, ip string, username string) (*ssh.Client, error) {
+func (n *Node) getOrCreateClient(jumpboxIP string, ip string, username string) (*ssh.Client, error) {
 	n.clientMu.Lock()
 	defer n.clientMu.Unlock()
 
@@ -481,7 +481,7 @@ func (n *Node) getOrCreateClient(jumpboxIp string, ip string, username string) (
 		delete(n.clientCache, username)
 	}
 
-	client, err := n.createClient(jumpboxIp, ip, username)
+	client, err := n.createClient(jumpboxIP, ip, username)
 	if err != nil {
 		return nil, err
 	}
@@ -509,16 +509,16 @@ func (n *Node) invalidateClient(username string) {
 }
 
 // createClient creates and returns a new SSH client connected to the node (internal, no caching)
-func (n *Node) createClient(jumpboxIp string, ip string, username string) (*ssh.Client, error) {
+func (n *Node) createClient(jumpboxIP string, ip string, username string) (*ssh.Client, error) {
 	authMethods, closeAgent, err := n.getAuthMethods()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get authentication methods: %w", err)
 	}
 	defer closeAgent()
 
-	if jumpboxIp != "" {
+	if jumpboxIP != "" {
 		// Use the Jumpbox's cached client if available
-		jbClient, err := n.Jumpbox.getOrCreateClient("", jumpboxIp, jumpboxUser)
+		jbClient, err := n.Jumpbox.getOrCreateClient("", jumpboxIP, jumpboxUser)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to jumpbox: %v", err)
 		}
@@ -575,8 +575,8 @@ func (n *Node) createClient(jumpboxIp string, ip string, username string) (*ssh.
 
 // getSFTPClient creates and returns an SFTP client connected to the node.
 // Uses the cached SSH client for the connection.
-func (n *Node) getSFTPClient(jumpboxIp string, ip string, username string) (*sftp.Client, error) {
-	client, err := n.getOrCreateClient(jumpboxIp, ip, username)
+func (n *Node) getSFTPClient(jumpboxIP string, ip string, username string) (*sftp.Client, error) {
+	client, err := n.getOrCreateClient(jumpboxIP, ip, username)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SSH client: %v", err)
 	}
@@ -598,8 +598,8 @@ func (n *Node) ensureDirectoryExists(username string, dir string) error {
 }
 
 // copyFile copies a file from the local system to the remote node via SFTP.
-func (n *Node) copyFile(jumpboxIp string, ip string, username string, src string, dst string) error {
-	client, err := n.getSFTPClient(jumpboxIp, ip, username)
+func (n *Node) copyFile(jumpboxIP string, ip string, username string, src string, dst string) error {
+	client, err := n.getSFTPClient(jumpboxIP, ip, username)
 	if err != nil {
 		return fmt.Errorf("failed to get SSH client: %v", err)
 	}
@@ -626,8 +626,8 @@ func (n *Node) copyFile(jumpboxIp string, ip string, username string, src string
 }
 
 // downloadFile downloads a file from the remote node to the local system via SFTP
-func (n *Node) downloadFile(jumpboxIp, ip, username, src, dst string) error {
-	client, err := n.getSFTPClient(jumpboxIp, ip, username)
+func (n *Node) downloadFile(jumpboxIP, ip, username, src, dst string) error {
+	client, err := n.getSFTPClient(jumpboxIP, ip, username)
 	if err != nil {
 		return fmt.Errorf("failed to get SSH client: %v", err)
 	}
