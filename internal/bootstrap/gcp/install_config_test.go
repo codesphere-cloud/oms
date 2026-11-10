@@ -399,6 +399,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 		Describe("Valid UpdateInstallConfig", func() {
 			It("updates config and writes files", func() {
 				csEnv.SSHProxyIP = "3.3.3.3"
+				csEnv.PublicGatewayIP = "2.2.2.2"
 				csEnv.InstallVersion = "1.111.0"
 				csEnv.InstallHash = "abc123"
 				csEnv.InstallConfig.Operations = &files.OperationsConfig{Skip: []string{"ceph"}}
@@ -440,6 +441,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(bs.Env.InstallConfig.DataCenters).To(BeEmpty())
 				Expect(bs.Env.InstallConfig.DefaultDataCenterID).To(BeZero())
 				Expect(bs.Env.InstallConfig.Codesphere.Domain).To(Equal("cs.example.com"))
+				// Custom domains' A records point to the public gateway; the k0s nodes have no external IP.
+				Expect(bs.Env.InstallConfig.Codesphere.PublicIP).To(Equal("2.2.2.2"))
 				Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal(map[string]bool{}))
 				Expect(bs.Env.InstallConfig.Codesphere.Internal).To(Equal(gcp.DefaultInternalFlags))
 				Expect(bs.Env.InstallConfig.Codesphere.Preview).To(Equal(util.StringSliceToBoolMap(gcp.DefaultPreviewFlags)))

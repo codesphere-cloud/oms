@@ -383,11 +383,9 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	dc.InstallConfig.Codesphere.CustomDomains = files.CustomDomainsConfig{
 		CNameBaseDomain: dc.WorkspaceHostingBaseDomain,
 	}
-	if b.Env.MultiDC {
-		dc.InstallConfig.Codesphere.PublicIP = dc.PublicGatewayIP
-	} else {
-		dc.InstallConfig.Codesphere.PublicIP = dc.ControlPlaneNodes[1].GetExternalIP()
-	}
+	// Custom domains' A records point to the public gateway, like the workspace domain does. The
+	// k0s nodes have no external IP, so they cannot serve as the public IP.
+	dc.InstallConfig.Codesphere.PublicIP = dc.PublicGatewayIP
 
 	dc.InstallConfig.Codesphere.DNSServers = []string{"8.8.8.8"}
 	dc.InstallConfig.Codesphere.DeployConfig = bootstrap.DefaultCodesphereDeployConfig()

@@ -55,6 +55,18 @@ var _ = Describe("ApplyProfile", func() {
 	})
 })
 
+var _ = Describe("Init install-config command", func() {
+	It("registers the Codesphere networking flags", func() {
+		command, _, err := GetRootCmd().Find([]string{"init", "install-config"})
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(command.Flags().Lookup("public-ip")).NotTo(BeNil())
+		Expect(command.Flags().Lookup("workspace-hosting-base-domain")).NotTo(BeNil())
+		Expect(command.Flags().Lookup("custom-domains-cname-base-domain")).NotTo(BeNil())
+		Expect(command.Flags().Lookup("dns-servers")).NotTo(BeNil())
+	})
+})
+
 var _ = Describe("UpdateConfigFromOpts", func() {
 	It("uses postgres-server as the primary hostname in install mode", func() {
 		config := &files.RootConfig{
@@ -121,6 +133,15 @@ var _ = Describe("UpdateConfigFromOpts", func() {
 		secretKey := vault.GetSecret(files.SecretOpenfgaDbBackupSecretAccessKey)
 		Expect(secretKey).NotTo(BeNil())
 		Expect(secretKey.Fields.Password).To(Equal("secret-key"))
+	})
+
+	It("sets the Codesphere public IP", func() {
+		config := &files.RootConfig{}
+		command := &InitInstallConfigCmd{Opts: &InitInstallConfigOpts{CodespherePublicIP: "203.0.113.10"}}
+
+		command.updateConfigFromOpts(config, &files.InstallVault{})
+
+		Expect(config.Codesphere.PublicIP).To(Equal("203.0.113.10"))
 	})
 
 	It("does not set openfga backups config when not enabled", func() {

@@ -112,6 +112,10 @@ func (g *InstallConfig) applyCommonProperties() {
 	if g.Config.Codesphere.WorkspaceHostingBaseDomain == "" {
 		g.Config.Codesphere.WorkspaceHostingBaseDomain = "ws.local"
 	}
+
+	if g.Config.Codesphere.PublicIP == "" {
+		g.Config.Codesphere.PublicIP = "127.0.0.1"
+	}
 	if g.Config.Codesphere.CustomDomains.CNameBaseDomain == "" {
 		g.Config.Codesphere.CustomDomains.CNameBaseDomain = "custom.local"
 	}

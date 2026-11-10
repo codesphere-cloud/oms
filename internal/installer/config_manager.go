@@ -19,6 +19,20 @@ func IsValidIP(ip string) bool {
 	return net.ParseIP(ip) != nil
 }
 
+// validateCodespherePublicIP checks the IP users point their custom domains' A records to.
+// Without it, Codesphere shows an empty A record value and custom domains cannot be set up.
+func validateCodespherePublicIP(config files.CodesphereConfig) error {
+	if config.PublicIP == "" {
+		return fmt.Errorf("codesphere.publicIp is required (the IP custom domains' A records must point to)")
+	}
+
+	if !IsValidIP(config.PublicIP) {
+		return fmt.Errorf("invalid codesphere.publicIp: %s", config.PublicIP)
+	}
+
+	return nil
+}
+
 //mockery:generate: true
 type InstallConfigManager interface {
 	// Profile management
@@ -217,6 +231,10 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 
 	if g.Config.Codesphere.Domain == "" {
 		errors = append(errors, "Codesphere domain is required")
+	}
+
+	if err := validateCodespherePublicIP(g.Config.Codesphere); err != nil {
+		errors = append(errors, err.Error())
 	}
 
 	if g.Config.Codesphere.OpenBao != nil {

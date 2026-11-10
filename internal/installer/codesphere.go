@@ -116,6 +116,10 @@ func (ci *CodesphereInstaller) Install(pm PackageManager, cm ConfigManager, im s
 		return nil
 	}
 
+	if err := ci.validatePublicIP(config); err != nil {
+		return err
+	}
+
 	if err := ci.ExtractAndValidatePackage(pm); err != nil {
 		return err
 	}
@@ -138,6 +142,20 @@ func (ci *CodesphereInstaller) loadConfig(cm ConfigManager) (files.RootConfig, e
 
 	ci.warnIfVaultDirDiffersFromSecretsDir(config)
 	return config, nil
+}
+
+// validatePublicIP rejects deploying Codesphere without a public IP for custom domains. Local
+// component installs are exempt because local dev clusters cannot serve custom domains.
+func (ci *CodesphereInstaller) validatePublicIP(config files.RootConfig) error {
+	if ci.LocalComponents || !ci.executableInstallerSteps(config)[CodesphereStep] {
+		return nil
+	}
+
+	if err := validateCodespherePublicIP(config.Codesphere); err != nil {
+		return fmt.Errorf("invalid codesphere configuration: %w", err)
+	}
+
+	return nil
 }
 
 // IsStepSkipped reports whether step is present in persisted or CLI skip steps.

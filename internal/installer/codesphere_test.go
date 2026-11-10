@@ -4,6 +4,7 @@
 package installer_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -56,5 +57,73 @@ var _ = Describe("Codesphere installer", func() {
 		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
 
 		Expect(err).To(MatchError(ContainSubstring("postgres.serverAddress must not be set when postgres.mode is 'install'")))
+	})
+
+	It("rejects a missing public IP before extracting the package when the codesphere step runs", func() {
+		configManager := installer.NewMockConfigManager(GinkgoT())
+		configManager.EXPECT().ParseConfigYaml("config.yaml").Return(files.RootConfig{}, nil)
+
+		packageManager := installer.NewMockPackageManager(GinkgoT())
+		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml"}
+
+		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+
+		Expect(err).To(MatchError(ContainSubstring("invalid codesphere configuration: codesphere.publicIp is required")))
+	})
+
+	It("rejects an invalid public IP when the codesphere step runs", func() {
+		config := files.RootConfig{Codesphere: files.CodesphereConfig{PublicIP: "not-an-ip"}}
+		configManager := installer.NewMockConfigManager(GinkgoT())
+		configManager.EXPECT().ParseConfigYaml("config.yaml").Return(config, nil)
+
+		packageManager := installer.NewMockPackageManager(GinkgoT())
+		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml"}
+
+		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+
+		Expect(err).To(MatchError(ContainSubstring("invalid codesphere.publicIp: not-an-ip")))
+	})
+
+	It("does not require a public IP when the codesphere step is skipped", func() {
+		configManager := installer.NewMockConfigManager(GinkgoT())
+		configManager.EXPECT().ParseConfigYaml("config.yaml").Return(files.RootConfig{}, nil)
+
+		packageManager := installer.NewMockPackageManager(GinkgoT())
+		packageManager.EXPECT().Extract(false, false).Return(errors.New("extract failed"))
+
+		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml", SkipSteps: []string{installer.CodesphereStep}}
+
+		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+
+		Expect(err).To(MatchError(ContainSubstring("extract failed")))
+	})
+
+	It("does not require a public IP for local component installs", func() {
+		configManager := installer.NewMockConfigManager(GinkgoT())
+		configManager.EXPECT().ParseConfigYaml("config.yaml").Return(files.RootConfig{}, nil)
+
+		packageManager := installer.NewMockPackageManager(GinkgoT())
+		packageManager.EXPECT().Extract(false, false).Return(errors.New("extract failed"))
+
+		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml", LocalComponents: true}
+
+		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+
+		Expect(err).To(MatchError(ContainSubstring("extract failed")))
+	})
+
+	It("accepts a valid public IP when the codesphere step runs", func() {
+		config := files.RootConfig{Codesphere: files.CodesphereConfig{PublicIP: "203.0.113.10"}}
+		configManager := installer.NewMockConfigManager(GinkgoT())
+		configManager.EXPECT().ParseConfigYaml("config.yaml").Return(config, nil)
+
+		packageManager := installer.NewMockPackageManager(GinkgoT())
+		packageManager.EXPECT().Extract(false, false).Return(errors.New("extract failed"))
+
+		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml"}
+
+		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+
+		Expect(err).To(MatchError(ContainSubstring("extract failed")))
 	})
 })
