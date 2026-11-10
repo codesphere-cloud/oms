@@ -191,17 +191,6 @@ func applyNoRequestsProfile(config *files.RootConfig, serviceReplicas int) {
 		},
 	})
 
-	if config.Cluster.BarmanCloudPlugin == nil {
-		config.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{Enabled: true}
-	}
-	config.Cluster.BarmanCloudPlugin.Override = util.DeepMergeMaps(config.Cluster.BarmanCloudPlugin.Override, map[string]any{
-		"plugin-barman-cloud": map[string]any{
-			"resources": map[string]any{
-				"requests": zeroRequests(),
-			},
-		},
-	})
-
 	if config.Cluster.RgwLoadBalancer == nil {
 		config.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{}
 	}
@@ -212,6 +201,19 @@ func applyNoRequestsProfile(config *files.RootConfig, serviceReplicas int) {
 	if config.ManagedServiceBackends == nil {
 		config.ManagedServiceBackends = &files.ManagedServiceBackendsConfig{}
 	}
+
+	if config.ManagedServiceBackends.BarmanCloudPlugin == nil {
+		config.ManagedServiceBackends.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{Enabled: true}
+	}
+
+	config.ManagedServiceBackends.BarmanCloudPlugin.Override = util.DeepMergeMaps(config.ManagedServiceBackends.BarmanCloudPlugin.Override, map[string]any{
+		"plugin-barman-cloud": map[string]any{
+			"resources": map[string]any{
+				"requests": zeroRequests(),
+			},
+		},
+	})
+
 	if config.ManagedServiceBackends.Postgres == nil {
 		config.ManagedServiceBackends.Postgres = &files.PgManagedServiceConfig{}
 	}

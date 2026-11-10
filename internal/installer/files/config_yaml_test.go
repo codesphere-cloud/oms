@@ -4,6 +4,8 @@
 package files_test
 
 import (
+	"bytes"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -198,6 +200,63 @@ codesphere:
 
 			Expect(rootConfig.Registry.Server).To(Equal("minimal.registry.com"))
 			Expect(rootConfig.Codesphere.DeployConfig.Images).To(BeEmpty())
+		})
+
+		It("parses additional registries independently of the registry config", func() {
+			var cfg files.RootConfig
+			Expect(cfg.Unmarshal([]byte(`registry:
+  server: ghcr.io
+additionalRegistries:
+  - name: codesphere
+    registry: registry.codesphere.com
+`))).To(Succeed())
+
+			Expect(cfg.Registry.Server).To(Equal("ghcr.io"))
+			Expect(cfg.AdditionalRegistries).To(Equal([]files.AdditionalRegistryConfig{
+				{Name: "codesphere", Registry: "registry.codesphere.com"},
+			}))
+		})
+
+		It("omits additional registries when they are not configured", func() {
+			cfg := files.RootConfig{}
+
+			data, err := cfg.Marshal()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(data)).NotTo(ContainSubstring("additionalRegistries"))
+		})
+	})
+
+	Describe("SetAdditionalRegistry", func() {
+		It("appends a registry with a new name", func() {
+			cfg := files.RootConfig{AdditionalRegistries: []files.AdditionalRegistryConfig{
+				{Name: "other", Registry: "other.example.com"},
+			}}
+
+			cfg.SetAdditionalRegistry(files.AdditionalRegistryConfig{Name: "codesphere", Registry: "registry.codesphere.com"})
+
+			Expect(cfg.AdditionalRegistries).To(Equal([]files.AdditionalRegistryConfig{
+				{Name: "other", Registry: "other.example.com"},
+				{Name: "codesphere", Registry: "registry.codesphere.com"},
+			}))
+		})
+
+		It("replaces the registry with the same name", func() {
+			cfg := files.RootConfig{AdditionalRegistries: []files.AdditionalRegistryConfig{
+				{Name: "codesphere", Registry: "registry.dev.codesphere.com"},
+			}}
+
+			cfg.SetAdditionalRegistry(files.AdditionalRegistryConfig{Name: "codesphere", Registry: "registry.codesphere.com"})
+
+			Expect(cfg.AdditionalRegistries).To(Equal([]files.AdditionalRegistryConfig{
+				{Name: "codesphere", Registry: "registry.codesphere.com"},
+			}))
+		})
+	})
+
+	Describe("additional registry secret names", func() {
+		It("prefixes the username and password entries with the registry name", func() {
+			Expect(files.AdditionalRegistryUsernameSecret("codesphere")).To(Equal("codesphereRegistryUsername"))
+			Expect(files.AdditionalRegistryPasswordSecret("codesphere")).To(Equal("codesphereRegistryPassword"))
 		})
 	})
 
@@ -626,6 +685,146 @@ var _ = Describe("RootConfig Clone", func() {
 		data, err := clone.Marshal()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(data)).NotTo(ContainSubstring("unmodelledKey"))
+	})
+})
+
+var _ = Describe("Barman Cloud plugin migration", func() {
+	const legacyOverride = "    override:\n      plugin-barman-cloud:\n        replicaCount: 2\n"
+
+	var logOutput bytes.Buffer
+
+	BeforeEach(func() {
+		logOutput.Reset()
+
+		previousLogWriter := log.Writer()
+
+		log.SetOutput(&logOutput)
+		DeferCleanup(func() { log.SetOutput(previousLogWriter) })
+	})
+
+	replicaOverride := files.ChartOverride{"plugin-barman-cloud": map[string]any{"replicaCount": 2}}
+
+	expectBarmanCloudPlugin := func(actual, expected *files.BarmanCloudPluginConfig) {
+		if expected == nil {
+			Expect(actual).To(BeNil())
+			return
+		}
+
+		Expect(actual).To(Equal(expected))
+	}
+
+	expectLog := func(expected string) {
+		if expected == "" {
+			Expect(logOutput.String()).To(BeEmpty())
+			return
+		}
+
+		Expect(logOutput.String()).To(ContainSubstring(expected))
+	}
+
+	cases := []TableEntry{
+		Entry("with the legacy key enabled, it moves with its override and logs the move",
+			"cluster:\n  BarmanCloudPluginConfig:\n    enabled: true\n"+legacyOverride,
+			&files.BarmanCloudPluginConfig{Enabled: true, Override: replicaOverride},
+			"Moved cluster.BarmanCloudPluginConfig to managedServiceBackends.barmanCloudPlugin"),
+		Entry("with the legacy key disabled, it moves enabled and warns",
+			"cluster:\n  BarmanCloudPluginConfig:\n    enabled: false\n"+legacyOverride,
+			&files.BarmanCloudPluginConfig{Enabled: true, Override: replicaOverride},
+			"Warning: cluster.BarmanCloudPluginConfig had enabled: false"),
+		Entry("with both keys set, it keeps the new key and warns that the legacy key is ignored",
+			"cluster:\n  BarmanCloudPluginConfig:\n    enabled: true\n"+legacyOverride+
+				"managedServiceBackends:\n  barmanCloudPlugin:\n    enabled: false\n",
+			&files.BarmanCloudPluginConfig{Enabled: false},
+			"Warning: ignoring cluster.BarmanCloudPluginConfig"),
+		Entry("with override: null, it moves the key without an override",
+			"cluster:\n  BarmanCloudPluginConfig:\n    enabled: true\n    override: null\n",
+			&files.BarmanCloudPluginConfig{Enabled: true},
+			"Moved cluster.BarmanCloudPluginConfig"),
+		Entry("with managedServiceBackends: null, it creates the block",
+			"cluster:\n  BarmanCloudPluginConfig:\n    enabled: true\nmanagedServiceBackends: null\n",
+			&files.BarmanCloudPluginConfig{Enabled: true},
+			"Moved cluster.BarmanCloudPluginConfig"),
+		Entry("with a null legacy key, it drops it without creating the new key",
+			"cluster:\n  BarmanCloudPluginConfig: null\n",
+			nil,
+			""),
+		Entry("without the legacy key, it leaves the new key unchanged and logs nothing",
+			"managedServiceBackends:\n  barmanCloudPlugin:\n    enabled: false\n",
+			&files.BarmanCloudPluginConfig{Enabled: false},
+			""),
+	}
+
+	DescribeTable("through RootConfig.Unmarshal", func(configYAML string, expected *files.BarmanCloudPluginConfig, expectedLog string) {
+		config := files.NewRootConfig()
+		Expect(config.Unmarshal([]byte(configYAML))).To(Succeed())
+
+		expectBarmanCloudPlugin(config.ManagedServiceBackends.BarmanCloudPlugin, expected)
+		expectLog(expectedLog)
+	}, cases)
+
+	DescribeTable("through MigrateLegacyBarmanCloudPluginKey on the raw map", func(configYAML string, expected *files.BarmanCloudPluginConfig, expectedLog string) {
+		var raw map[string]any
+		Expect(yaml.Unmarshal([]byte(configYAML), &raw)).To(Succeed())
+
+		Expect(files.MigrateLegacyBarmanCloudPluginKey(raw)).To(Succeed())
+
+		if cluster, ok := raw["cluster"].(map[string]any); ok {
+			Expect(cluster).NotTo(HaveKey("BarmanCloudPluginConfig"))
+		}
+
+		data, err := yaml.Marshal(raw)
+		Expect(err).NotTo(HaveOccurred())
+
+		config := files.NewRootConfig()
+		Expect(config.Unmarshal(data)).To(Succeed())
+		expectBarmanCloudPlugin(config.ManagedServiceBackends.BarmanCloudPlugin, expected)
+		expectLog(expectedLog)
+	}, cases)
+
+	It("with the legacy key loaded, marshal writes only managedServiceBackends.barmanCloudPlugin", func() {
+		config := files.NewRootConfig()
+		Expect(config.Unmarshal([]byte("cluster:\n  BarmanCloudPluginConfig:\n    enabled: true\n" + legacyOverride))).To(Succeed())
+
+		data, err := config.Marshal()
+		Expect(err).NotTo(HaveOccurred())
+
+		var written map[string]any
+		Expect(yaml.Unmarshal(data, &written)).To(Succeed())
+		Expect(written["cluster"]).NotTo(HaveKey("BarmanCloudPluginConfig"))
+		Expect(written["managedServiceBackends"]).To(HaveKeyWithValue("barmanCloudPlugin", map[string]any{
+			"enabled":  true,
+			"override": map[string]any{"plugin-barman-cloud": map[string]any{"replicaCount": 2}},
+		}))
+	})
+
+	It("with override: null in the raw map, migrating writes no override key", func() {
+		raw := map[string]any{"cluster": map[string]any{
+			"BarmanCloudPluginConfig": map[string]any{"enabled": true, "override": nil},
+		}}
+
+		Expect(files.MigrateLegacyBarmanCloudPluginKey(raw)).To(Succeed())
+
+		Expect(raw["managedServiceBackends"]).To(Equal(map[string]any{"barmanCloudPlugin": map[string]any{"enabled": true}}))
+	})
+
+	It("with both keys set in the raw map, migrating keeps the new key as written, unmodelled fields included", func() {
+		current := map[string]any{"enabled": false, "unmodelled": "kept"}
+		raw := map[string]any{
+			"cluster":                map[string]any{"BarmanCloudPluginConfig": map[string]any{"enabled": true}},
+			"managedServiceBackends": map[string]any{"barmanCloudPlugin": current},
+		}
+
+		Expect(files.MigrateLegacyBarmanCloudPluginKey(raw)).To(Succeed())
+
+		Expect(raw["managedServiceBackends"]).To(Equal(map[string]any{"barmanCloudPlugin": map[string]any{"enabled": false, "unmodelled": "kept"}}))
+	})
+
+	It("with a legacy key that is not a mapping, migrating the raw map fails", func() {
+		raw := map[string]any{"cluster": map[string]any{"BarmanCloudPluginConfig": "enabled"}}
+
+		err := files.MigrateLegacyBarmanCloudPluginKey(raw)
+
+		Expect(err).To(MatchError(ContainSubstring("read cluster.BarmanCloudPluginConfig")))
 	})
 })
 

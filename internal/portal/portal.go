@@ -5,6 +5,7 @@ package portal
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -26,7 +27,7 @@ var errDownloadRangeNotSatisfiable = errors.New("download range not satisfiable"
 type Portal interface {
 	ListBuilds(product Product, sort string) (availablePackages Builds, err error)
 	GetBuild(product Product, version string, hash string) (Build, error)
-	DownloadBuildArtifact(product Product, build Build, file io.Writer, startByte int, quiet bool) error
+	DownloadBuildArtifact(ctx context.Context, product Product, build Build, file io.Writer, startByte int, quiet bool) error
 	VerifyBuildArtifactDownload(file io.Reader, download Build) error
 	RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) (*ApiKey, error)
 	RevokeAPIKey(key string) error
@@ -245,7 +246,7 @@ func (c *PortalClient) GetBuild(product Product, version string, hash string) (B
 }
 
 // DownloadBuildArtifact downloads the build artifact for the specified product and build.
-func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file io.Writer, startByte int, quiet bool) error {
+func (c *PortalClient) DownloadBuildArtifact(ctx context.Context, product Product, build Build, file io.Writer, startByte int, quiet bool) error {
 	reqBody, err := json.Marshal(build)
 	if err != nil {
 		return fmt.Errorf("failed to generate request body: %w", err)
@@ -256,7 +257,8 @@ func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file 
 		return fmt.Errorf("failed to get generate URL: %w", err)
 	}
 	bodyReader := bytes.NewBuffer(reqBody)
-	req, err := http.NewRequest(http.MethodGet, url, bodyReader)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, bodyReader)
 	if err != nil {
 		return fmt.Errorf("failed to create GET request to download build: %w", err)
 	}

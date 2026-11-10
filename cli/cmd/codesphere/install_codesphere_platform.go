@@ -30,7 +30,8 @@ type InstallCodespherePlatformCmd struct {
 	Env  env.Env
 }
 
-func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) error {
+// Run installs the Codesphere platform phase; cancelling ctx stops the installation.
+func (c *InstallCodespherePlatformCmd) Run(ctx context.Context) error {
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
@@ -44,11 +45,11 @@ func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) erro
 	}
 	defer cleanup()
 
-	if err := ensureCodespherePackageForVersion(effectiveOpts, cfg, c.Env); err != nil {
+	if err := ensureCodespherePackageForVersion(ctx, effectiveOpts, cfg, c.Env); err != nil {
 		return err
 	}
 
-	return installCodespherePlatform(cmd.Context(), effectiveOpts, cfg, c.Env)
+	return installCodespherePlatform(ctx, effectiveOpts, cfg, c.Env)
 }
 
 func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, env env.Env) error {
@@ -116,9 +117,8 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		// The legacy installer picks the migrations to run from it. With ArgoCD there is no Helm
 		// release it could read the version from.
 		InstalledVersion: installedVersion,
-		Context:          ctx,
 	}
-	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
+	if err := ci.Install(ctx, pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install platform: %w", err)
 	}
 
@@ -209,7 +209,7 @@ func AddInstallCodespherePlatformCmd(codesphere *cobra.Command, opts *InstallCod
 	addCodesphereViaArgoCDFlag(platform.cmd, opts)
 
 	util.AddCmd(codesphere, platform.cmd)
-	platform.cmd.RunE = platform.RunE
+	platform.cmd.RunE = util.CancelOnSignal(platform.Run)
 }
 
 // addCodesphereViaArgoCDFlag adds the flag only to the commands that deploy Codesphere.

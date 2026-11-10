@@ -4,6 +4,7 @@
 package portal
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,7 +14,7 @@ import (
 
 // EnsureCodespherePackage resolves the configured build and delegates archive
 // downloads, resuming, and checksum verification to the shared downloader.
-func EnsureCodespherePackage(p Portal, workdir, version, hash, filename string, quiet bool) (string, error) {
+func EnsureCodespherePackage(ctx context.Context, p Portal, workdir, version, hash, filename string, quiet bool) (string, error) {
 	if version == "" {
 		return "", fmt.Errorf("codesphere package version is required")
 	}
@@ -29,7 +30,7 @@ func EnsureCodespherePackage(p Portal, workdir, version, hash, filename string, 
 		return "", fmt.Errorf("failed to create package workdir: %w", err)
 	}
 
-	if err := DownloadAndVerifyBuild(p, intutil.NewFilesystemWriter(), CodesphereProduct, build, filename, destination, DownloadOptions{Resume: true, Quiet: quiet}); err != nil {
+	if err := DownloadAndVerifyBuild(ctx, p, intutil.NewFilesystemWriter(), CodesphereProduct, build, filename, destination, DownloadOptions{Resume: true, Quiet: quiet}); err != nil {
 		return "", fmt.Errorf("failed to download codesphere package: %w", err)
 	}
 

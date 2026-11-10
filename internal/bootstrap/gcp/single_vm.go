@@ -222,6 +222,11 @@ func (b *GCPBootstrapper) provideSingleVMConfig() error {
 	config.Cluster.Certificates.Override = util.DeepMergeMaps(config.Cluster.Certificates.Override, issuerConfig.Cluster.Certificates.Override)
 	dc.InstallConfig = &config
 
+	// Applied after vault recovery so the current portal key replaces any recovered credentials.
+	if err := b.applyCodesphereRegistry(dc); err != nil {
+		return fmt.Errorf("failed to apply codesphere registry: %w", err)
+	}
+
 	data, err := config.Marshal()
 	if err != nil {
 		return fmt.Errorf("failed to marshal single VM install config: %w", err)

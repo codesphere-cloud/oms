@@ -32,8 +32,8 @@ type InstallCodesphereDepenciesCmd struct {
 	Env  env.Env
 }
 
-// RunE installs the cluster dependencies selected by the command options.
-func (c *InstallCodesphereDepenciesCmd) RunE(cmd *cobra.Command, _ []string) error {
+// Run installs the cluster dependencies selected by the command options.
+func (c *InstallCodesphereDepenciesCmd) Run(ctx context.Context) error {
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
@@ -51,11 +51,11 @@ func (c *InstallCodesphereDepenciesCmd) RunE(cmd *cobra.Command, _ []string) err
 	}
 	defer cleanup()
 
-	if err := ensureCodespherePackageForVersion(effectiveOpts, cfg, c.Env); err != nil {
+	if err := ensureCodespherePackageForVersion(ctx, effectiveOpts, cfg, c.Env); err != nil {
 		return err
 	}
 
-	return installCodesphereDepencies(cmd.Context(), effectiveOpts, cfg, c.Env)
+	return installCodesphereDepencies(ctx, effectiveOpts, cfg, c.Env)
 }
 
 func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, env env.Env) error {
@@ -82,7 +82,6 @@ func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts
 		LocalComponents:   opts.LocalComponents,
 		LocalConfigDir:    opts.LocalConfigDir,
 		SkipImageBuilding: opts.LocalComponents,
-		Context:           ctx,
 	}
 
 	_, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
@@ -137,7 +136,7 @@ func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts
 		}
 	}
 
-	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
+	if err := ci.Install(ctx, pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install dependencies: %w", err)
 	}
 	return nil
@@ -229,7 +228,10 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 	}); err != nil {
 		return err
 	}
-	if err := stlog.Substep("Install ArgoCD", install.InstallArgoCD); err != nil {
+
+	if err := stlog.Substep("Install ArgoCD", func() error {
+		return install.InstallArgoCD(ctx)
+	}); err != nil {
 		return err
 	}
 	if err := stlog.Substep("Sync vault secret", func() error {
@@ -281,5 +283,5 @@ func AddInstallCodesphereDepenciesCmd(codesphere *cobra.Command, opts *InstallCo
 	}
 
 	util.AddCmd(codesphere, deps.cmd)
-	deps.cmd.RunE = deps.RunE
+	deps.cmd.RunE = util.CancelOnSignal(deps.Run)
 }

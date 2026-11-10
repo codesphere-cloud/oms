@@ -4,6 +4,7 @@
 package codesphere
 
 import (
+	"context"
 	"fmt"
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"maps"
@@ -68,23 +69,25 @@ type InstallCodesphereOpts struct {
 	CodesphereViaArgoCD bool
 }
 
-func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
+// Run installs all Codesphere phases selected by the options; cancelling ctx stops the installation.
+func (c *InstallCodesphereCmd) Run(ctx context.Context) error {
 	if c.Opts.LocalComponents {
 		return fmt.Errorf("--local-components requires install codesphere dependencies or install codesphere platform")
 	}
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
-	ctx := cmd.Context()
 	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	if err := ensureCodespherePackageForVersion(effectiveOpts, cfg, c.Env); err != nil {
+	if err := ensureCodespherePackageForVersion(ctx, effectiveOpts, cfg, c.Env); err != nil {
 		return err
 	}
+
+	laterOpts := laterPhaseOpts(effectiveOpts)
 
 	infraInstaller := &installer.CodesphereInstaller{
 		SkipSteps:    c.Opts.SkipSteps,
@@ -92,12 +95,12 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 		Verbose:      c.Opts.Verbose,
 	}
 	dependenciesInstaller := &installer.CodesphereInstaller{
-		SkipSteps:    append(sharedInstallCodesphereSteps(), c.Opts.SkipSteps...),
+		SkipSteps:    laterOpts.SkipSteps,
 		AllowedSteps: installer.DependenciesSteps,
 		Verbose:      c.Opts.Verbose,
 	}
 	platformInstaller := &installer.CodesphereInstaller{
-		SkipSteps:    append(sharedInstallCodesphereSteps(), c.Opts.SkipSteps...),
+		SkipSteps:    laterOpts.SkipSteps,
 		AllowedSteps: installer.PlatformSteps,
 		Verbose:      c.Opts.Verbose,
 	}
@@ -107,13 +110,13 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	}
 
 	if infraInstaller.HasExecutableSteps(cfg) {
-		if err := installCodesphereInfra(effectiveOpts, c.Env); err != nil {
+		if err := installCodesphereInfra(ctx, effectiveOpts, c.Env); err != nil {
 			return err
 		}
 	}
 
 	if dependenciesInstaller.HasExecutableSteps(cfg) || !installer.IsStepSkipped(cfg, c.Opts.SkipSteps, installer.ArgoCDStep) {
-		if err := installCodesphereDepencies(ctx, effectiveOpts, cfg, c.Env); err != nil {
+		if err := installCodesphereDepencies(ctx, laterOpts, cfg, c.Env); err != nil {
 			return err
 		}
 	}
@@ -122,7 +125,7 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	return installCodespherePlatform(ctx, effectiveOpts, cfg, c.Env)
+	return installCodespherePlatform(ctx, laterOpts, cfg, c.Env)
 }
 
 func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
@@ -177,7 +180,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 
 	util.AddCmd(install, codesphere.cmd)
 
-	codesphere.cmd.RunE = codesphere.RunE
+	codesphere.cmd.RunE = util.CancelOnSignal(codesphere.Run)
 
 	AddInstallCodesphereInfraCmd(codesphere.cmd, codesphere.Opts)
 	AddInstallCodesphereDepenciesCmd(codesphere.cmd, codesphere.Opts)
@@ -205,6 +208,16 @@ func validateInstallCodesphereVault(opts *InstallCodesphereOpts) error {
 
 func sharedInstallCodesphereSteps() []string {
 	return []string{"copy-dependencies", "extract-dependencies"}
+}
+
+// laterPhaseOpts returns a copy of opts for the dependencies and platform phases of a full install,
+// with copying and extracting the package skipped. That is only safe because both steps are part of
+// installer.InfraSteps, so the infrastructure phase has already run them.
+func laterPhaseOpts(opts *InstallCodesphereOpts) *InstallCodesphereOpts {
+	later := *opts
+	later.SkipSteps = slices.Concat(sharedInstallCodesphereSteps(), opts.SkipSteps)
+
+	return &later
 }
 
 // prepareInstallConfig resolves the install command's repeated --config inputs
@@ -278,6 +291,11 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 			}
 		}
 		merged = intutil.DeepMergeMaps(merged, partial)
+	}
+	// The PC installer reads the merged file, not cfg, so a legacy key has to move in the map.
+	if err := files.MigrateLegacyBarmanCloudPluginKey(merged); err != nil {
+		cleanup()
+		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to migrate merged config.yaml: %w", err)
 	}
 
 	if opts.Registry != "" {
@@ -406,7 +424,7 @@ func readConfigWithSecretMarkers(configPath string) (map[string]any, error) {
 
 // ensureCodespherePackageForVersion preserves explicit packages and resolves config-selected
 // packages before any installation phase starts.
-func ensureCodespherePackageForVersion(opts *InstallCodesphereOpts, cfg files.RootConfig, environment env.Env) error {
+func ensureCodespherePackageForVersion(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, environment env.Env) error {
 	if opts.Package != "" {
 		return nil
 	}
@@ -416,7 +434,7 @@ func ensureCodespherePackageForVersion(opts *InstallCodesphereOpts, cfg files.Ro
 		return fmt.Errorf("failed to resolve install package version: %w", err)
 	}
 
-	opts.Package, err = portal.EnsureCodespherePackage(portal.NewPortalClient(), environment.GetOmsWorkdir(), version, cfg.Operations.Codesphere.Hash, "installer-lite.tar.gz", false)
+	opts.Package, err = portal.EnsureCodespherePackage(ctx, portal.NewPortalClient(), environment.GetOmsWorkdir(), version, cfg.Operations.Codesphere.Hash, "installer-lite.tar.gz", false)
 	if err != nil {
 		return fmt.Errorf("failed to prepare install package: %w", err)
 	}

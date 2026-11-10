@@ -33,17 +33,17 @@ $ oms copy package --version codesphere-v1.70.0 --dest registry.example.com/mirr
 ### Options
 
 ```
-      --dest string      Destination registry or repository prefix
-  -f, --file string      Installer artifact to download for an upstream package (default "installer-lite.tar.gz")
-      --force            Re-extract the installer package
-  -H, --hash string      Build hash used to disambiguate an upstream package version
-  -h, --help             help for package
-      --insecure         Allow image references to be fetched without TLS
-  -p, --package string   Path to a local installer package
-      --show-artifacts   Print the source and destination of every artifact to copy
-  -v, --verbose          Enable debug logs
-  -V, --version string   Codesphere package version to download from the OMS portal
-  -y, --yes              Copy without prompting for confirmation
+      --dest string                   Destination registry or repository prefix
+  -f, --file string                   Installer artifact to download for an upstream package (default "installer-lite.tar.gz")
+      --force[=true|false]            Re-extract the installer package
+  -H, --hash string                   Build hash used to disambiguate an upstream package version
+  -h, --help[=true|false]             help for package
+      --insecure[=true|false]         Allow image references to be fetched without TLS
+  -p, --package string                Path to a local installer package
+      --show-artifacts[=true|false]   Print the source and destination of every artifact to copy
+  -v, --verbose[=true|false]          Enable debug logs
+  -V, --version string                Codesphere package version to download from the OMS portal
+  -y, --yes[=true|false]              Copy without prompting for confirmation
 ```
 
 ### SEE ALSO

@@ -46,12 +46,10 @@ var _ = Describe("InstallCodesphereCmd", func() {
 		mockEnv.AssertExpectations(GinkgoT())
 	})
 
-	Context("RunE method", func() {
+	Context("Run method", func() {
 		It("requires a phase subcommand for local components", func() {
 			c.Opts.LocalComponents = true
-			runCmd := &cobra.Command{}
-			runCmd.SetContext(context.Background())
-			err := c.RunE(runCmd, nil)
+			err := c.Run(context.Background())
 			Expect(err).To(MatchError("--local-components requires install codesphere dependencies or install codesphere platform"))
 		})
 
@@ -69,9 +67,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 			c.Opts.Configs = []string{tempConfigFile.Name()}
 			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir")
 
-			runCmd := &cobra.Command{}
-			runCmd.SetContext(context.Background())
-			err = c.RunE(runCmd, []string{})
+			err = c.Run(context.Background())
 
 			Expect(err).To(HaveOccurred())
 			if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
