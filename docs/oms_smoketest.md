@@ -9,13 +9,13 @@ Run automated smoke tests for Codesphere installations to verify functionality.
 ### Options
 
 ```
-  -h, --help   help for smoketest
+  -h, --help[=true|false]   help for smoketest
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

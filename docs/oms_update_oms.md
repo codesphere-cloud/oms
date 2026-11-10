@@ -13,13 +13,13 @@ oms update oms [flags]
 ### Options
 
 ```
-  -h, --help   help for oms
+  -h, --help[=true|false]   help for oms
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

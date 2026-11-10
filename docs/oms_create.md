@@ -9,13 +9,13 @@ Create resources for Codesphere installations, such as test users for automated 
 ### Options
 
 ```
-  -h, --help   help for create
+  -h, --help[=true|false]   help for create
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO
