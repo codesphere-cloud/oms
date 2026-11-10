@@ -23,10 +23,12 @@ type InstallCodesphereInfraCmd struct {
 	Env  env.Env
 }
 
-func (c *InstallCodesphereInfraCmd) RunE(_ *cobra.Command, _ []string) error {
+// Run installs the infrastructure phase; cancelling ctx stops the installation.
+func (c *InstallCodesphereInfraCmd) Run(ctx context.Context) error {
 	if c.Opts.LocalComponents {
 		return fmt.Errorf("--local-components requires install codesphere dependencies or install codesphere platform")
 	}
+
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
@@ -37,18 +39,18 @@ func (c *InstallCodesphereInfraCmd) RunE(_ *cobra.Command, _ []string) error {
 	}
 	defer cleanup()
 
-	if err := ensureCodespherePackageForVersion(effectiveOpts, cfg, c.Env); err != nil {
+	if err := ensureCodespherePackageForVersion(ctx, effectiveOpts, cfg, c.Env); err != nil {
 		return err
 	}
 
-	return installCodesphereInfra(effectiveOpts, c.Env)
+	return installCodesphereInfra(ctx, effectiveOpts, c.Env)
 }
 
-func installCodesphereInfra(opts *InstallCodesphereOpts, env env.Env) error {
+func installCodesphereInfra(ctx context.Context, opts *InstallCodesphereOpts, env env.Env) error {
 	workdir := env.GetOmsWorkdir()
 	pm := installer.NewPackage(workdir, opts.Package)
 	cm := installer.NewConfig()
-	im := system.NewImage(context.Background())
+	im := system.NewImage(ctx)
 
 	ci := &installer.CodesphereInstaller{
 		ConfigPath:       opts.ConfigPath,
@@ -61,9 +63,10 @@ func installCodesphereInfra(opts *InstallCodesphereOpts, env env.Env) error {
 		DirectConnection: opts.DirectConnection,
 		AutoApprove:      opts.AutoApprove,
 	}
-	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
+	if err := ci.Install(ctx, pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install infra: %w", err)
 	}
+
 	return nil
 }
 
@@ -90,5 +93,5 @@ func AddInstallCodesphereInfraCmd(codesphere *cobra.Command, opts *InstallCodesp
 	}
 
 	util.AddCmd(codesphere, infra.cmd)
-	infra.cmd.RunE = infra.RunE
+	infra.cmd.RunE = util.CancelOnSignal(infra.Run)
 }

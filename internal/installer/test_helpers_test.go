@@ -15,6 +15,7 @@ func newTestConfig(name string, managed bool, ips ...string) *files.RootConfig {
 			nodes[i] = files.K8sNode{IPAddress: ip}
 		}
 	}
+
 	return &files.RootConfig{
 		Datacenter: files.DatacenterConfig{
 			ID:   1,

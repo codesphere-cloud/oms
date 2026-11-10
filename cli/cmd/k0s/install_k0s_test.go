@@ -125,7 +125,9 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockK0sctl = installer.NewMockK0sctlManager(GinkgoT())
 			mockPrompter = prompt.NewMockPrompter(GinkgoT())
 			c.Prompter = mockPrompter
+
 			var err error
+
 			tempDir, err = os.MkdirTemp("", "install-k0s-test-*")
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -134,6 +136,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockPM.AssertExpectations(GinkgoT())
 			mockK0s.AssertExpectations(GinkgoT())
 			mockK0sctl.AssertExpectations(GinkgoT())
+
 			if tempDir != "" {
 				_ = os.RemoveAll(tempDir)
 			}
@@ -344,6 +347,7 @@ var _ = Describe("InstallK0sCmd", func() {
 				if !testutil.SopsAndAgeAvailable() {
 					Skip("sops and age-keygen not available")
 				}
+
 				c.FileWriter = intutil.NewFilesystemWriter()
 			})
 
@@ -368,6 +372,7 @@ var _ = Describe("InstallK0sCmd", func() {
 				Expect(err).NotTo(HaveOccurred())
 				loaded, err := backend.Load()
 				Expect(err).NotTo(HaveOccurred())
+
 				secret := loaded.GetSecret(files.SecretKubeConfig)
 				Expect(secret).NotTo(BeNil())
 				Expect(secret.File.Content).To(Equal("apiVersion: v1\nkind: Config"))
@@ -403,6 +408,7 @@ var _ = Describe("InstallK0sCmd", func() {
 
 				vaultYAML, err := existingVault.Marshal()
 				Expect(err).NotTo(HaveOccurred())
+
 				plainPath := c.Opts.Vault + ".plain"
 				err = os.WriteFile(plainPath, vaultYAML, 0600)
 				Expect(err).NotTo(HaveOccurred())
@@ -455,6 +461,7 @@ var _ = Describe("InstallK0sCmd", func() {
 				}
 				vaultYAML, err := existingVault.Marshal()
 				Expect(err).NotTo(HaveOccurred())
+
 				plainPath := c.Opts.Vault + ".plain"
 				err = os.WriteFile(plainPath, vaultYAML, 0600)
 				Expect(err).NotTo(HaveOccurred())
@@ -472,6 +479,7 @@ var _ = Describe("InstallK0sCmd", func() {
 				Expect(err).NotTo(HaveOccurred())
 				loaded, err := backend.Load()
 				Expect(err).NotTo(HaveOccurred())
+
 				secret := loaded.GetSecret(files.SecretKubeConfig)
 				Expect(secret).NotTo(BeNil())
 				Expect(secret.File.Content).To(Equal("apiVersion: v1\nkind: Config\nnew: true"))
@@ -501,6 +509,7 @@ var _ = Describe("InstallK0sCmd", func() {
 				Expect(err).NotTo(HaveOccurred())
 				loaded, err := backend.Load()
 				Expect(err).NotTo(HaveOccurred())
+
 				secret := loaded.GetSecret(files.SecretKubeConfig)
 				Expect(secret).NotTo(BeNil())
 				Expect(secret.File.Content).To(Equal("apiVersion: v1\nkind: Config"))
@@ -549,6 +558,7 @@ var _ = Describe("InstallK0sCmd", func() {
 				}
 				vaultYAML, err := existingVault.Marshal()
 				Expect(err).NotTo(HaveOccurred())
+
 				plainPath := vaultPath + ".plain"
 				err = os.WriteFile(plainPath, vaultYAML, 0600)
 				Expect(err).NotTo(HaveOccurred())
@@ -603,6 +613,7 @@ var _ = Describe("InstallK0sCmd", func() {
 				}
 				vaultYAML, err := existingVault.Marshal()
 				Expect(err).NotTo(HaveOccurred())
+
 				plainPath := vaultPath + ".plain"
 				err = os.WriteFile(plainPath, vaultYAML, 0600)
 				Expect(err).NotTo(HaveOccurred())
@@ -667,6 +678,7 @@ var _ = Describe("InstallK0sCmd", func() {
 				}
 				vaultYAML, err := existingVault.Marshal()
 				Expect(err).NotTo(HaveOccurred())
+
 				plainPath := vaultPath + ".plain"
 				err = os.WriteFile(plainPath, vaultYAML, 0600)
 				Expect(err).NotTo(HaveOccurred())

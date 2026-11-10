@@ -106,6 +106,7 @@ func ParseJSON(data []byte) (*Config, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON BOM: %w", err)
 	}
+
 	return &cfg, nil
 }
 
@@ -116,6 +117,7 @@ func (b *Config) GetChart(component string) (reference.NamedTagged, bool) {
 	if !ok {
 		return nil, false
 	}
+
 	chart, ok := comp.Files["chart"]
 	if !ok || chart.OciRef == "" {
 		return nil, false
@@ -130,6 +132,7 @@ func (b *Config) GetChart(component string) (reference.NamedTagged, bool) {
 	if !ok {
 		return nil, false
 	}
+
 	return tagged, true
 }
 
@@ -138,9 +141,11 @@ func (b *Config) GetCodesphereContainerImages() (map[string]string, error) {
 	if b.Components == nil {
 		return nil, fmt.Errorf("codesphere component not found in BOM")
 	}
+
 	comp, exists := b.Components["codesphere"]
 	if !exists {
 		return nil, fmt.Errorf("codesphere component not found in BOM")
 	}
+
 	return comp.ContainerImages, nil
 }

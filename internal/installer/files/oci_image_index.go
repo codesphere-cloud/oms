@@ -29,6 +29,7 @@ type ManifestEntry struct {
 
 func (o *OCIImageIndex) ParseOCIImageConfig(filePath string) error {
 	indexfile := filepath.Join(filepath.Dir(filePath), "index.json")
+
 	file, err := os.Open(indexfile)
 	if err != nil {
 		return fmt.Errorf("failed to open file %s: %w", indexfile, err)
@@ -36,6 +37,7 @@ func (o *OCIImageIndex) ParseOCIImageConfig(filePath string) error {
 	defer util.CloseFileIgnoreError(file)
 
 	decoder := json.NewDecoder(file)
+
 	err = decoder.Decode(o)
 	if err != nil {
 		return fmt.Errorf("failed to decode file %s: %w", indexfile, err)
@@ -47,12 +49,15 @@ func (o *OCIImageIndex) ParseOCIImageConfig(filePath string) error {
 // ExtractImageNames extracts the image names from the OCI image index file.
 func (o *OCIImageIndex) ExtractImageNames() ([]string, error) {
 	var names []string
+
 	for _, manifest := range o.Manifests {
 		name := manifest.Annotations["io.containerd.image.name"]
 		if name == "" {
 			continue
 		}
+
 		names = append(names, name)
 	}
+
 	return names, nil
 }

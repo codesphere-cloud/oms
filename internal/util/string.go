@@ -8,5 +8,6 @@ func Truncate(s string, max int) string {
 	if len(runes) <= max {
 		return s
 	}
+
 	return string(runes[:max-3]) + "..."
 }

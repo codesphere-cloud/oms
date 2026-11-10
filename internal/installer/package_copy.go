@@ -43,6 +43,7 @@ func (c *CraneArtifactCopier) Copy(ctx context.Context, source, destination stri
 	if c.Insecure {
 		options = append(options, crane.Insecure)
 	}
+
 	if err := crane.Copy(source, destination, options...); err != nil {
 		return fmt.Errorf("crane copy failed: %w", err)
 	}
@@ -252,6 +253,7 @@ func CopyPackageArtifacts(ctx context.Context, copier ArtifactCopier, artifacts 
 
 	var craneOutput bytes.Buffer
 	logs.Warn.SetOutput(&craneOutput)
+
 	logs.Progress.SetOutput(&craneOutput)
 	defer func() {
 		logs.Warn.SetOutput(io.Discard)
@@ -264,6 +266,7 @@ func CopyPackageArtifacts(ctx context.Context, copier ArtifactCopier, artifacts 
 
 		if err := copier.Copy(ctx, artifact.Source, artifact.Destination); err != nil {
 			fmt.Println()
+
 			if craneOutput.Len() > 0 {
 				fmt.Fprint(os.Stderr, craneOutput.String())
 			}

@@ -59,6 +59,7 @@ func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
 	if !c.Opts.Single && c.Opts.InstallConfig == "" && c.Opts.K0sctlConfig == "" {
 		return fmt.Errorf("--install-config or --config is required unless --single is set")
 	}
+
 	hw := portal.NewHttpWrapper()
 	env := c.Env
 	pm := installer.NewPackage(env.GetOmsWorkdir(), c.Opts.Package)
@@ -202,11 +203,13 @@ func (c *InstallK0sCmd) downloadK0sctl(k0sctl installer.K0sctlManager) (string, 
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0sctl: %w", err)
 	}
+
 	return k0sctlPath, nil
 }
 
 func (c *InstallK0sCmd) deployK0sCluster(k0sctl installer.K0sctlManager, k0sctlPath string, k0sctlConfigPath string) error {
 	log.Println("Applying k0sctl configuration to deploy k0s cluster...")
+
 	if err := k0sctl.Apply(k0sctlConfigPath, k0sctlPath, c.Opts.Force); err != nil {
 		return fmt.Errorf("failed to apply k0sctl config: %w", err)
 	}
@@ -219,10 +222,12 @@ func (c *InstallK0sCmd) deployK0sCluster(k0sctl installer.K0sctlManager, k0sctlP
 
 func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0sctlConfigPath, k0sctlPath string) error {
 	log.Println("Retrieving kubeconfig from k0sctl for vault...")
+
 	kubeconfigContent, err := k0sctl.GetKubeconfig(k0sctlConfigPath, k0sctlPath)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve kubeconfig from k0sctl: %w", err)
 	}
+
 	kubeconfigContent = strings.TrimRight(kubeconfigContent, "\n\r")
 
 	store, err := c.vaultStore()
@@ -252,6 +257,7 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 	}
 
 	log.Printf("Saved kubeconfig to %s", c.Opts.Vault)
+
 	return nil
 }
 
@@ -260,6 +266,7 @@ func (c *InstallK0sCmd) vaultStore() (vault.Vault, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load vault: %w", err)
 	}
+
 	return vault, nil
 }
 

@@ -235,8 +235,10 @@ func asStoredInStatus(source *argov1alpha1.ApplicationSource) (*argov1alpha1.App
 }
 
 // InstallerAPI is implemented by the concrete ArgoCD chart installer.
+//
+//mockery:generate: true
 type InstallerAPI interface {
-	Install() error
+	Install(ctx context.Context) error
 }
 
 // AppInstallerConfig configures the shared ArgoCD, vault secret, and
@@ -263,12 +265,12 @@ func NewAppInstaller(cfg AppInstallerConfig) *AppInstaller {
 }
 
 // InstallArgoCD installs or upgrades ArgoCD using the configured installer.
-func (i *AppInstaller) InstallArgoCD() error {
+func (i *AppInstaller) InstallArgoCD(ctx context.Context) error {
 	if i.cfg.Installer == nil {
 		return fmt.Errorf("ArgoCD installer is required")
 	}
 
-	if err := i.cfg.Installer.Install(); err != nil {
+	if err := i.cfg.Installer.Install(ctx); err != nil {
 		return fmt.Errorf("failed to install ArgoCD: %w", err)
 	}
 
@@ -322,6 +324,7 @@ func (i *AppInstaller) getPcAppsValues() (files.ChartValues, error) {
 	if err != nil {
 		return nil, fmt.Errorf("configuring cluster-config application: %w", err)
 	}
+
 	openFGAppValues := pcapps.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault)
 	rookCephAppValues := pcapps.RookCephPcAppsValues(&i.cfg.Config)
 

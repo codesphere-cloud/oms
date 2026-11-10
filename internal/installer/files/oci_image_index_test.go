@@ -26,6 +26,7 @@ var _ = Describe("OciImageIndex", func() {
 		ociIndex = &files.OCIImageIndex{}
 
 		var err error
+
 		tempDir, err = os.MkdirTemp("", "oci_index_test")
 		Expect(err).NotTo(HaveOccurred())
 

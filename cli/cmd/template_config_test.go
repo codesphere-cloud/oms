@@ -62,11 +62,13 @@ postgres:
 		vaultYaml, err := testVault.Marshal()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(os.WriteFile(plaintextVaultPath, vaultYaml, 0600)).To(Succeed())
+
 		recipient, err := exec.Command("age-keygen", "-y", ageKeyPath).Output()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(sops.EncryptFile(plaintextVaultPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
 
 		rootCmd := cmd.GetRootCmd()
+
 		var output bytes.Buffer
 		rootCmd.SetOut(&output)
 		rootCmd.SetErr(&output)

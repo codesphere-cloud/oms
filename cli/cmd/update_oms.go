@@ -28,6 +28,7 @@ func (s *OMSSelfUpdater) Update(ctx context.Context, current string, repo selfup
 	if err != nil {
 		return current, "", err
 	}
+
 	if !found {
 		return current, "", fmt.Errorf("latest version could not be found from GitHub repository")
 	}

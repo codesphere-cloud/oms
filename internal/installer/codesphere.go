@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -64,8 +63,6 @@ var PlatformSteps = []string{"copy-dependencies", "extract-dependencies", Codesp
 
 // CodesphereInstaller encapsulates the logic for running the private-cloud-installer.js script.
 type CodesphereInstaller struct {
-	// Context cancels the installer process when the caller stops.
-	Context context.Context
 	// ConfigPath is the path to the Codesphere Private Cloud configuration YAML file.
 	ConfigPath string
 	// VaultPath is the path to the SOPS-encrypted vault file used for config templating.
@@ -101,8 +98,8 @@ type CodesphereInstaller struct {
 }
 
 // Install validates the platform, extracts the package, builds any custom workspace images,
-// and runs the private-cloud-installer.js script.
-func (ci *CodesphereInstaller) Install(pm PackageManager, cm ConfigManager, im system.ImageManager, goos, goarch string) error {
+// and runs the private-cloud-installer.js script. Cancelling ctx interrupts the installer process.
+func (ci *CodesphereInstaller) Install(ctx context.Context, pm PackageManager, cm ConfigManager, im system.ImageManager, goos, goarch string) error {
 	if goos != "linux" || goarch != "amd64" {
 		return fmt.Errorf("codesphere installation is only supported on Linux amd64. Current platform: %s/%s", goos, goarch)
 	}
@@ -111,6 +108,7 @@ func (ci *CodesphereInstaller) Install(pm PackageManager, cm ConfigManager, im s
 	if err != nil {
 		return err
 	}
+
 	if !ci.HasExecutableSteps(config) {
 		log.Println("No executable installer steps remain after applying skip configuration. Skipping installer run.")
 		return nil
@@ -124,7 +122,7 @@ func (ci *CodesphereInstaller) Install(pm PackageManager, cm ConfigManager, im s
 		return err
 	}
 
-	return ci.runInstaller(pm, config)
+	return ci.runInstaller(ctx, pm, config)
 }
 
 func (ci *CodesphereInstaller) loadConfig(cm ConfigManager) (files.RootConfig, error) {
@@ -132,25 +130,30 @@ func (ci *CodesphereInstaller) loadConfig(cm ConfigManager) (files.RootConfig, e
 	if err != nil {
 		return files.RootConfig{}, fmt.Errorf("failed to extract config.yaml: %w", err)
 	}
+
 	if err := validatePostgresServerAddress(config.Postgres); err != nil {
 		return files.RootConfig{}, fmt.Errorf("invalid postgres configuration: %w", err)
 	}
 
 	ci.warnIfVaultDirDiffersFromSecretsDir(config)
+
 	return config, nil
 }
 
 // IsStepSkipped reports whether step is present in persisted or CLI skip steps.
 func IsStepSkipped(config files.RootConfig, skipSteps []string, step string) bool {
 	skippedSteps := map[string]bool{}
+
 	if config.Operations != nil {
 		for _, skippedStep := range config.Operations.Skip {
 			skippedSteps[skippedStep] = true
 		}
 	}
+
 	for _, skippedStep := range skipSteps {
 		skippedSteps[skippedStep] = true
 	}
+
 	return skippedSteps[step]
 }
 
@@ -215,6 +218,7 @@ func (ci *CodesphereInstaller) ExtractAndValidatePackage(pm PackageManager) erro
 	if !slices.Contains(foundFiles, installerScript) {
 		return fmt.Errorf("%s not found in package", installerScript)
 	}
+
 	if !slices.Contains(foundFiles, "node") {
 		return fmt.Errorf("node executable not found in package")
 	}
@@ -238,7 +242,9 @@ func (ci *CodesphereInstaller) listPackageFiles(pm PackageManager) ([]string, er
 	}
 
 	log.Printf("Listing contents of %s", packageDir)
+
 	foundFiles := []string{}
+
 	for _, entry := range entries {
 		filename := entry.Name()
 		log.Printf("- %s", filename)
@@ -310,6 +316,7 @@ func (ci *CodesphereInstaller) buildWorkspaceImage(
 	}
 
 	log.Printf("Pushing image to %s", buildTag)
+
 	if err := im.PushImage(buildTag); err != nil {
 		return fmt.Errorf("failed to push image %s: %w", buildTag, err)
 	}
@@ -325,6 +332,7 @@ func splitImageTag(fullImageTag string) (string, string, error) {
 
 	imageNameAndPath := parts[0]
 	version := parts[1]
+
 	return path.Base(imageNameAndPath), version, nil
 }
 
@@ -340,6 +348,7 @@ func (ci *CodesphereInstaller) extractAndLoadRootImage(pm PackageManager, im sys
 	}
 
 	log.Printf("Loaded root image '%s'", extractedImagePath)
+
 	return nil
 }
 
@@ -351,6 +360,7 @@ func updateDockerfileFromStatement(pm PackageManager, dockerfile, fullImageTag s
 	defer util.CloseFileIgnoreError(dockerfileFile)
 
 	dockerfileManager := util.NewDockerfileManager()
+
 	updatedContent, err := dockerfileManager.UpdateFromStatement(dockerfileFile, fullImageTag)
 	if err != nil {
 		return fmt.Errorf("failed to update FROM statement: %w", err)
@@ -361,18 +371,20 @@ func updateDockerfileFromStatement(pm PackageManager, dockerfile, fullImageTag s
 	}
 
 	log.Printf("Successfully updated FROM statement in %s to use %s", dockerfile, fullImageTag)
+
 	return nil
 }
 
-func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.RootConfig) error {
+func (ci *CodesphereInstaller) runInstaller(ctx context.Context, pm PackageManager, config files.RootConfig) error {
 	if ci.LocalComponents {
 		// TODO(nate): remove once ESO is persisted, i.e. no release without external secrets is left to roll back to.
-		if err := ci.orphanExternalSecretsForCodesphereStep(config); err != nil {
+		if err := ci.orphanExternalSecretsForCodesphereStep(ctx, config); err != nil {
 			return err
 		}
 
-		return ci.runLocalComponents(pm, config)
+		return ci.runLocalComponents(ctx, pm, config)
 	}
+
 	nodePath := filepath.Join(pm.GetWorkDir(), "node")
 	if err := os.Chmod(nodePath, 0755); err != nil {
 		return fmt.Errorf("failed to make node executable: %w", err)
@@ -387,16 +399,11 @@ func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.Root
 	}
 
 	// TODO(nate): remove once ESO is persisted, i.e. no release without external secrets is left to roll back to.
-	if err := ci.orphanExternalSecretsForCodesphereStep(config); err != nil {
+	if err := ci.orphanExternalSecretsForCodesphereStep(ctx, config); err != nil {
 		return err
 	}
 
-	ctx := ci.Context
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	cmd := exec.CommandContext(ctx, nodePath, cmdArgs...)
+	cmd := system.CommandContext(ctx, nodePath, cmdArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -408,6 +415,7 @@ func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.Root
 	}
 
 	log.Println("Private cloud installer script finished.")
+
 	return nil
 }
 
@@ -415,14 +423,9 @@ func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.Root
 // install leaves the ExternalSecrets in place.
 //
 // TODO(nate): remove once ESO is persisted, i.e. no release without external secrets is left to roll back to.
-func (ci *CodesphereInstaller) orphanExternalSecretsForCodesphereStep(config files.RootConfig) error {
+func (ci *CodesphereInstaller) orphanExternalSecretsForCodesphereStep(ctx context.Context, config files.RootConfig) error {
 	if !ci.executableInstallerSteps(config)[CodesphereStep] {
 		return nil
-	}
-
-	ctx := ci.Context
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	if err := OrphanCodesphereExternalSecrets(ctx, ci.VaultPath, ci.PrivKey, ci.VaultType, config); err != nil {
@@ -432,7 +435,7 @@ func (ci *CodesphereInstaller) orphanExternalSecretsForCodesphereStep(config fil
 	return nil
 }
 
-func (ci *CodesphereInstaller) runLocalComponents(pm PackageManager, config files.RootConfig) error {
+func (ci *CodesphereInstaller) runLocalComponents(ctx context.Context, pm PackageManager, config files.RootConfig) error {
 	bundleDir, err := filepath.Abs(pm.GetWorkDir())
 	if err != nil {
 		return fmt.Errorf("failed to resolve installer bundle path: %w", err)
@@ -461,12 +464,7 @@ func (ci *CodesphereInstaller) runLocalComponents(pm PackageManager, config file
 			"--dependenciesDir", filepath.Join(bundleDir, "deps"),
 			"--config", ci.ConfigPath, "--privKey", privKey}
 
-		ctx := ci.Context
-		if ctx == nil {
-			ctx = context.Background()
-		}
-
-		cmd := exec.CommandContext(ctx, filepath.Join(bundleDir, "node"), args...)
+		cmd := system.CommandContext(ctx, filepath.Join(bundleDir, "node"), args...)
 
 		cmd.Stdout, cmd.Stderr, cmd.Stdin = os.Stdout, os.Stderr, os.Stdin
 		if err := cmd.Run(); err != nil {
@@ -491,6 +489,7 @@ func (ci *CodesphereInstaller) installerCommandArgs(pm PackageManager, config fi
 	}
 
 	executedSteps := []string{}
+
 	for step, executed := range executableSteps {
 		if !executed {
 			cmdArgs = append(cmdArgs, "--skipStep", step)
@@ -502,6 +501,7 @@ func (ci *CodesphereInstaller) installerCommandArgs(pm PackageManager, config fi
 	sort.Strings(executedSteps)
 
 	prompter := prompt.NewPrompter(!ci.AutoApprove)
+
 	msg := fmt.Sprintf("The following steps will be executed: %s. Type \"yes\" to continue.", strings.Join(executedSteps, ", "))
 	if prompter.String(msg, "yes") != "yes" {
 		return nil, fmt.Errorf("installation aborted")
@@ -541,6 +541,7 @@ func (ci *CodesphereInstaller) executableInstallerSteps(config files.RootConfig)
 // ExecutableSteps returns the sorted installer steps that remain after allowlist and skip filtering.
 func (ci *CodesphereInstaller) ExecutableSteps(config files.RootConfig) []string {
 	executableSteps := ci.executableInstallerSteps(config)
+
 	steps := make([]string, 0, len(executableSteps))
 	for _, step := range KnownInstallerSteps {
 		if executableSteps[step] {

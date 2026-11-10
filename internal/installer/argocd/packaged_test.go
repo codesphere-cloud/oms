@@ -77,12 +77,12 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 
 	It("refreshes image credentials while retaining the same Codesphere chart", func() {
 		expectCredentialRefresh("2.3.0")
-		Expect(a.Install()).To(Succeed())
+		Expect(a.Install(context.Background())).To(Succeed())
 	})
 
 	It("refreshes image credentials without downgrading a newer Codesphere chart", func() {
 		expectCredentialRefresh("2.4.0")
-		Expect(a.Install()).To(Succeed())
+		Expect(a.Install(context.Background())).To(Succeed())
 	})
 
 	It("upgrades an older Codesphere chart using the local package", func() {
@@ -92,21 +92,21 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 			return c.ChartName == a.PackageChart && c.Version == "2.3.0" && c.RepoURL == ""
 		}), mock.Anything).Return(nil)
 		expectResources()
-		Expect(a.Install()).To(Succeed())
+		Expect(a.Install(context.Background())).To(Succeed())
 	})
 
 	It("retains the same Codesphere chart version and still configures credentials", func() {
 		expectExisting("argocd", "2.3.0")
 		expectChartValues(nil)
 		expectResources()
-		Expect(a.Install()).To(Succeed())
+		Expect(a.Install(context.Background())).To(Succeed())
 	})
 
 	It("retains a newer Codesphere chart without downgrading", func() {
 		expectExisting("argocd", "2.4.0")
 		expectChartValues(nil)
 		expectResources()
-		Expect(a.Install()).To(Succeed())
+		Expect(a.Install(context.Background())).To(Succeed())
 	})
 
 	It("preserves an upstream chart without comparing unrelated chart versions", func() {
@@ -115,14 +115,14 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 		expectExisting("argo-cd", "10.3.2")
 		expectChartValues(nil)
 		expectResources()
-		Expect(a.Install()).To(Succeed())
+		Expect(a.Install(context.Background())).To(Succeed())
 	})
 
 	It("preserves a release whose chart identity is unknown", func() {
 		expectExisting("", "unparseable")
 		expectChartValues(nil)
 		expectResources()
-		Expect(a.Install()).To(Succeed())
+		Expect(a.Install(context.Background())).To(Succeed())
 	})
 
 	It("installs the local chart with nested bootstrap settings and mirrored images", func() {
@@ -145,13 +145,13 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 			return nil
 		})
 		expectResources()
-		Expect(a.Install()).To(Succeed())
+		Expect(a.Install(context.Background())).To(Succeed())
 	})
 
 	It("propagates chart loading or validation failures without installing", func() {
 		loader.EXPECT().LoadValues(a.ValueFiles).Return(nil, nil)
 		loader.EXPECT().LoadChart(a.PackageChart).Return(installer.ChartInfo{}, errors.New("chart does not match BOM"))
-		Expect(a.Install()).To(MatchError(ContainSubstring("does not match BOM")))
+		Expect(a.Install(context.Background())).To(MatchError(ContainSubstring("does not match BOM")))
 	})
 
 	It("lets explicit wrapper values override bootstrap defaults", func() {
@@ -172,7 +172,7 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 			return nil
 		})
 		expectResources()
-		Expect(a.Install()).To(Succeed())
+		Expect(a.Install(context.Background())).To(Succeed())
 	})
 	It("uses root values for an explicit upstream installation", func() {
 		a.PackageChart = ""
@@ -190,7 +190,7 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 			return nil
 		})
 		expectResources()
-		Expect(a.Install()).To(Succeed())
+		Expect(a.Install(context.Background())).To(Succeed())
 	})
 })
 

@@ -38,6 +38,7 @@ func (b *Build) GetBuildForDownload(filename string) (Build, error) {
 		build.Artifacts = []Artifact{
 			a,
 		}
+
 		return build, nil
 	}
 

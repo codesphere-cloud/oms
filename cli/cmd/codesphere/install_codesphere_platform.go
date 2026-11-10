@@ -27,7 +27,8 @@ type InstallCodespherePlatformCmd struct {
 	Env  env.Env
 }
 
-func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) error {
+// Run installs the Codesphere platform phase; cancelling ctx stops the installation.
+func (c *InstallCodespherePlatformCmd) Run(ctx context.Context) error {
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
@@ -35,17 +36,18 @@ func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) erro
 	if c.Opts.LocalComponents && c.Opts.LocalConfigDir == "" {
 		return fmt.Errorf("--local-config-dir is required with --local-components")
 	}
+
 	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	if err := ensureCodespherePackageForVersion(effectiveOpts, cfg, c.Env); err != nil {
+	if err := ensureCodespherePackageForVersion(ctx, effectiveOpts, cfg, c.Env); err != nil {
 		return err
 	}
 
-	return installCodespherePlatform(cmd.Context(), effectiveOpts, cfg, c.Env)
+	return installCodespherePlatform(ctx, effectiveOpts, cfg, c.Env)
 }
 
 func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, env env.Env) error {
@@ -66,10 +68,12 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	}
 
 	workdir := env.GetOmsWorkdir()
+
 	pm := installer.NewPackage(workdir, opts.Package)
 	if opts.LocalComponents {
 		pm = installer.NewPackage(filepath.Dir(opts.Package), opts.Package)
 	}
+
 	cm := installer.NewConfig()
 	im := system.NewImage(ctx)
 
@@ -88,11 +92,11 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		LocalComponents:   opts.LocalComponents,
 		LocalConfigDir:    opts.LocalConfigDir,
 		SkipImageBuilding: opts.LocalComponents,
-		Context:           ctx,
 	}
-	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
+	if err := ci.Install(ctx, pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install platform: %w", err)
 	}
+
 	return nil
 }
 
@@ -138,5 +142,5 @@ func AddInstallCodespherePlatformCmd(codesphere *cobra.Command, opts *InstallCod
 	}
 
 	util.AddCmd(codesphere, platform.cmd)
-	platform.cmd.RunE = platform.RunE
+	platform.cmd.RunE = util.CancelOnSignal(platform.Run)
 }
