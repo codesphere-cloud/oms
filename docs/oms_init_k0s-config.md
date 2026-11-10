@@ -40,23 +40,23 @@ $ oms init k0s-config --install-config <path> --airgapped --path <bundle>
 ### Options
 
 ```
-      --airgapped               Generate a config for installing k0s without internet access from the airgap image bundle
-  -f, --force                   Force extracting k0s from the package even if it was extracted before
-  -h, --help                    help for k0s-config
-      --install-config string   Path to Codesphere install-config file (required)
-      --no-download             Do not upload a k0s binary, the nodes download k0s themselves
-  -o, --output string           Output file path for the k0sctl config (default: k0sctl-config-<datacenter>.yaml in the OMS workdir)
-  -p, --package string          Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from
-      --path string             Path to the k0s airgap image bundle (requires --airgapped; default: the bundle in the OMS cache)
-      --ssh-key-path string     SSH private key path for remote installation
-  -v, --version string          Version of k0s to install (default "v1.36.5+k0s.0")
-  -y, --yes                     Overwrite an existing k0sctl config without asking
+      --airgapped[=true|false]     Generate a config for installing k0s without internet access from the airgap image bundle
+  -f, --force[=true|false]         Force extracting k0s from the package even if it was extracted before
+  -h, --help[=true|false]          help for k0s-config
+      --install-config string      Path to Codesphere install-config file (required)
+      --no-download[=true|false]   Do not upload a k0s binary, the nodes download k0s themselves
+  -o, --output string              Output file path for the k0sctl config (default: k0sctl-config-<datacenter>.yaml in the OMS workdir)
+  -p, --package string             Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from
+      --path string                Path to the k0s airgap image bundle (requires --airgapped; default: the bundle in the OMS cache)
+      --ssh-key-path string        SSH private key path for remote installation
+  -v, --version string             Version of k0s to install (default "v1.36.5+k0s.0")
+  -y, --yes[=true|false]           Overwrite an existing k0sctl config without asking
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

@@ -14,15 +14,15 @@ oms build images [flags]
 ### Options
 
 ```
-  -c, --config string   Path to the configuration YAML file
-  -f, --force           Force new unpacking of the package even if already extracted
-  -h, --help            help for images
+  -c, --config string        Path to the configuration YAML file
+  -f, --force[=true|false]   Force new unpacking of the package even if already extracted
+  -h, --help[=true|false]    help for images
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

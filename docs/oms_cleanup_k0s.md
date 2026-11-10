@@ -39,17 +39,17 @@ $ oms cleanup k0s --install-config <path> --force
 ### Options
 
 ```
-  -f, --force                   Skip the confirmation prompt
-  -h, --help                    help for k0s
-      --install-config string   Path to Codesphere install-config file (required)
-      --skip-reboot             Do not reboot the nodes after the cleanup
-      --ssh-key-path string     SSH private key path to access the nodes
+  -f, --force[=true|false]         Skip the confirmation prompt
+  -h, --help[=true|false]          help for k0s
+      --install-config string      Path to Codesphere install-config file (required)
+      --skip-reboot[=true|false]   Do not reboot the nodes after the cleanup
+      --ssh-key-path string        SSH private key path to access the nodes
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

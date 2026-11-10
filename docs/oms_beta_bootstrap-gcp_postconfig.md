@@ -16,7 +16,7 @@ oms beta bootstrap-gcp postconfig [flags]
 ### Options
 
 ```
-  -h, --help                         help for postconfig
+  -h, --help[=true|false]            help for postconfig
       --install-config-path string   Path to the installation configuration file (default "config.yaml")
       --private-key-path string      Path to the GCP service account private key file (optional)
 ```
@@ -24,7 +24,7 @@ oms beta bootstrap-gcp postconfig [flags]
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

@@ -17,17 +17,17 @@ oms beta extend baseimage [flags]
 ### Options
 
 ```
-  -b, --baseimage string    Base image file name inside the package to extend (default: 'workspace-agent-24.04') (default "workspace-agent-24.04")
-  -d, --dockerfile string   Output Dockerfile to generate for extending the base image (default "Dockerfile")
-  -f, --force               Enforce package extraction
-  -h, --help                help for baseimage
-  -p, --package string      Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load base image from
+  -b, --baseimage string     Base image file name inside the package to extend (default: 'workspace-agent-24.04') (default "workspace-agent-24.04")
+  -d, --dockerfile string    Output Dockerfile to generate for extending the base image (default "Dockerfile")
+  -f, --force[=true|false]   Enforce package extraction
+  -h, --help[=true|false]    help for baseimage
+  -p, --package string       Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load base image from
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

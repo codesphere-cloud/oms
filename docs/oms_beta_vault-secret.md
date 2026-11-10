@@ -27,7 +27,7 @@ $ oms vault-secret --vault-file prod.vault.yaml --age-key /path/to/age_key.txt -
 
 ```
       --age-key string       Path to the age key file (required for sops unless an age key environment variable is set)
-  -h, --help                 help for vault-secret
+  -h, --help[=true|false]    help for vault-secret
       --namespace string     Kubernetes namespace where the secret will be created (default "codesphere")
       --secret-name string   Name of the Kubernetes secret to create (default "cs-vault")
       --vault-file string    Path to the vault file (required)
@@ -37,7 +37,7 @@ $ oms vault-secret --vault-file prod.vault.yaml --age-key /path/to/age_key.txt -
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO
