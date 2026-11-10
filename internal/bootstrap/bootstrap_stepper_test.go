@@ -169,6 +169,7 @@ var _ = Describe("Step logger", func() {
 				if calls < 3 {
 					return errors.New("transient")
 				}
+
 				return nil
 			}, 3)
 			Expect(err).NotTo(HaveOccurred())
@@ -183,6 +184,7 @@ var _ = Describe("Step logger", func() {
 				if calls < 3 {
 					return errors.New("earlier problem")
 				}
+
 				return lastFailure
 			}, 3)
 			Expect(err).To(MatchError(lastFailure))

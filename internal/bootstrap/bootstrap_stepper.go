@@ -63,6 +63,7 @@ func NewStepLogger(silent bool, options ...StepLoggerOption) *StepLogger {
 	for _, option := range options {
 		option(&config)
 	}
+
 	return &StepLogger{config: config, retryDelay: defaultRetryDelay}
 }
 
@@ -153,6 +154,7 @@ func (b *StepLogger) Step(name string, fn func() error) error {
 // Returns an error if all attempts failed.
 func (b *StepLogger) StepWithRetry(name string, fn func() error, maxRetries int) error {
 	var lastError error
+
 	for i := range maxRetries {
 		attemptID := i + 1
 
@@ -168,6 +170,7 @@ func (b *StepLogger) StepWithRetry(name string, fn func() error, maxRetries int)
 
 		lastError = err
 		log.Printf("'%s' failed on attempt %v/%v: %s", name, attemptID, maxRetries, err)
+
 		if attemptID < maxRetries {
 			time.Sleep(b.retryDelay)
 			log.Printf("Retrying '%s'...", name)
