@@ -9,13 +9,13 @@ Build and push container images to a registry using the provided configuration.
 ### Options
 
 ```
-  -h, --help   help for build
+  -h, --help[=true|false]   help for build
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

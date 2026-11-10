@@ -9,13 +9,13 @@ Install Codesphere and other components like Ceph and PostgreSQL.
 ### Options
 
 ```
-  -h, --help   help for install
+  -h, --help[=true|false]   help for install
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

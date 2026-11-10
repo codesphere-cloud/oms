@@ -13,15 +13,15 @@ oms update api-key [flags]
 ### Options
 
 ```
-  -h, --help               help for api-key
-  -i, --id string          The ID of the API key to update
-      --valid-for string   Validity duration in days to extend the API key (e.g., 10d)
+  -h, --help[=true|false]   help for api-key
+  -i, --id string           The ID of the API key to update
+      --valid-for string    Validity duration in days to extend the API key (e.g., 10d)
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

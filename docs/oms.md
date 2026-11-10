@@ -12,8 +12,8 @@ like downloading new versions.
 ### Options
 
 ```
-  -h, --help      help for oms
-      --verbose   Enable verbose output
+  -h, --help[=true|false]      help for oms
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO
