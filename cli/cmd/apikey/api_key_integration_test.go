@@ -60,7 +60,7 @@ var _ = Describe("API Key Integration Tests", func() {
 			}
 
 			GinkgoWriter.Printf("Attempting to register API key for owner: %s at API: %s\n", registerCmd.Opts.Owner, os.Getenv("OMS_PORTAL_API"))
-			newKey, err := registerCmd.Register(portalClient)
+			newKey, err := registerCmd.Register(context.Background(), portalClient)
 			if err != nil {
 				GinkgoWriter.Printf("Registration failed: %v\n", err)
 			}
@@ -94,7 +94,7 @@ var _ = Describe("API Key Integration Tests", func() {
 
 			GinkgoWriter.Printf("[DEBUG] Attempting to register API key for owner: %s, org: %s at API: %s\n",
 				testOwner, testOrg, os.Getenv("OMS_PORTAL_API"))
-			newKey, err := registerCmd.Register(portalClient)
+			newKey, err := registerCmd.Register(context.Background(), portalClient)
 			if err != nil {
 				GinkgoWriter.Printf("[ERROR] Registration failed: %v\n", err)
 			}
@@ -111,7 +111,7 @@ var _ = Describe("API Key Integration Tests", func() {
 			// switch to the new key
 			p.Env = NewTestEnv(newKey.ApiKey, os.Getenv("OMS_PORTAL_API"), "")
 
-			builds, err := p.ListBuilds(portal.CodesphereProduct, portal.SortSemver)
+			builds, err := p.ListBuilds(context.Background(), portal.CodesphereProduct, portal.SortSemver)
 			Expect(err).To(BeNil(), "Listing builds with new key should succeed")
 			Expect(builds.Builds).NotTo(BeEmpty(), "Should have at least one build available")
 
@@ -124,12 +124,12 @@ var _ = Describe("API Key Integration Tests", func() {
 				},
 			}
 
-			err = updateCmd.UpdateAPIKey(p)
+			err = updateCmd.UpdateAPIKey(context.Background(), p)
 			Expect(err).To(BeNil(), "API key update should succeed")
 			afterUpdate := time.Now()
 
 			By("Verifying the API key was updated")
-			keys, err := p.ListAPIKeys()
+			keys, err := p.ListAPIKeys(context.Background())
 			Expect(err).To(BeNil(), "Listing API keys should succeed")
 
 			// Find the updated key
@@ -153,11 +153,11 @@ var _ = Describe("API Key Integration Tests", func() {
 				},
 			}
 
-			err = revokeCmd.Revoke(portalClient)
+			err = revokeCmd.Revoke(context.Background(), portalClient)
 			Expect(err).To(BeNil(), "API key revocation should succeed")
 
 			By("Ensuring the API Key is not valid anymore")
-			_, useErr := p.ListBuilds(portal.CodesphereProduct, portal.SortSemver)
+			_, useErr := p.ListBuilds(context.Background(), portal.CodesphereProduct, portal.SortSemver)
 			Expect(useErr).NotTo(BeNil(), "Using a revoked API key should fail")
 		})
 	})
@@ -171,7 +171,7 @@ var _ = Describe("API Key Integration Tests", func() {
 				},
 			}
 
-			err := updateCmd.UpdateAPIKey(portalClient)
+			err := updateCmd.UpdateAPIKey(context.Background(), portalClient)
 			Expect(err).NotTo(BeNil(), "Should fail with invalid valid-for duration")
 			Expect(err.Error()).To(ContainSubstring("failed to parse valid-for duration"))
 		})
