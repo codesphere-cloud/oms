@@ -61,9 +61,11 @@ var _ = Describe("AppOfApps.Install", func() {
 	// getApp reads back the Application the installer applied.
 	getApp := func() *argov1alpha1.Application {
 		GinkgoHelper()
+
 		app := &argov1alpha1.Application{}
 		err := fakeClient.Get(context.Background(), client.ObjectKey{Name: appName, Namespace: "argocd"}, app)
 		Expect(err).ToNot(HaveOccurred())
+
 		return app
 	}
 
@@ -73,8 +75,10 @@ var _ = Describe("AppOfApps.Install", func() {
 		Expect(app.Spec.Source).ToNot(BeNil())
 		Expect(app.Spec.Source.Helm).ToNot(BeNil())
 		Expect(app.Spec.Source.Helm.ValuesObject).ToNot(BeNil())
+
 		vals := map[string]interface{}{}
 		Expect(json.Unmarshal(app.Spec.Source.Helm.ValuesObject.Raw, &vals)).To(Succeed())
+
 		return vals
 	}
 

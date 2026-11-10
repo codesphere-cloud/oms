@@ -33,6 +33,7 @@ func (dm *Dockerfile) UpdateFromStatement(dockerfile io.Reader, baseImage string
 	fromRegex := regexp.MustCompile(`(?i)(.*FROM\s+).*workspace-agent[^\s]*(.*)`)
 
 	updated := false
+
 	lines := strings.Split(string(content), "\n")
 	for i, line := range lines {
 		if fromRegex.MatchString(line) {

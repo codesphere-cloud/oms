@@ -30,9 +30,11 @@ var _ = Describe("Tar", func() {
 		archiveIn   io.Reader
 		archiveData []byte
 	)
+
 	BeforeEach(func() {
 		// Create an in-memory tar.gz containing the embedded files.
 		var buf bytes.Buffer
+
 		gz := gzip.NewWriter(&buf)
 		tw := tar.NewWriter(gz)
 
@@ -40,6 +42,7 @@ var _ = Describe("Tar", func() {
 		add := func(name, key string) {
 			dataStr, ok := fileContents[key]
 			Expect(ok).To(BeTrue(), "missing test data for %s", key)
+
 			data := []byte(dataStr)
 			hdr := &tar.Header{
 				Name: name,

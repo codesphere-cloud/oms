@@ -83,6 +83,7 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 		if resp.Body != nil {
 			_ = resp.Body.Close()
 		}
+
 		return nil, fmt.Errorf("unexpected response: %w", err)
 	}
 
@@ -105,6 +106,7 @@ func (c *PortalClient) isOKResponseStatus(resp *http.Response) error {
 
 	if resp.StatusCode >= 300 {
 		var respBody string
+
 		if resp.Body != nil {
 			body, _ := io.ReadAll(resp.Body)
 			respBody = strings.TrimSpace(string(body))
@@ -130,6 +132,7 @@ func (c *PortalClient) isOKResponseStatus(resp *http.Response) error {
 // HttpRequest sends an unauthorized HTTP request to the portal API with the specified method, path, and body.
 func (c *PortalClient) HttpRequest(method string, path string, body []byte) (*http.Response, error) {
 	requestBody := bytes.NewBuffer(body)
+
 	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get generate URL: %w", err)
@@ -140,6 +143,7 @@ func (c *PortalClient) HttpRequest(method string, path string, body []byte) (*ht
 		log.Fatalf("failed to create request: %v", err)
 		return nil, err
 	}
+
 	if len(body) > 0 {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -176,10 +180,12 @@ func (c *PortalClient) ListBuilds(product Product, sort string) (Builds, error) 
 	if err != nil {
 		return Builds{}, fmt.Errorf("failed to generate URL: %w", err)
 	}
+
 	u, parseErr := url.Parse(requestUrl)
 	if parseErr != nil {
 		return Builds{}, fmt.Errorf("failed to parse URL: %w", parseErr)
 	}
+
 	q := u.Query()
 	q.Set("sort", sort)
 	u.RawQuery = q.Encode()
@@ -195,6 +201,7 @@ func (c *PortalClient) ListBuilds(product Product, sort string) (Builds, error) 
 		if resp != nil && resp.Body != nil {
 			_ = resp.Body.Close()
 		}
+
 		return Builds{}, fmt.Errorf("failed to list packages: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -229,6 +236,7 @@ func (c *PortalClient) GetBuild(product Product, version string, hash string) (B
 	}
 
 	matchingPackages := []Build{}
+
 	for _, build := range packages.Builds {
 		if build.Version == version {
 			if len(hash) == 0 || strings.HasPrefix(hash, build.Hash) {
@@ -256,12 +264,14 @@ func (c *PortalClient) DownloadBuildArtifact(ctx context.Context, product Produc
 	if err != nil {
 		return fmt.Errorf("failed to get generate URL: %w", err)
 	}
+
 	bodyReader := bytes.NewBuffer(reqBody)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, bodyReader)
 	if err != nil {
 		return fmt.Errorf("failed to create GET request to download build: %w", err)
 	}
+
 	if startByte > 0 {
 		log.Printf("Resuming download of existing file at byte %d\n", startByte)
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", startByte))
@@ -269,10 +279,12 @@ func (c *PortalClient) DownloadBuildArtifact(ctx context.Context, product Produc
 
 	// Download the file from startByte to allow resuming
 	req.Header.Set("Content-Type", "application/json")
+
 	resp, err := c.AuthorizedHttpRequest(req)
 	if err != nil {
 		return fmt.Errorf("GET request to download build failed: %w", err)
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	// Create a WriteCounter to wrap the output file and report progress, unless quiet is requested.
@@ -288,6 +300,7 @@ func (c *PortalClient) DownloadBuildArtifact(ctx context.Context, product Produc
 	}
 
 	log.Println("Download finished successfully.")
+
 	return nil
 }
 
@@ -348,6 +361,7 @@ func (c *PortalClient) RegisterAPIKey(owner string, organization string, role st
 	}
 
 	newKey := &ApiKey{}
+
 	err = json.Unmarshal(responseBody, newKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode response body: %w", err)
@@ -402,6 +416,7 @@ func (c *PortalClient) UpdateAPIKey(key string, expiresAt time.Time) error {
 	defer func() { _ = resp.Body.Close() }()
 
 	log.Println("API key updated successfully")
+
 	return nil
 }
 

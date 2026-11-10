@@ -103,6 +103,7 @@ func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
 	}
 
 	store := vault.NewVaultTemplatingSecretStore(g.Vault)
+
 	data, err = configtemplating.RenderInstallConfigTemplate(data, store)
 	if err != nil {
 		return err
@@ -114,6 +115,7 @@ func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
 	}
 
 	g.Config = &config
+
 	return nil
 }
 
@@ -131,6 +133,7 @@ func (g *InstallConfig) LoadVaultFromFile(vaultPath string) error {
 	}
 
 	g.Vault = loaded
+
 	return nil
 }
 
@@ -145,6 +148,7 @@ func (g *InstallConfig) LoadVaultFromUnecryptedFile(vaultPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load vault: %w", err)
 	}
+
 	return nil
 }
 
@@ -158,6 +162,7 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 	if g.Config.Datacenter.ID == 0 {
 		errors = append(errors, "datacenter ID is required")
 	}
+
 	if g.Config.Datacenter.Name == "" {
 		errors = append(errors, "datacenter name is required")
 	}
@@ -177,12 +182,14 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 		if err := validatePostgresServerAddress(g.Config.Postgres); err != nil {
 			errors = append(errors, err.Error())
 		}
+
 		if g.Config.Postgres.Primary == nil {
 			errors = append(errors, "postgres primary configuration is required when mode is 'install'")
 		} else {
 			if g.Config.Postgres.Primary.IP == "" {
 				errors = append(errors, "postgres primary IP is required")
 			}
+
 			if g.Config.Postgres.Primary.Hostname == "" {
 				errors = append(errors, "postgres primary hostname is required")
 			}
@@ -196,6 +203,7 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 	if len(g.Config.Ceph.Hosts) == 0 {
 		errors = append(errors, "at least one Ceph host is required")
 	}
+
 	for _, host := range g.Config.Ceph.Hosts {
 		if !IsValidIP(host.IPAddress) {
 			errors = append(errors, fmt.Sprintf("invalid Ceph host IP: %s", host.IPAddress))
@@ -210,6 +218,7 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 		if g.Config.Kubernetes.PodCIDR == "" {
 			errors = append(errors, "pod CIDR is required for external Kubernetes")
 		}
+
 		if g.Config.Kubernetes.ServiceCIDR == "" {
 			errors = append(errors, "service CIDR is required for external Kubernetes")
 		}
@@ -223,12 +232,15 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 		if g.Config.Codesphere.OpenBao.URI == "" {
 			errors = append(errors, "OpenBao URI is required when OpenBao integration is enabled")
 		}
+
 		if _, err := url.ParseRequestURI(g.Config.Codesphere.OpenBao.URI); err != nil {
 			errors = append(errors, "OpenBao URI must be a valid URL")
 		}
+
 		if g.Config.Codesphere.OpenBao.Engine == "" {
 			errors = append(errors, "OpenBao engine name is required when OpenBao integration is enabled")
 		}
+
 		if g.Config.Codesphere.OpenBao.User == "" {
 			errors = append(errors, "OpenBao username is required when OpenBao integration is enabled")
 		}
@@ -238,6 +250,7 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 		if ob.DestinationPath == "" {
 			errors = append(errors, "openfga backups destinationPath is required when openfgaBackups is enabled")
 		}
+
 		if ob.EndpointURL == "" {
 			errors = append(errors, "openfga backups endpointURL is required when openfgaBackups is enabled")
 		}
@@ -340,6 +353,7 @@ func validateOpenFga(config *files.OpenFgaConfig) []string {
 			errors = append(errors, "OpenFGA cannot be exposed by a data center that does not deploy it")
 		}
 	}
+
 	return errors
 }
 
@@ -447,6 +461,7 @@ func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to write vault: %w", err)
 	}
+
 	return nil
 }
 
@@ -460,6 +475,7 @@ func AddConfigComments(yamlData []byte) []byte {
 # For more information, see the installation documentation.
 
 `
+
 	return append([]byte(header), yamlData...)
 }
 
@@ -483,6 +499,7 @@ func AddVaultComments(yamlData []byte) []byte {
 #    sops prod.vault.yaml
 
 `
+
 	return append([]byte(header), yamlData...)
 }
 
@@ -498,5 +515,6 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 	case PROFILE_MINIMAL:
 		return g.applyProfileMinimal()
 	}
+
 	return fmt.Errorf("unknown profile: %s, available profiles: dev, prod, minimal", profile)
 }

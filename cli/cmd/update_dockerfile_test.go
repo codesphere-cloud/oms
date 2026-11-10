@@ -147,6 +147,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 				_ = tempFile.Close()
 				_ = os.Remove(tempFile.Name())
 			})
+
 			_, err = tempFile.WriteString(sampleDockerfileContent)
 			Expect(err).To(BeNil())
 			// Reset file position to beginning
@@ -181,6 +182,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 				_ = tempFile.Close()
 				_ = os.Remove(tempFile.Name())
 			})
+
 			_, err = tempFile.WriteString(sampleDockerfileContent)
 			Expect(err).To(BeNil())
 			// Reset file position to beginning
@@ -214,6 +216,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 				_ = tempFile.Close()
 				_ = os.Remove(tempFile.Name())
 			})
+
 			_, err = tempFile.WriteString(sampleDockerfileContent)
 			Expect(err).To(BeNil())
 			// Reset file position to beginning
@@ -247,6 +250,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 				_ = tempFile.Close()
 				_ = os.Remove(tempFile.Name())
 			})
+
 			_, err = tempFile.WriteString(sampleDockerfileContent)
 			Expect(err).To(BeNil())
 			// Reset file position to beginning
@@ -285,6 +289,7 @@ var _ = Describe("AddUpdateDockerfileCmd", func() {
 		cmd.AddUpdateDockerfileCmd(parentCmd, globalOpts)
 
 		var dockerfileCmd *cobra.Command
+
 		for _, c := range parentCmd.Commands() {
 			if c.Use == "dockerfile" {
 				dockerfileCmd = c

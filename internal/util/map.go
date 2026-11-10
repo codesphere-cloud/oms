@@ -10,10 +10,12 @@ func StringSliceToBoolMap(items []string) map[string]bool {
 	if items == nil {
 		return nil
 	}
+
 	m := make(map[string]bool, len(items))
 	for _, item := range items {
 		m[item] = true
 	}
+
 	return m
 }
 

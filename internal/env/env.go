@@ -44,6 +44,7 @@ func (e *Environment) GetOmsPortalApiKey() (string, error) {
 	if IsLegacyAPIKey(apiToken) {
 		return "", ErrLegacyAPIKey
 	}
+
 	return apiToken, nil
 }
 
@@ -52,6 +53,7 @@ func (e *Environment) GetOmsWorkdir() string {
 	if workdir == "" {
 		return "./oms-workdir"
 	}
+
 	return workdir
 }
 
@@ -60,6 +62,7 @@ func (e *Environment) GetOmsCacheDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	return filepath.Join(cacheDir, "oms"), nil
 }
 
@@ -68,5 +71,6 @@ func (e *Environment) GetOmsPortalApi() string {
 	if apiUrl == "" {
 		return "https://oms-portal.codesphere.com/api"
 	}
+
 	return apiUrl
 }
