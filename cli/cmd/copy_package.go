@@ -135,6 +135,7 @@ func (c *CopyPackageCmd) CopyPackage(ctx context.Context, packageManager install
 
 	if c.Opts.ShowArtifacts {
 		log.Printf("Artifacts to copy (%d):", len(artifacts))
+
 		for _, artifact := range artifacts {
 			log.Printf("  %s -> %s", artifact.Source, artifact.Destination)
 		}
@@ -147,6 +148,7 @@ func (c *CopyPackageCmd) CopyPackage(ctx context.Context, packageManager install
 	}
 
 	log.Printf("Copying %d package artifacts...", len(artifacts))
+
 	if err := installer.CopyPackageArtifacts(ctx, copier, artifacts); err != nil {
 		return fmt.Errorf("failed to copy package artifacts: %w", err)
 	}

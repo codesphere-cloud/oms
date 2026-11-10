@@ -10,6 +10,7 @@ import (
 func MustMap[T any](value any) map[string]T {
 	result, ok := value.(map[string]T)
 	gomega.Expect(ok).To(gomega.BeTrue(), "expected map[string]%T, got %T", *new(T), value)
+
 	return result
 }
 

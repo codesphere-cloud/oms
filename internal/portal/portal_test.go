@@ -49,6 +49,7 @@ var _ = Describe("PortalClient", func() {
 		apiKey         string
 		apiKeyErr      error
 	)
+
 	BeforeEach(func() {
 		apiKey = "fake-api-key"
 		apiKeyErr = nil
@@ -127,6 +128,7 @@ var _ = Describe("PortalClient", func() {
 							if strings.Contains(req.URL.Path, "health") {
 								headers := http.Header{}
 								headers.Add("X-Service-Name", "oms-portal")
+
 								return &http.Response{
 									StatusCode: http.StatusOK,
 									Header:     headers,
@@ -184,6 +186,7 @@ var _ = Describe("PortalClient", func() {
 				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
 					func(req *http.Request) (*http.Response, error) {
 						getUrl = *req.URL
+
 						return &http.Response{
 							StatusCode: http.StatusOK,
 							Body:       io.NopCloser(bytes.NewReader([]byte{})),
@@ -203,6 +206,7 @@ var _ = Describe("PortalClient", func() {
 				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
 					func(req *http.Request) (*http.Response, error) {
 						getUrl = *req.URL
+
 						return &http.Response{
 							StatusCode: http.StatusOK,
 							Body:       io.NopCloser(bytes.NewReader([]byte{})),
@@ -248,6 +252,7 @@ var _ = Describe("PortalClient", func() {
 				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
 					func(req *http.Request) (*http.Response, error) {
 						getUrl = *req.URL
+
 						return &http.Response{
 							StatusCode: http.StatusOK,
 							Body:       io.NopCloser(bytes.NewReader(responseBody)),
@@ -285,6 +290,7 @@ var _ = Describe("PortalClient", func() {
 				func(req *http.Request) (*http.Response, error) {
 					getUrl = *req.URL
 					headers = req.Header
+
 					return &http.Response{
 						StatusCode: http.StatusOK,
 						Body:       io.NopCloser(bytes.NewReader([]byte("fake-file-contents"))),
@@ -312,9 +318,11 @@ var _ = Describe("PortalClient", func() {
 	})
 
 	Describe("VerifyBuildArtifactDownload", func() {
-		var testfilePath string
-		var testfile *os.File
-		var testfileMd5Sum string
+		var (
+			testfilePath   string
+			testfile       *os.File
+			testfileMd5Sum string
+		)
 
 		BeforeEach(func() {
 			var err error
@@ -396,7 +404,6 @@ var _ = Describe("PortalClient", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to compute checksum"))
 		})
-
 	})
 
 	Describe("GetLatestOmsBuild", func() {
@@ -421,6 +428,7 @@ var _ = Describe("PortalClient", func() {
 				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
 					func(req *http.Request) (*http.Response, error) {
 						getUrl = *req.URL
+
 						return &http.Response{
 							StatusCode: http.StatusOK,
 							Body:       io.NopCloser(bytes.NewReader(responseBody)),

@@ -322,6 +322,7 @@ func (i *AppInstaller) getPcAppsValues() (files.ChartValues, error) {
 	if err != nil {
 		return nil, fmt.Errorf("configuring cluster-config application: %w", err)
 	}
+
 	openFGAppValues := pcapps.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault)
 	rookCephAppValues := pcapps.RookCephPcAppsValues(&i.cfg.Config)
 

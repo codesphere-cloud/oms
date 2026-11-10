@@ -43,6 +43,7 @@ func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
 	}
 
 	p := portal.NewPortalClient()
+
 	build, err := p.GetBuild(portal.CodesphereProduct, c.Opts.Version, c.Opts.Hash)
 	if err != nil {
 		return fmt.Errorf("failed to get codesphere package: %w", err)
@@ -110,5 +111,6 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 	}); err != nil {
 		return fmt.Errorf("failed to download and verify build: %w", err)
 	}
+
 	return nil
 }

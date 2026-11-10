@@ -71,10 +71,13 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	if c.Opts.LocalComponents {
 		return fmt.Errorf("--local-components requires install codesphere dependencies or install codesphere platform")
 	}
+
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
+
 	ctx := cmd.Context()
+
 	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err
@@ -84,6 +87,7 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	if err := ensureCodespherePackageForVersion(effectiveOpts, cfg, c.Env); err != nil {
 		return err
 	}
+
 	laterOpts := laterPhaseOpts(effectiveOpts)
 
 	infraInstaller := &installer.CodesphereInstaller{
@@ -212,6 +216,7 @@ func sharedInstallCodesphereSteps() []string {
 func laterPhaseOpts(opts *InstallCodesphereOpts) *InstallCodesphereOpts {
 	later := *opts
 	later.SkipSteps = slices.Concat(sharedInstallCodesphereSteps(), opts.SkipSteps)
+
 	return &later
 }
 
@@ -245,6 +250,7 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 
 		store = vault.NewLazyVaultTemplatingSecretStoreWithVault(backend)
 	}
+
 	cleanupFns := []func(){}
 	cleanup := func() {
 		for i := len(cleanupFns) - 1; i >= 0; i-- {
@@ -253,6 +259,7 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 	}
 
 	merged := map[string]any{}
+
 	for _, configPath := range configFiles {
 		renderedPath := configPath
 		if opts.Vault != "" {
@@ -261,6 +268,7 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 				cleanup()
 				return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to render config template %s: %w", configPath, err)
 			}
+
 			cleanupFns = append(cleanupFns, renderCleanup)
 			renderedPath = tmpPath
 		}
@@ -276,6 +284,7 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 			cleanup()
 			return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to parse config file %s: %w", renderedPath, err)
 		}
+
 		if partial == nil {
 			partial = map[string]any{}
 		}
@@ -285,6 +294,7 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 				operations["codesphere"] = map[string]any{"version": version, "hash": ""}
 			}
 		}
+
 		merged = intutil.DeepMergeMaps(merged, partial)
 	}
 	// The PC installer reads the merged file, not cfg, so a legacy key has to move in the map.
@@ -314,24 +324,35 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 		cleanup()
 		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to create merged config directory: %w", err)
 	}
+
 	mergedPath := filepath.Join(mergedDir, mergedInstallConfigFileName)
+
 	tmp, err := os.OpenFile(mergedPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		cleanup()
+
 		_ = os.RemoveAll(mergedDir)
+
 		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to create merged config file %s: %w", mergedPath, err)
 	}
+
 	if _, err := tmp.Write(mergedBytes); err != nil {
 		_ = tmp.Close()
 		_ = os.RemoveAll(mergedDir)
+
 		cleanup()
+
 		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to write merged config file: %w", err)
 	}
+
 	if err := tmp.Close(); err != nil {
 		_ = os.RemoveAll(mergedDir)
+
 		cleanup()
+
 		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to close merged config file: %w", err)
 	}
+
 	cleanupFns = append(cleanupFns, func() {
 		_ = os.RemoveAll(mergedDir)
 	})
@@ -344,6 +365,7 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 
 	effectiveOpts := *opts
 	effectiveOpts.ConfigPath = mergedPath
+
 	effectiveOpts.Configs = append([]string(nil), configFiles...)
 
 	return &effectiveOpts, cfg, cleanup, nil

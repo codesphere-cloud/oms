@@ -36,6 +36,7 @@ func DownloadAndVerifyBuild(p Portal, fileWriter intutil.FileIO, product Product
 	defer intutil.CloseFileIgnoreError(out)
 
 	fileSize := 0
+
 	if opts.Resume {
 		if fileInfo, statErr := out.Stat(); statErr == nil {
 			fileSize = int(fileInfo.Size())
@@ -75,5 +76,6 @@ func openDestination(fileWriter intutil.FileIO, destination string, resume bool)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file at %q: %w", destination, err)
 	}
+
 	return file, nil
 }

@@ -32,6 +32,7 @@ func isCommandAvailable(name string) bool {
 	if err := cmd.Run(); err != nil {
 		return false
 	}
+
 	return true
 }
 
@@ -40,6 +41,7 @@ func (i *Image) LoadImage(imageTarPath string) error {
 	if err != nil {
 		return fmt.Errorf("load failed: %w", err)
 	}
+
 	return nil
 }
 
@@ -48,6 +50,7 @@ func (i *Image) BuildImage(dockerfile string, tag string, buildContext string) e
 	if err != nil {
 		return fmt.Errorf("build failed: %w", err)
 	}
+
 	return nil
 }
 
@@ -56,6 +59,7 @@ func (i *Image) PushImage(tag string) error {
 	if err != nil {
 		return fmt.Errorf("push failed: %w", err)
 	}
+
 	return nil
 }
 

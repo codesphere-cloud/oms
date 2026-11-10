@@ -35,6 +35,7 @@ func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) erro
 	if c.Opts.LocalComponents && c.Opts.LocalConfigDir == "" {
 		return fmt.Errorf("--local-config-dir is required with --local-components")
 	}
+
 	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err
@@ -66,10 +67,12 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	}
 
 	workdir := env.GetOmsWorkdir()
+
 	pm := installer.NewPackage(workdir, opts.Package)
 	if opts.LocalComponents {
 		pm = installer.NewPackage(filepath.Dir(opts.Package), opts.Package)
 	}
+
 	cm := installer.NewConfig()
 	im := system.NewImage(ctx)
 
@@ -93,6 +96,7 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install platform: %w", err)
 	}
+
 	return nil
 }
 

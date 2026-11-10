@@ -16,5 +16,6 @@ func ExpandPath(path string) string {
 			return filepath.Join(home, path[2:])
 		}
 	}
+
 	return path
 }

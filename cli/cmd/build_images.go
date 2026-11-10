@@ -72,6 +72,7 @@ func (c *BuildImagesCmd) BuildAndPushImages(pm installer.PackageManager, cm inst
 	if len(config.Codesphere.DeployConfig.Images) == 0 {
 		return fmt.Errorf("no images defined in the config")
 	}
+
 	if len(config.Registry.Server) == 0 {
 		return fmt.Errorf("registry server (property registry.server) not defined in the config, please specify a valid registry to which the image shall be pushed")
 	}
@@ -89,6 +90,7 @@ func (c *BuildImagesCmd) BuildAndPushImages(pm installer.PackageManager, cm inst
 	for imageName, imageConfig := range config.Codesphere.DeployConfig.Images {
 		for flavorName, flavorConfig := range imageConfig.Flavors {
 			log.Printf("Processing image '%s' with flavor '%s'", imageName, flavorName)
+
 			if flavorConfig.Image.Dockerfile == "" {
 				log.Printf("Skipping flavor '%s', no dockerfile defined", flavorName)
 				continue

@@ -182,6 +182,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 		})
 		It("completes successfully with all steps", func() {
 			mockFullTestRun(mockClient, teamIdInt, planIdInt, 789)
+
 			err := c.RunSmoketest()
 			Expect(err).To(BeNil())
 		})
@@ -645,13 +646,16 @@ var _ = Describe("AddSmoketestCodesphereCmd", func() {
 		parent := &cobra.Command{}
 		opts := &util.GlobalOptions{}
 		codesphere.AddSmoketestCmd(parent, opts)
+
 		found := false
+
 		for _, c := range parent.Commands() {
 			if c.Use == "codesphere" {
 				found = true
 				break
 			}
 		}
+
 		Expect(found).To(BeTrue())
 	})
 })
