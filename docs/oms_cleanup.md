@@ -9,13 +9,13 @@ Remove components installed by OMS, e.g. to recover from a failed installation.
 ### Options
 
 ```
-  -h, --help   help for cleanup
+  -h, --help[=true|false]   help for cleanup
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO
