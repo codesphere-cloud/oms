@@ -7,6 +7,7 @@ package bootstrap
 // Line resets don't work with log.Print as expected.
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -28,7 +29,10 @@ type StepLogger struct {
 	currentStep string
 	timings     []stepTiming
 	depth       int
+	retryDelay  time.Duration
 }
+
+const defaultRetryDelay = 500 * time.Millisecond
 
 type stepTiming struct {
 	name     string
@@ -59,7 +63,7 @@ func NewStepLogger(silent bool, options ...StepLoggerOption) *StepLogger {
 	for _, option := range options {
 		option(&config)
 	}
-	return &StepLogger{config: config}
+	return &StepLogger{config: config, retryDelay: defaultRetryDelay}
 }
 
 func (b *StepLogger) elapsed(start time.Time) string {
@@ -116,6 +120,8 @@ func (b *StepLogger) PrintSummary() {
 	_ = w.Flush()
 }
 
+// Step runs fn as a top-level step, printing its progress, result, and duration and recording its timing.
+// Returns an error if fn does.
 func (b *StepLogger) Step(name string, fn func() error) error {
 	if b.config.Silent {
 		return fn()
@@ -136,9 +142,40 @@ func (b *StepLogger) Step(name string, fn func() error) error {
 		}
 		fmt.Printf("%s%s%s %s✓%s%s\n", LINE_RESET, RESET_TEXT, name, GREEN_TEXT, b.elapsed(start), RESET_TEXT)
 	}
+
 	return err
 }
 
+// StepWithRetry is calling Step up to maxRetries with a backoff of 500ms.
+// Returns an error if all attempts failed.
+func (b *StepLogger) StepWithRetry(name string, fn func() error, maxRetries int) error {
+	var lastError error
+	for i := range maxRetries {
+		attemptId := i + 1
+
+		stepName := name
+		if attemptId != 1 {
+			stepName = fmt.Sprintf("%s (Retry %v/%v)", name, attemptId, maxRetries)
+		}
+
+		err := b.Step(stepName, fn)
+		if err == nil {
+			return nil
+		}
+
+		lastError = err
+		log.Printf("'%s' failed on attempt %v/%v: %s", name, attemptId, maxRetries, err)
+		if attemptId < maxRetries {
+			time.Sleep(b.retryDelay)
+			log.Printf("Retrying '%s'...", name)
+		}
+	}
+
+	return fmt.Errorf("'%s' failed after %v retries - last error: %w", name, maxRetries, lastError)
+}
+
+// Substep runs fn as an indented substep of the current step, printing its progress, result, and duration and recording its timing.
+// Returns an error if fn does.
 func (b *StepLogger) Substep(name string, fn func() error) error {
 	if b.config.Silent {
 		return fn()
