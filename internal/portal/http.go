@@ -4,6 +4,7 @@
 package portal
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -12,9 +13,9 @@ import (
 
 //mockery:generate: true
 type Http interface {
-	Request(url string, method string, body io.Reader) (responseBody []byte, err error)
-	Get(url string) (responseBody []byte, err error)
-	Download(url string, file io.Writer, quiet bool) error
+	Request(ctx context.Context, url string, method string, body io.Reader) (responseBody []byte, err error)
+	Get(ctx context.Context, url string) (responseBody []byte, err error)
+	Download(ctx context.Context, url string, file io.Writer, quiet bool) error
 }
 
 type HttpWrapper struct {
@@ -27,8 +28,9 @@ func NewHttpWrapper() *HttpWrapper {
 	}
 }
 
-func (c *HttpWrapper) Request(url string, method string, body io.Reader) (responseBody []byte, err error) {
-	req, err := http.NewRequest(method, url, body)
+// Request sends a request and returns the response body, failing on non-2xx statuses.
+func (c *HttpWrapper) Request(ctx context.Context, url string, method string, body io.Reader) (responseBody []byte, err error) {
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		log.Fatalf("Error creating request: %v", err)
 		return
@@ -54,12 +56,14 @@ func (c *HttpWrapper) Request(url string, method string, body io.Reader) (respon
 	return respBody, nil
 }
 
-func (c *HttpWrapper) Get(url string) (responseBody []byte, err error) {
-	return c.Request(url, http.MethodGet, nil)
+// Get sends a GET request and returns the response body.
+func (c *HttpWrapper) Get(ctx context.Context, url string) (responseBody []byte, err error) {
+	return c.Request(ctx, url, http.MethodGet, nil)
 }
 
-func (c *HttpWrapper) Download(url string, file io.Writer, quiet bool) error {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+// Download streams the response body of a GET request to file.
+func (c *HttpWrapper) Download(ctx context.Context, url string, file io.Writer, quiet bool) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}

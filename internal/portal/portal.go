@@ -25,14 +25,14 @@ var errDownloadRangeNotSatisfiable = errors.New("download range not satisfiable"
 
 //mockery:generate: true
 type Portal interface {
-	ListBuilds(product Product, sort string) (availablePackages Builds, err error)
-	GetBuild(product Product, version string, hash string) (Build, error)
+	ListBuilds(ctx context.Context, product Product, sort string) (availablePackages Builds, err error)
+	GetBuild(ctx context.Context, product Product, version string, hash string) (Build, error)
 	DownloadBuildArtifact(ctx context.Context, product Product, build Build, file io.Writer, startByte int, quiet bool) error
 	VerifyBuildArtifactDownload(file io.Reader, download Build) error
-	RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) (*ApiKey, error)
-	RevokeAPIKey(key string) error
-	UpdateAPIKey(key string, expiresAt time.Time) error
-	ListAPIKeys() ([]ApiKey, error)
+	RegisterAPIKey(ctx context.Context, owner string, organization string, role string, expiresAt time.Time) (*ApiKey, error)
+	RevokeAPIKey(ctx context.Context, key string) error
+	UpdateAPIKey(ctx context.Context, key string, expiresAt time.Time) error
+	ListAPIKeys(ctx context.Context) ([]ApiKey, error)
 }
 
 type PortalClient struct {
@@ -78,7 +78,7 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
-	err = c.isOKResponseStatus(resp)
+	err = c.isOKResponseStatus(req.Context(), resp)
 	if err != nil {
 		if resp.Body != nil {
 			_ = resp.Body.Close()
@@ -91,7 +91,7 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 
 // isOKResponseStatus checks the status code in the response
 // if status is not a 2xx response it returns an error and logs some info for the user depending on the required steps
-func (c *PortalClient) isOKResponseStatus(resp *http.Response) error {
+func (c *PortalClient) isOKResponseStatus(ctx context.Context, resp *http.Response) error {
 	if resp.StatusCode == http.StatusRequestedRangeNotSatisfiable {
 		return fmt.Errorf("HTTP %d: %w", resp.StatusCode, errDownloadRangeNotSatisfiable)
 	}
@@ -112,7 +112,7 @@ func (c *PortalClient) isOKResponseStatus(resp *http.Response) error {
 
 		log.Printf("Non-2xx response received from OMS-Portal (%s) - Status: %d, Body: %s", c.Env.GetOmsPortalApi(), resp.StatusCode, respBody)
 
-		if healthErr := c.GetHealth(); healthErr != nil {
+		if healthErr := c.GetHealth(ctx); healthErr != nil {
 			log.Printf("OMS-Portal healthcheck also failed: %s", healthErr)
 			log.Println("Please check if the OMS-Portal URL is correct and instance is healthy and reachable at:", c.Env.GetOmsPortalApi())
 		}
@@ -127,15 +127,15 @@ func (c *PortalClient) isOKResponseStatus(resp *http.Response) error {
 	return nil
 }
 
-// HttpRequest sends an unauthorized HTTP request to the portal API with the specified method, path, and body.
-func (c *PortalClient) HttpRequest(method string, path string, body []byte) (*http.Response, error) {
+// HTTPRequest sends an unauthorized HTTP request to the portal API with the specified method, path, and body.
+func (c *PortalClient) HTTPRequest(ctx context.Context, method string, path string, body []byte) (*http.Response, error) {
 	requestBody := bytes.NewBuffer(body)
 	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get generate URL: %w", err)
 	}
 
-	req, err := http.NewRequest(method, url, requestBody)
+	req, err := http.NewRequestWithContext(ctx, method, url, requestBody)
 	if err != nil {
 		log.Fatalf("failed to create request: %v", err)
 		return nil, err
@@ -153,8 +153,8 @@ func (c *PortalClient) HttpRequest(method string, path string, body []byte) (*ht
 }
 
 // GetBody sends a GET request to the specified path and returns the response body and status code.
-func (c *PortalClient) GetBody(path string) ([]byte, int, error) {
-	resp, err := c.HttpRequest(http.MethodGet, path, []byte{})
+func (c *PortalClient) GetBody(ctx context.Context, path string) ([]byte, int, error) {
+	resp, err := c.HTTPRequest(ctx, http.MethodGet, path, []byte{})
 	if err != nil || resp == nil {
 		return nil, 0, fmt.Errorf("GET failed: %w", err)
 	}
@@ -171,7 +171,7 @@ func (c *PortalClient) GetBody(path string) ([]byte, int, error) {
 // ListBuilds retrieves the list of available builds for the specified product.
 // The sort parameter controls server-side ordering: "semver" (by semantic version)
 // or "date" (by build date).
-func (c *PortalClient) ListBuilds(product Product, sort string) (Builds, error) {
+func (c *PortalClient) ListBuilds(ctx context.Context, product Product, sort string) (Builds, error) {
 	requestUrl, err := url.JoinPath(c.Env.GetOmsPortalApi(), fmt.Sprintf("/packages/%s", product))
 	if err != nil {
 		return Builds{}, fmt.Errorf("failed to generate URL: %w", err)
@@ -185,7 +185,7 @@ func (c *PortalClient) ListBuilds(product Product, sort string) (Builds, error) 
 	u.RawQuery = q.Encode()
 	requestUrl = u.String()
 
-	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestUrl, nil)
 	if err != nil {
 		return Builds{}, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -213,8 +213,8 @@ func (c *PortalClient) ListBuilds(product Product, sort string) (Builds, error) 
 }
 
 // GetBuild retrieves a specific build for the given product, version, and hash.
-func (c *PortalClient) GetBuild(product Product, version string, hash string) (Build, error) {
-	packages, err := c.ListBuilds(product, SortDate)
+func (c *PortalClient) GetBuild(ctx context.Context, product Product, version string, hash string) (Build, error) {
+	packages, err := c.ListBuilds(ctx, product, SortDate)
 	if err != nil {
 		return Build{}, fmt.Errorf("failed to list %s packages: %w", product, err)
 	}
@@ -318,7 +318,7 @@ func (c *PortalClient) VerifyBuildArtifactDownload(file io.Reader, download Buil
 }
 
 // RegisterAPIKey registers a new API key with the specified parameters.
-func (c *PortalClient) RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) (*ApiKey, error) {
+func (c *PortalClient) RegisterAPIKey(ctx context.Context, owner string, organization string, role string, expiresAt time.Time) (*ApiKey, error) {
 	req := struct {
 		Owner        string    `json:"owner"`
 		Organization string    `json:"organization"`
@@ -336,7 +336,7 @@ func (c *PortalClient) RegisterAPIKey(owner string, organization string, role st
 		return nil, fmt.Errorf("failed to generate request body: %w", err)
 	}
 
-	resp, err := c.HttpRequest(http.MethodPost, "/key/register", reqBody)
+	resp, err := c.HTTPRequest(ctx, http.MethodPost, "/key/register", reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("POST request to register API key failed: %w", err)
 	}
@@ -357,11 +357,11 @@ func (c *PortalClient) RegisterAPIKey(owner string, organization string, role st
 }
 
 // RevokeAPIKey revokes the API key with the specified key ID.
-func (c *PortalClient) RevokeAPIKey(keyId string) error {
+func (c *PortalClient) RevokeAPIKey(ctx context.Context, keyID string) error {
 	req := struct {
 		KeyID string `json:"keyId"`
 	}{
-		KeyID: keyId,
+		KeyID: keyID,
 	}
 
 	reqBody, err := json.Marshal(req)
@@ -369,7 +369,7 @@ func (c *PortalClient) RevokeAPIKey(keyId string) error {
 		return fmt.Errorf("failed to generate request body: %w", err)
 	}
 
-	resp, err := c.HttpRequest(http.MethodPost, "/key/revoke", reqBody)
+	resp, err := c.HTTPRequest(ctx, http.MethodPost, "/key/revoke", reqBody)
 	if err != nil {
 		return fmt.Errorf("POST request to revoke API key failed: %w", err)
 	}
@@ -381,7 +381,7 @@ func (c *PortalClient) RevokeAPIKey(keyId string) error {
 }
 
 // UpdateAPIKey updates the expiration date of the specified API key.
-func (c *PortalClient) UpdateAPIKey(key string, expiresAt time.Time) error {
+func (c *PortalClient) UpdateAPIKey(ctx context.Context, key string, expiresAt time.Time) error {
 	req := struct {
 		Key       string    `json:"keyId"`
 		ExpiresAt time.Time `json:"expiresAt"`
@@ -395,7 +395,7 @@ func (c *PortalClient) UpdateAPIKey(key string, expiresAt time.Time) error {
 		return fmt.Errorf("failed to generate request body: %w", err)
 	}
 
-	resp, err := c.HttpRequest(http.MethodPost, "/key/update", reqBody)
+	resp, err := c.HTTPRequest(ctx, http.MethodPost, "/key/update", reqBody)
 	if err != nil {
 		return fmt.Errorf("POST request to update API key failed: %w", err)
 	}
@@ -406,8 +406,8 @@ func (c *PortalClient) UpdateAPIKey(key string, expiresAt time.Time) error {
 }
 
 // ListAPIKeys retrieves the list of API keys.
-func (c *PortalClient) ListAPIKeys() ([]ApiKey, error) {
-	res, _, err := c.GetBody("/keys")
+func (c *PortalClient) ListAPIKeys(ctx context.Context) ([]ApiKey, error) {
+	res, _, err := c.GetBody(ctx, "/keys")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list api keys: %w", err)
 	}
@@ -422,13 +422,13 @@ func (c *PortalClient) ListAPIKeys() ([]ApiKey, error) {
 
 // GetHealth checks the response of the OMS-Portal health endpoint
 // returns an error if portal is unhealthy
-func (c *PortalClient) GetHealth() error {
+func (c *PortalClient) GetHealth(ctx context.Context) error {
 	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), "health")
 	if err != nil {
 		return fmt.Errorf("failed to get generate health URL: %w", err)
 	}
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create healthcheck request: %w", err)
 	}

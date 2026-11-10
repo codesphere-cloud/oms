@@ -283,5 +283,7 @@ func AddInstallCodesphereDepenciesCmd(codesphere *cobra.Command, opts *InstallCo
 	}
 
 	util.AddCmd(codesphere, deps.cmd)
-	deps.cmd.RunE = util.CancelOnSignal(deps.Run)
+	deps.cmd.RunE = func(cmd *cobra.Command, _ []string) error {
+		return deps.Run(cmd.Context())
+	}
 }

@@ -7,6 +7,7 @@
 package apikey_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -73,7 +74,7 @@ var _ = Describe("API Key Integration Tests", func() {
 			client := portal.NewPortalClient()
 			client.Env = NewTestEnv(newKey.ApiKey, os.Getenv("OMS_PORTAL_API"), "")
 
-			builds, err := client.ListBuilds(portal.CodesphereProduct, portal.SortSemver)
+			builds, err := client.ListBuilds(context.Background(), portal.CodesphereProduct, portal.SortSemver)
 			Expect(err).To(BeNil(), "Listing builds with created key should succeed")
 			Expect(builds.Builds).NotTo(BeEmpty(), "Created key should be able to see builds")
 		})

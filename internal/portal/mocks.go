@@ -40,16 +40,16 @@ func (_m *MockHttp) EXPECT() *MockHttp_Expecter {
 }
 
 // Download provides a mock function for the type MockHttp
-func (_mock *MockHttp) Download(url string, file io.Writer, quiet bool) error {
-	ret := _mock.Called(url, file, quiet)
+func (_mock *MockHttp) Download(ctx context.Context, url string, file io.Writer, quiet bool) error {
+	ret := _mock.Called(ctx, url, file, quiet)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Download")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, io.Writer, bool) error); ok {
-		r0 = returnFunc(url, file, quiet)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, io.Writer, bool) error); ok {
+		r0 = returnFunc(ctx, url, file, quiet)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -62,31 +62,37 @@ type MockHttp_Download_Call struct {
 }
 
 // Download is a helper method to define mock.On call
+//   - ctx context.Context
 //   - url string
 //   - file io.Writer
 //   - quiet bool
-func (_e *MockHttp_Expecter) Download(url any, file any, quiet any) *MockHttp_Download_Call {
-	return &MockHttp_Download_Call{Call: _e.mock.On("Download", url, file, quiet)}
+func (_e *MockHttp_Expecter) Download(ctx any, url any, file any, quiet any) *MockHttp_Download_Call {
+	return &MockHttp_Download_Call{Call: _e.mock.On("Download", ctx, url, file, quiet)}
 }
 
-func (_c *MockHttp_Download_Call) Run(run func(url string, file io.Writer, quiet bool)) *MockHttp_Download_Call {
+func (_c *MockHttp_Download_Call) Run(run func(ctx context.Context, url string, file io.Writer, quiet bool)) *MockHttp_Download_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(string)
+			arg0 = args[0].(context.Context)
 		}
-		var arg1 io.Writer
+		var arg1 string
 		if args[1] != nil {
-			arg1 = args[1].(io.Writer)
+			arg1 = args[1].(string)
 		}
-		var arg2 bool
+		var arg2 io.Writer
 		if args[2] != nil {
-			arg2 = args[2].(bool)
+			arg2 = args[2].(io.Writer)
+		}
+		var arg3 bool
+		if args[3] != nil {
+			arg3 = args[3].(bool)
 		}
 		run(
 			arg0,
 			arg1,
 			arg2,
+			arg3,
 		)
 	})
 	return _c
@@ -97,14 +103,14 @@ func (_c *MockHttp_Download_Call) Return(err error) *MockHttp_Download_Call {
 	return _c
 }
 
-func (_c *MockHttp_Download_Call) RunAndReturn(run func(url string, file io.Writer, quiet bool) error) *MockHttp_Download_Call {
+func (_c *MockHttp_Download_Call) RunAndReturn(run func(ctx context.Context, url string, file io.Writer, quiet bool) error) *MockHttp_Download_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // Get provides a mock function for the type MockHttp
-func (_mock *MockHttp) Get(url string) ([]byte, error) {
-	ret := _mock.Called(url)
+func (_mock *MockHttp) Get(ctx context.Context, url string) ([]byte, error) {
+	ret := _mock.Called(ctx, url)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Get")
@@ -112,18 +118,18 @@ func (_mock *MockHttp) Get(url string) ([]byte, error) {
 
 	var r0 []byte
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string) ([]byte, error)); ok {
-		return returnFunc(url)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]byte, error)); ok {
+		return returnFunc(ctx, url)
 	}
-	if returnFunc, ok := ret.Get(0).(func(string) []byte); ok {
-		r0 = returnFunc(url)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []byte); ok {
+		r0 = returnFunc(ctx, url)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]byte)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
-		r1 = returnFunc(url)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, url)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -136,19 +142,25 @@ type MockHttp_Get_Call struct {
 }
 
 // Get is a helper method to define mock.On call
+//   - ctx context.Context
 //   - url string
-func (_e *MockHttp_Expecter) Get(url any) *MockHttp_Get_Call {
-	return &MockHttp_Get_Call{Call: _e.mock.On("Get", url)}
+func (_e *MockHttp_Expecter) Get(ctx any, url any) *MockHttp_Get_Call {
+	return &MockHttp_Get_Call{Call: _e.mock.On("Get", ctx, url)}
 }
 
-func (_c *MockHttp_Get_Call) Run(run func(url string)) *MockHttp_Get_Call {
+func (_c *MockHttp_Get_Call) Run(run func(ctx context.Context, url string)) *MockHttp_Get_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(string)
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
 		}
 		run(
 			arg0,
+			arg1,
 		)
 	})
 	return _c
@@ -159,14 +171,14 @@ func (_c *MockHttp_Get_Call) Return(responseBody []byte, err error) *MockHttp_Ge
 	return _c
 }
 
-func (_c *MockHttp_Get_Call) RunAndReturn(run func(url string) ([]byte, error)) *MockHttp_Get_Call {
+func (_c *MockHttp_Get_Call) RunAndReturn(run func(ctx context.Context, url string) ([]byte, error)) *MockHttp_Get_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // Request provides a mock function for the type MockHttp
-func (_mock *MockHttp) Request(url string, method string, body io.Reader) ([]byte, error) {
-	ret := _mock.Called(url, method, body)
+func (_mock *MockHttp) Request(ctx context.Context, url string, method string, body io.Reader) ([]byte, error) {
+	ret := _mock.Called(ctx, url, method, body)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Request")
@@ -174,18 +186,18 @@ func (_mock *MockHttp) Request(url string, method string, body io.Reader) ([]byt
 
 	var r0 []byte
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string, string, io.Reader) ([]byte, error)); ok {
-		return returnFunc(url, method, body)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, io.Reader) ([]byte, error)); ok {
+		return returnFunc(ctx, url, method, body)
 	}
-	if returnFunc, ok := ret.Get(0).(func(string, string, io.Reader) []byte); ok {
-		r0 = returnFunc(url, method, body)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, io.Reader) []byte); ok {
+		r0 = returnFunc(ctx, url, method, body)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]byte)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(string, string, io.Reader) error); ok {
-		r1 = returnFunc(url, method, body)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, io.Reader) error); ok {
+		r1 = returnFunc(ctx, url, method, body)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -198,31 +210,37 @@ type MockHttp_Request_Call struct {
 }
 
 // Request is a helper method to define mock.On call
+//   - ctx context.Context
 //   - url string
 //   - method string
 //   - body io.Reader
-func (_e *MockHttp_Expecter) Request(url any, method any, body any) *MockHttp_Request_Call {
-	return &MockHttp_Request_Call{Call: _e.mock.On("Request", url, method, body)}
+func (_e *MockHttp_Expecter) Request(ctx any, url any, method any, body any) *MockHttp_Request_Call {
+	return &MockHttp_Request_Call{Call: _e.mock.On("Request", ctx, url, method, body)}
 }
 
-func (_c *MockHttp_Request_Call) Run(run func(url string, method string, body io.Reader)) *MockHttp_Request_Call {
+func (_c *MockHttp_Request_Call) Run(run func(ctx context.Context, url string, method string, body io.Reader)) *MockHttp_Request_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(string)
+			arg0 = args[0].(context.Context)
 		}
 		var arg1 string
 		if args[1] != nil {
 			arg1 = args[1].(string)
 		}
-		var arg2 io.Reader
+		var arg2 string
 		if args[2] != nil {
-			arg2 = args[2].(io.Reader)
+			arg2 = args[2].(string)
+		}
+		var arg3 io.Reader
+		if args[3] != nil {
+			arg3 = args[3].(io.Reader)
 		}
 		run(
 			arg0,
 			arg1,
 			arg2,
+			arg3,
 		)
 	})
 	return _c
@@ -233,7 +251,7 @@ func (_c *MockHttp_Request_Call) Return(responseBody []byte, err error) *MockHtt
 	return _c
 }
 
-func (_c *MockHttp_Request_Call) RunAndReturn(run func(url string, method string, body io.Reader) ([]byte, error)) *MockHttp_Request_Call {
+func (_c *MockHttp_Request_Call) RunAndReturn(run func(ctx context.Context, url string, method string, body io.Reader) ([]byte, error)) *MockHttp_Request_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -347,8 +365,8 @@ func (_c *MockPortal_DownloadBuildArtifact_Call) RunAndReturn(run func(ctx conte
 }
 
 // GetBuild provides a mock function for the type MockPortal
-func (_mock *MockPortal) GetBuild(product Product, version string, hash string) (Build, error) {
-	ret := _mock.Called(product, version, hash)
+func (_mock *MockPortal) GetBuild(ctx context.Context, product Product, version string, hash string) (Build, error) {
+	ret := _mock.Called(ctx, product, version, hash)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetBuild")
@@ -356,16 +374,16 @@ func (_mock *MockPortal) GetBuild(product Product, version string, hash string) 
 
 	var r0 Build
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(Product, string, string) (Build, error)); ok {
-		return returnFunc(product, version, hash)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, Product, string, string) (Build, error)); ok {
+		return returnFunc(ctx, product, version, hash)
 	}
-	if returnFunc, ok := ret.Get(0).(func(Product, string, string) Build); ok {
-		r0 = returnFunc(product, version, hash)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, Product, string, string) Build); ok {
+		r0 = returnFunc(ctx, product, version, hash)
 	} else {
 		r0 = ret.Get(0).(Build)
 	}
-	if returnFunc, ok := ret.Get(1).(func(Product, string, string) error); ok {
-		r1 = returnFunc(product, version, hash)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, Product, string, string) error); ok {
+		r1 = returnFunc(ctx, product, version, hash)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -378,31 +396,37 @@ type MockPortal_GetBuild_Call struct {
 }
 
 // GetBuild is a helper method to define mock.On call
+//   - ctx context.Context
 //   - product Product
 //   - version string
 //   - hash string
-func (_e *MockPortal_Expecter) GetBuild(product any, version any, hash any) *MockPortal_GetBuild_Call {
-	return &MockPortal_GetBuild_Call{Call: _e.mock.On("GetBuild", product, version, hash)}
+func (_e *MockPortal_Expecter) GetBuild(ctx any, product any, version any, hash any) *MockPortal_GetBuild_Call {
+	return &MockPortal_GetBuild_Call{Call: _e.mock.On("GetBuild", ctx, product, version, hash)}
 }
 
-func (_c *MockPortal_GetBuild_Call) Run(run func(product Product, version string, hash string)) *MockPortal_GetBuild_Call {
+func (_c *MockPortal_GetBuild_Call) Run(run func(ctx context.Context, product Product, version string, hash string)) *MockPortal_GetBuild_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 Product
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(Product)
+			arg0 = args[0].(context.Context)
 		}
-		var arg1 string
+		var arg1 Product
 		if args[1] != nil {
-			arg1 = args[1].(string)
+			arg1 = args[1].(Product)
 		}
 		var arg2 string
 		if args[2] != nil {
 			arg2 = args[2].(string)
 		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
 		run(
 			arg0,
 			arg1,
 			arg2,
+			arg3,
 		)
 	})
 	return _c
@@ -413,14 +437,14 @@ func (_c *MockPortal_GetBuild_Call) Return(build Build, err error) *MockPortal_G
 	return _c
 }
 
-func (_c *MockPortal_GetBuild_Call) RunAndReturn(run func(product Product, version string, hash string) (Build, error)) *MockPortal_GetBuild_Call {
+func (_c *MockPortal_GetBuild_Call) RunAndReturn(run func(ctx context.Context, product Product, version string, hash string) (Build, error)) *MockPortal_GetBuild_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // ListAPIKeys provides a mock function for the type MockPortal
-func (_mock *MockPortal) ListAPIKeys() ([]ApiKey, error) {
-	ret := _mock.Called()
+func (_mock *MockPortal) ListAPIKeys(ctx context.Context) ([]ApiKey, error) {
+	ret := _mock.Called(ctx)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ListAPIKeys")
@@ -428,18 +452,18 @@ func (_mock *MockPortal) ListAPIKeys() ([]ApiKey, error) {
 
 	var r0 []ApiKey
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func() ([]ApiKey, error)); ok {
-		return returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(context.Context) ([]ApiKey, error)); ok {
+		return returnFunc(ctx)
 	}
-	if returnFunc, ok := ret.Get(0).(func() []ApiKey); ok {
-		r0 = returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(context.Context) []ApiKey); ok {
+		r0 = returnFunc(ctx)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]ApiKey)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func() error); ok {
-		r1 = returnFunc()
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -452,13 +476,20 @@ type MockPortal_ListAPIKeys_Call struct {
 }
 
 // ListAPIKeys is a helper method to define mock.On call
-func (_e *MockPortal_Expecter) ListAPIKeys() *MockPortal_ListAPIKeys_Call {
-	return &MockPortal_ListAPIKeys_Call{Call: _e.mock.On("ListAPIKeys")}
+//   - ctx context.Context
+func (_e *MockPortal_Expecter) ListAPIKeys(ctx any) *MockPortal_ListAPIKeys_Call {
+	return &MockPortal_ListAPIKeys_Call{Call: _e.mock.On("ListAPIKeys", ctx)}
 }
 
-func (_c *MockPortal_ListAPIKeys_Call) Run(run func()) *MockPortal_ListAPIKeys_Call {
+func (_c *MockPortal_ListAPIKeys_Call) Run(run func(ctx context.Context)) *MockPortal_ListAPIKeys_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run()
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -468,14 +499,14 @@ func (_c *MockPortal_ListAPIKeys_Call) Return(apiKeys []ApiKey, err error) *Mock
 	return _c
 }
 
-func (_c *MockPortal_ListAPIKeys_Call) RunAndReturn(run func() ([]ApiKey, error)) *MockPortal_ListAPIKeys_Call {
+func (_c *MockPortal_ListAPIKeys_Call) RunAndReturn(run func(ctx context.Context) ([]ApiKey, error)) *MockPortal_ListAPIKeys_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // ListBuilds provides a mock function for the type MockPortal
-func (_mock *MockPortal) ListBuilds(product Product, sort string) (Builds, error) {
-	ret := _mock.Called(product, sort)
+func (_mock *MockPortal) ListBuilds(ctx context.Context, product Product, sort string) (Builds, error) {
+	ret := _mock.Called(ctx, product, sort)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ListBuilds")
@@ -483,16 +514,16 @@ func (_mock *MockPortal) ListBuilds(product Product, sort string) (Builds, error
 
 	var r0 Builds
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(Product, string) (Builds, error)); ok {
-		return returnFunc(product, sort)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, Product, string) (Builds, error)); ok {
+		return returnFunc(ctx, product, sort)
 	}
-	if returnFunc, ok := ret.Get(0).(func(Product, string) Builds); ok {
-		r0 = returnFunc(product, sort)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, Product, string) Builds); ok {
+		r0 = returnFunc(ctx, product, sort)
 	} else {
 		r0 = ret.Get(0).(Builds)
 	}
-	if returnFunc, ok := ret.Get(1).(func(Product, string) error); ok {
-		r1 = returnFunc(product, sort)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, Product, string) error); ok {
+		r1 = returnFunc(ctx, product, sort)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -505,25 +536,31 @@ type MockPortal_ListBuilds_Call struct {
 }
 
 // ListBuilds is a helper method to define mock.On call
+//   - ctx context.Context
 //   - product Product
 //   - sort string
-func (_e *MockPortal_Expecter) ListBuilds(product any, sort any) *MockPortal_ListBuilds_Call {
-	return &MockPortal_ListBuilds_Call{Call: _e.mock.On("ListBuilds", product, sort)}
+func (_e *MockPortal_Expecter) ListBuilds(ctx any, product any, sort any) *MockPortal_ListBuilds_Call {
+	return &MockPortal_ListBuilds_Call{Call: _e.mock.On("ListBuilds", ctx, product, sort)}
 }
 
-func (_c *MockPortal_ListBuilds_Call) Run(run func(product Product, sort string)) *MockPortal_ListBuilds_Call {
+func (_c *MockPortal_ListBuilds_Call) Run(run func(ctx context.Context, product Product, sort string)) *MockPortal_ListBuilds_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 Product
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(Product)
+			arg0 = args[0].(context.Context)
 		}
-		var arg1 string
+		var arg1 Product
 		if args[1] != nil {
-			arg1 = args[1].(string)
+			arg1 = args[1].(Product)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
 		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -534,14 +571,14 @@ func (_c *MockPortal_ListBuilds_Call) Return(availablePackages Builds, err error
 	return _c
 }
 
-func (_c *MockPortal_ListBuilds_Call) RunAndReturn(run func(product Product, sort string) (Builds, error)) *MockPortal_ListBuilds_Call {
+func (_c *MockPortal_ListBuilds_Call) RunAndReturn(run func(ctx context.Context, product Product, sort string) (Builds, error)) *MockPortal_ListBuilds_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // RegisterAPIKey provides a mock function for the type MockPortal
-func (_mock *MockPortal) RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) (*ApiKey, error) {
-	ret := _mock.Called(owner, organization, role, expiresAt)
+func (_mock *MockPortal) RegisterAPIKey(ctx context.Context, owner string, organization string, role string, expiresAt time.Time) (*ApiKey, error) {
+	ret := _mock.Called(ctx, owner, organization, role, expiresAt)
 
 	if len(ret) == 0 {
 		panic("no return value specified for RegisterAPIKey")
@@ -549,18 +586,18 @@ func (_mock *MockPortal) RegisterAPIKey(owner string, organization string, role 
 
 	var r0 *ApiKey
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string, string, string, time.Time) (*ApiKey, error)); ok {
-		return returnFunc(owner, organization, role, expiresAt)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, time.Time) (*ApiKey, error)); ok {
+		return returnFunc(ctx, owner, organization, role, expiresAt)
 	}
-	if returnFunc, ok := ret.Get(0).(func(string, string, string, time.Time) *ApiKey); ok {
-		r0 = returnFunc(owner, organization, role, expiresAt)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, time.Time) *ApiKey); ok {
+		r0 = returnFunc(ctx, owner, organization, role, expiresAt)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*ApiKey)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(string, string, string, time.Time) error); ok {
-		r1 = returnFunc(owner, organization, role, expiresAt)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, string, time.Time) error); ok {
+		r1 = returnFunc(ctx, owner, organization, role, expiresAt)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -573,19 +610,20 @@ type MockPortal_RegisterAPIKey_Call struct {
 }
 
 // RegisterAPIKey is a helper method to define mock.On call
+//   - ctx context.Context
 //   - owner string
 //   - organization string
 //   - role string
 //   - expiresAt time.Time
-func (_e *MockPortal_Expecter) RegisterAPIKey(owner any, organization any, role any, expiresAt any) *MockPortal_RegisterAPIKey_Call {
-	return &MockPortal_RegisterAPIKey_Call{Call: _e.mock.On("RegisterAPIKey", owner, organization, role, expiresAt)}
+func (_e *MockPortal_Expecter) RegisterAPIKey(ctx any, owner any, organization any, role any, expiresAt any) *MockPortal_RegisterAPIKey_Call {
+	return &MockPortal_RegisterAPIKey_Call{Call: _e.mock.On("RegisterAPIKey", ctx, owner, organization, role, expiresAt)}
 }
 
-func (_c *MockPortal_RegisterAPIKey_Call) Run(run func(owner string, organization string, role string, expiresAt time.Time)) *MockPortal_RegisterAPIKey_Call {
+func (_c *MockPortal_RegisterAPIKey_Call) Run(run func(ctx context.Context, owner string, organization string, role string, expiresAt time.Time)) *MockPortal_RegisterAPIKey_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(string)
+			arg0 = args[0].(context.Context)
 		}
 		var arg1 string
 		if args[1] != nil {
@@ -595,15 +633,20 @@ func (_c *MockPortal_RegisterAPIKey_Call) Run(run func(owner string, organizatio
 		if args[2] != nil {
 			arg2 = args[2].(string)
 		}
-		var arg3 time.Time
+		var arg3 string
 		if args[3] != nil {
-			arg3 = args[3].(time.Time)
+			arg3 = args[3].(string)
+		}
+		var arg4 time.Time
+		if args[4] != nil {
+			arg4 = args[4].(time.Time)
 		}
 		run(
 			arg0,
 			arg1,
 			arg2,
 			arg3,
+			arg4,
 		)
 	})
 	return _c
@@ -614,22 +657,22 @@ func (_c *MockPortal_RegisterAPIKey_Call) Return(apiKey *ApiKey, err error) *Moc
 	return _c
 }
 
-func (_c *MockPortal_RegisterAPIKey_Call) RunAndReturn(run func(owner string, organization string, role string, expiresAt time.Time) (*ApiKey, error)) *MockPortal_RegisterAPIKey_Call {
+func (_c *MockPortal_RegisterAPIKey_Call) RunAndReturn(run func(ctx context.Context, owner string, organization string, role string, expiresAt time.Time) (*ApiKey, error)) *MockPortal_RegisterAPIKey_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // RevokeAPIKey provides a mock function for the type MockPortal
-func (_mock *MockPortal) RevokeAPIKey(key string) error {
-	ret := _mock.Called(key)
+func (_mock *MockPortal) RevokeAPIKey(ctx context.Context, key string) error {
+	ret := _mock.Called(ctx, key)
 
 	if len(ret) == 0 {
 		panic("no return value specified for RevokeAPIKey")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
-		r0 = returnFunc(key)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = returnFunc(ctx, key)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -642,19 +685,25 @@ type MockPortal_RevokeAPIKey_Call struct {
 }
 
 // RevokeAPIKey is a helper method to define mock.On call
+//   - ctx context.Context
 //   - key string
-func (_e *MockPortal_Expecter) RevokeAPIKey(key any) *MockPortal_RevokeAPIKey_Call {
-	return &MockPortal_RevokeAPIKey_Call{Call: _e.mock.On("RevokeAPIKey", key)}
+func (_e *MockPortal_Expecter) RevokeAPIKey(ctx any, key any) *MockPortal_RevokeAPIKey_Call {
+	return &MockPortal_RevokeAPIKey_Call{Call: _e.mock.On("RevokeAPIKey", ctx, key)}
 }
 
-func (_c *MockPortal_RevokeAPIKey_Call) Run(run func(key string)) *MockPortal_RevokeAPIKey_Call {
+func (_c *MockPortal_RevokeAPIKey_Call) Run(run func(ctx context.Context, key string)) *MockPortal_RevokeAPIKey_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(string)
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
 		}
 		run(
 			arg0,
+			arg1,
 		)
 	})
 	return _c
@@ -665,22 +714,22 @@ func (_c *MockPortal_RevokeAPIKey_Call) Return(err error) *MockPortal_RevokeAPIK
 	return _c
 }
 
-func (_c *MockPortal_RevokeAPIKey_Call) RunAndReturn(run func(key string) error) *MockPortal_RevokeAPIKey_Call {
+func (_c *MockPortal_RevokeAPIKey_Call) RunAndReturn(run func(ctx context.Context, key string) error) *MockPortal_RevokeAPIKey_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // UpdateAPIKey provides a mock function for the type MockPortal
-func (_mock *MockPortal) UpdateAPIKey(key string, expiresAt time.Time) error {
-	ret := _mock.Called(key, expiresAt)
+func (_mock *MockPortal) UpdateAPIKey(ctx context.Context, key string, expiresAt time.Time) error {
+	ret := _mock.Called(ctx, key, expiresAt)
 
 	if len(ret) == 0 {
 		panic("no return value specified for UpdateAPIKey")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, time.Time) error); ok {
-		r0 = returnFunc(key, expiresAt)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, time.Time) error); ok {
+		r0 = returnFunc(ctx, key, expiresAt)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -693,25 +742,31 @@ type MockPortal_UpdateAPIKey_Call struct {
 }
 
 // UpdateAPIKey is a helper method to define mock.On call
+//   - ctx context.Context
 //   - key string
 //   - expiresAt time.Time
-func (_e *MockPortal_Expecter) UpdateAPIKey(key any, expiresAt any) *MockPortal_UpdateAPIKey_Call {
-	return &MockPortal_UpdateAPIKey_Call{Call: _e.mock.On("UpdateAPIKey", key, expiresAt)}
+func (_e *MockPortal_Expecter) UpdateAPIKey(ctx any, key any, expiresAt any) *MockPortal_UpdateAPIKey_Call {
+	return &MockPortal_UpdateAPIKey_Call{Call: _e.mock.On("UpdateAPIKey", ctx, key, expiresAt)}
 }
 
-func (_c *MockPortal_UpdateAPIKey_Call) Run(run func(key string, expiresAt time.Time)) *MockPortal_UpdateAPIKey_Call {
+func (_c *MockPortal_UpdateAPIKey_Call) Run(run func(ctx context.Context, key string, expiresAt time.Time)) *MockPortal_UpdateAPIKey_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(string)
+			arg0 = args[0].(context.Context)
 		}
-		var arg1 time.Time
+		var arg1 string
 		if args[1] != nil {
-			arg1 = args[1].(time.Time)
+			arg1 = args[1].(string)
+		}
+		var arg2 time.Time
+		if args[2] != nil {
+			arg2 = args[2].(time.Time)
 		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -722,7 +777,7 @@ func (_c *MockPortal_UpdateAPIKey_Call) Return(err error) *MockPortal_UpdateAPIK
 	return _c
 }
 
-func (_c *MockPortal_UpdateAPIKey_Call) RunAndReturn(run func(key string, expiresAt time.Time) error) *MockPortal_UpdateAPIKey_Call {
+func (_c *MockPortal_UpdateAPIKey_Call) RunAndReturn(run func(ctx context.Context, key string, expiresAt time.Time) error) *MockPortal_UpdateAPIKey_Call {
 	_c.Call.Return(run)
 	return _c
 }

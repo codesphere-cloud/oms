@@ -51,7 +51,8 @@ type InstallK0sOpts struct {
 	Yes bool
 }
 
-func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE validates the options and installs k0s with the real package, k0s and k0sctl implementations.
+func (c *InstallK0sCmd) RunE(cmd *cobra.Command, _ []string) error {
 	if c.Opts.Single && (c.Opts.InstallConfig != "" || c.Opts.K0sctlConfig != "") {
 		return fmt.Errorf("--install-config and --config cannot be used with --single")
 	}
@@ -65,7 +66,7 @@ func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
 	k0s := installer.NewK0s(hw, env, c.FileWriter)
 	k0sctl := installer.NewK0sctl(hw, env, c.FileWriter)
 
-	return c.InstallK0s(pm, k0s, k0sctl)
+	return c.InstallK0s(cmd.Context(), pm, k0s, k0sctl)
 }
 
 func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
@@ -135,31 +136,31 @@ const vaultSecretNameKubeconfig = "kubeConfig"
 
 // InstallK0s installs k0s with the given k0sctl config, or with one generated from the
 // command options.
-func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0sManager, k0sctl installer.K0sctlManager) error {
+func (c *InstallK0sCmd) InstallK0s(ctx context.Context, pm installer.PackageManager, k0s installer.K0sManager, k0sctl installer.K0sctlManager) error {
 	if err := c.FileWriter.MkdirAll(c.Env.GetOmsWorkdir(), 0755); err != nil {
 		return fmt.Errorf("failed to create oms workdir: %w", err)
 	}
 
 	if c.Opts.Single {
-		return c.installSingle(pm, k0s)
+		return c.installSingle(ctx, pm, k0s)
 	}
 
-	k0sctlConfigPath, err := c.getK0sctlConfigPath(pm, k0s)
+	k0sctlConfigPath, err := c.getK0sctlConfigPath(ctx, pm, k0s)
 	if err != nil {
 		return err
 	}
 
-	k0sctlPath, err := c.downloadK0sctl(k0sctl)
+	k0sctlPath, err := c.downloadK0sctl(ctx, k0sctl)
 	if err != nil {
 		return err
 	}
 
-	if err := c.deployK0sCluster(k0sctl, k0sctlPath, k0sctlConfigPath); err != nil {
+	if err := c.deployK0sCluster(ctx, k0sctl, k0sctlPath, k0sctlConfigPath); err != nil {
 		return fmt.Errorf("failed to deploy k0s cluster: %w", err)
 	}
 
 	if c.Opts.Vault != "" {
-		if err := c.saveKubeconfigToVault(k0sctl, k0sctlConfigPath, k0sctlPath); err != nil {
+		if err := c.saveKubeconfigToVault(ctx, k0sctl, k0sctlConfigPath, k0sctlPath); err != nil {
 			return fmt.Errorf("failed to save kubeconfig to vault: %w", err)
 		}
 	}
@@ -169,7 +170,7 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 
 // getK0sctlConfigPath returns the k0sctl config given with --config, or generates one
 // into the OMS workdir.
-func (c *InstallK0sCmd) getK0sctlConfigPath(pm installer.PackageManager, k0s installer.K0sManager) (string, error) {
+func (c *InstallK0sCmd) getK0sctlConfigPath(ctx context.Context, pm installer.PackageManager, k0s installer.K0sManager) (string, error) {
 	if c.Opts.K0sctlConfig != "" {
 		if !c.FileWriter.Exists(c.Opts.K0sctlConfig) {
 			return "", fmt.Errorf("k0sctl config '%s' does not exist", c.Opts.K0sctlConfig)
@@ -187,7 +188,7 @@ func (c *InstallK0sCmd) getK0sctlConfigPath(pm installer.PackageManager, k0s ins
 		Prompter:   c.Prompter,
 	}
 
-	path, err := generator.Generate(pm, k0s, "")
+	path, err := generator.Generate(ctx, pm, k0s, "")
 	if err != nil {
 		return "", fmt.Errorf("failed to generate k0sctl config: %w", err)
 	}
@@ -195,19 +196,20 @@ func (c *InstallK0sCmd) getK0sctlConfigPath(pm installer.PackageManager, k0s ins
 	return path, nil
 }
 
-func (c *InstallK0sCmd) downloadK0sctl(k0sctl installer.K0sctlManager) (string, error) {
+func (c *InstallK0sCmd) downloadK0sctl(ctx context.Context, k0sctl installer.K0sctlManager) (string, error) {
 	log.Println("Downloading k0sctl...")
 
-	k0sctlPath, err := k0sctl.Download(c.Opts.K0sctlVersion, installer.DownloadOptions{Force: c.Opts.Force})
+	k0sctlPath, err := k0sctl.Download(ctx, c.Opts.K0sctlVersion, installer.DownloadOptions{Force: c.Opts.Force})
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0sctl: %w", err)
 	}
 	return k0sctlPath, nil
 }
 
-func (c *InstallK0sCmd) deployK0sCluster(k0sctl installer.K0sctlManager, k0sctlPath string, k0sctlConfigPath string) error {
+func (c *InstallK0sCmd) deployK0sCluster(ctx context.Context, k0sctl installer.K0sctlManager, k0sctlPath string, k0sctlConfigPath string) error {
 	log.Println("Applying k0sctl configuration to deploy k0s cluster...")
-	if err := k0sctl.Apply(k0sctlConfigPath, k0sctlPath, c.Opts.Force); err != nil {
+
+	if err := k0sctl.Apply(ctx, k0sctlConfigPath, k0sctlPath, c.Opts.Force); err != nil {
 		return fmt.Errorf("failed to apply k0sctl config: %w", err)
 	}
 
@@ -217,9 +219,10 @@ func (c *InstallK0sCmd) deployK0sCluster(k0sctl installer.K0sctlManager, k0sctlP
 	return nil
 }
 
-func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0sctlConfigPath, k0sctlPath string) error {
+func (c *InstallK0sCmd) saveKubeconfigToVault(ctx context.Context, k0sctl installer.K0sctlManager, k0sctlConfigPath, k0sctlPath string) error {
 	log.Println("Retrieving kubeconfig from k0sctl for vault...")
-	kubeconfigContent, err := k0sctl.GetKubeconfig(k0sctlConfigPath, k0sctlPath)
+
+	kubeconfigContent, err := k0sctl.GetKubeconfig(ctx, k0sctlConfigPath, k0sctlPath)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve kubeconfig from k0sctl: %w", err)
 	}
@@ -263,7 +266,7 @@ func (c *InstallK0sCmd) vaultStore() (vault.Vault, error) {
 	return vault, nil
 }
 
-func (c *InstallK0sCmd) installSingle(pm installer.PackageManager, k0s installer.K0sManager) error {
+func (c *InstallK0sCmd) installSingle(ctx context.Context, pm installer.PackageManager, k0s installer.K0sManager) error {
 	if c.Opts.SSHKeyPath != "" || c.Opts.Vault != "" {
 		return fmt.Errorf("--ssh-key-path and --vault are not supported with --single")
 	}
@@ -272,12 +275,12 @@ func (c *InstallK0sCmd) installSingle(pm installer.PackageManager, k0s installer
 		return fmt.Errorf("--single requires root privileges")
 	}
 
-	version, err := installer.ResolveK0sVersion(k0s, c.Opts.Version)
+	version, err := installer.ResolveK0sVersion(ctx, k0s, c.Opts.Version)
 	if err != nil {
 		return fmt.Errorf("failed to resolve k0s version: %w", err)
 	}
 
-	path, err := c.getK0sBinaryPath(pm, k0s, version)
+	path, err := c.getK0sBinaryPath(ctx, pm, k0s, version)
 	if err != nil {
 		return err
 	}
@@ -285,7 +288,7 @@ func (c *InstallK0sCmd) installSingle(pm installer.PackageManager, k0s installer
 	const installedPath = "/usr/local/bin/k0s"
 	if path != "" && path != installedPath {
 		stagedPath := installedPath + ".new"
-		if out, err := exec.Command("install", "-m", "0755", path, stagedPath).CombinedOutput(); err != nil {
+		if out, err := exec.CommandContext(ctx, "install", "-m", "0755", path, stagedPath).CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to install k0s binary: %w: %s", err, strings.TrimSpace(string(out)))
 		}
 
@@ -299,20 +302,20 @@ func (c *InstallK0sCmd) installSingle(pm installer.PackageManager, k0s installer
 	}
 
 	if _, err := os.Stat("/etc/systemd/system/k0scontroller.service"); os.IsNotExist(err) {
-		if out, err := exec.Command(installedPath, "install", "controller", "--single", "--enable-worker", "--no-taints=true").CombinedOutput(); err != nil {
+		if out, err := exec.CommandContext(ctx, installedPath, "install", "controller", "--single", "--enable-worker", "--no-taints=true").CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to install k0s controller: %w: %s", err, strings.TrimSpace(string(out)))
 		}
 	} else if err != nil {
 		return fmt.Errorf("failed to inspect k0s service: %w", err)
 	}
 
-	if err := exec.Command("systemctl", "is-active", "--quiet", "k0scontroller").Run(); err != nil {
-		if out, err := exec.Command(installedPath, "start").CombinedOutput(); err != nil {
+	if err := exec.CommandContext(ctx, "systemctl", "is-active", "--quiet", "k0scontroller").Run(); err != nil {
+		if out, err := exec.CommandContext(ctx, installedPath, "start").CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to start k0s: %w: %s", err, strings.TrimSpace(string(out)))
 		}
 	}
 
-	statusCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	statusCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
 	readiness := installer.NewK0sReadinessClient(installedPath)
@@ -320,7 +323,7 @@ func (c *InstallK0sCmd) installSingle(pm installer.PackageManager, k0s installer
 		return fmt.Errorf("failed to wait for k0s installation: %w", err)
 	}
 
-	nodeCtx, cancelNodeWait := context.WithTimeout(context.Background(), 30*time.Minute)
+	nodeCtx, cancelNodeWait := context.WithTimeout(ctx, 30*time.Minute)
 	defer cancelNodeWait()
 
 	node, err := waitForK0sNode(nodeCtx, 2*time.Second, readiness)
@@ -332,7 +335,7 @@ func (c *InstallK0sCmd) installSingle(pm installer.PackageManager, k0s installer
 		return fmt.Errorf("failed to wait for k0s node: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 
-	kubeconfig, err := exec.Command(installedPath, "kubeconfig", "admin").Output()
+	kubeconfig, err := exec.CommandContext(ctx, installedPath, "kubeconfig", "admin").Output()
 	if err != nil {
 		return fmt.Errorf("failed to get k0s kubeconfig: %w", err)
 	}
@@ -415,7 +418,7 @@ func waitForK0sReady(ctx context.Context, interval time.Duration, readiness inst
 	}
 }
 
-func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s installer.K0sManager, k0sVersion string) (string, error) {
+func (c *InstallK0sCmd) getK0sBinaryPath(ctx context.Context, pm installer.PackageManager, k0s installer.K0sManager, k0sVersion string) (string, error) {
 	if c.Opts.NoDownload {
 		return "", nil
 	}
@@ -428,7 +431,7 @@ func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s instal
 		return pm.GetDependencyPath("kubernetes/files/k0s"), nil
 	}
 
-	k0sBinaryPath, err := k0s.Download(k0sVersion, installer.DownloadOptions{Force: c.Opts.Force})
+	k0sBinaryPath, err := k0s.Download(ctx, k0sVersion, installer.DownloadOptions{Force: c.Opts.Force})
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0s: %w", err)
 	}

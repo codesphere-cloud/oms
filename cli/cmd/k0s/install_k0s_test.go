@@ -4,6 +4,7 @@
 package k0s_test
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -159,7 +160,7 @@ var _ = Describe("InstallK0sCmd", func() {
 
 			setupWorkdirMocks()
 
-			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			err := c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to load install-config"))
 		})
@@ -171,7 +172,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
 			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 
-			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			err := c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(MatchError(ContainSubstring("not supported with --single")))
 		})
 
@@ -180,7 +181,7 @@ var _ = Describe("InstallK0sCmd", func() {
 
 			setupWorkdirMocks()
 
-			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			err := c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("external Kubernetes"))
 		})
@@ -195,11 +196,11 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockFileWriter.EXPECT().Exists(defaultConfigPath()).Return(false)
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", true, false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{Force: true}).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Download(mock.Anything, "", installer.DownloadOptions{Force: true}).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
-			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", true).Return(nil)
+			mockK0sctl.EXPECT().Apply(mock.Anything, mock.Anything, "/tmp/k0sctl", true).Return(nil)
 
-			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			err := c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -217,12 +218,12 @@ var _ = Describe("InstallK0sCmd", func() {
 				setupWorkdirMocks()
 				mockFileWriter.EXPECT().Exists(defaultConfigPath()).Return(true)
 				mockPrompter.EXPECT().Bool(overwriteQuestion, false).Return(true)
-				mockK0s.EXPECT().Download("v1.29.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
+				mockK0s.EXPECT().Download(mock.Anything, "v1.29.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
 				mockFileWriter.EXPECT().WriteFile(defaultConfigPath(), mock.Anything, os.FileMode(0644)).Return(nil)
-				mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
-				mockK0sctl.EXPECT().Apply(defaultConfigPath(), "/tmp/k0sctl", false).Return(nil)
+				mockK0sctl.EXPECT().Download(mock.Anything, "", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
+				mockK0sctl.EXPECT().Apply(mock.Anything, defaultConfigPath(), "/tmp/k0sctl", false).Return(nil)
 
-				Expect(c.InstallK0s(mockPM, mockK0s, mockK0sctl)).To(Succeed())
+				Expect(c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)).To(Succeed())
 			})
 
 			It("installs nothing when overwriting is declined", func() {
@@ -230,19 +231,19 @@ var _ = Describe("InstallK0sCmd", func() {
 				mockFileWriter.EXPECT().Exists(defaultConfigPath()).Return(true)
 				mockPrompter.EXPECT().Bool(overwriteQuestion, false).Return(false)
 
-				Expect(c.InstallK0s(mockPM, mockK0s, mockK0sctl)).To(MatchError(ContainSubstring("already exists")))
+				Expect(c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)).To(MatchError(ContainSubstring("already exists")))
 			})
 
 			It("overwrites it without asking with --yes", func() {
 				c.Opts.Yes = true
 
 				setupWorkdirMocks()
-				mockK0s.EXPECT().Download("v1.29.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
+				mockK0s.EXPECT().Download(mock.Anything, "v1.29.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
 				mockFileWriter.EXPECT().WriteFile(defaultConfigPath(), mock.Anything, os.FileMode(0644)).Return(nil)
-				mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
-				mockK0sctl.EXPECT().Apply(defaultConfigPath(), "/tmp/k0sctl", false).Return(nil)
+				mockK0sctl.EXPECT().Download(mock.Anything, "", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
+				mockK0sctl.EXPECT().Apply(mock.Anything, defaultConfigPath(), "/tmp/k0sctl", false).Return(nil)
 
-				Expect(c.InstallK0s(mockPM, mockK0s, mockK0sctl)).To(Succeed())
+				Expect(c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)).To(Succeed())
 			})
 		})
 
@@ -253,12 +254,12 @@ var _ = Describe("InstallK0sCmd", func() {
 
 			setupWorkdirMocks()
 			mockFileWriter.EXPECT().Exists(defaultConfigPath()).Return(false)
-			mockK0s.EXPECT().Download("v1.29.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
-			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
+			mockK0s.EXPECT().Download(mock.Anything, "v1.29.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
+			mockK0sctl.EXPECT().Download(mock.Anything, "", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
-			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
+			mockK0sctl.EXPECT().Apply(mock.Anything, mock.Anything, "/tmp/k0sctl", false).Return(nil)
 
-			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			err := c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -268,10 +269,10 @@ var _ = Describe("InstallK0sCmd", func() {
 
 			setupWorkdirMocks()
 			mockFileWriter.EXPECT().Exists(defaultConfigPath()).Return(false)
-			mockK0s.EXPECT().GetLatestVersion().Return("v1.30.0+k0s.0", nil)
-			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("", os.ErrNotExist)
+			mockK0s.EXPECT().GetLatestVersion(mock.Anything).Return("v1.30.0+k0s.0", nil)
+			mockK0s.EXPECT().Download(mock.Anything, "v1.30.0+k0s.0", installer.DownloadOptions{}).Return("", os.ErrNotExist)
 
-			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			err := c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to get k0s binary"))
 		})
@@ -281,10 +282,10 @@ var _ = Describe("InstallK0sCmd", func() {
 
 			setupWorkdirMocks()
 			mockFileWriter.EXPECT().Exists("/etc/codesphere/k0sctl-config.yaml").Return(true)
-			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
-			mockK0sctl.EXPECT().Apply("/etc/codesphere/k0sctl-config.yaml", "/tmp/k0sctl", false).Return(nil)
+			mockK0sctl.EXPECT().Download(mock.Anything, "", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Apply(mock.Anything, "/etc/codesphere/k0sctl-config.yaml", "/tmp/k0sctl", false).Return(nil)
 
-			Expect(c.InstallK0s(mockPM, mockK0s, mockK0sctl)).To(Succeed())
+			Expect(c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)).To(Succeed())
 		})
 
 		It("fails when the k0sctl config given with --config does not exist", func() {
@@ -293,7 +294,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			setupWorkdirMocks()
 			mockFileWriter.EXPECT().Exists("/nonexistent/k0sctl-config.yaml").Return(false)
 
-			Expect(c.InstallK0s(mockPM, mockK0s, mockK0sctl)).To(MatchError(ContainSubstring("k0sctl config '/nonexistent/k0sctl-config.yaml' does not exist")))
+			Expect(c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)).To(MatchError(ContainSubstring("k0sctl config '/nonexistent/k0sctl-config.yaml' does not exist")))
 		})
 
 		It("fails when k0sctl download fails", func() {
@@ -306,9 +307,9 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false, false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
-			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("", os.ErrPermission)
+			mockK0sctl.EXPECT().Download(mock.Anything, "", installer.DownloadOptions{}).Return("", os.ErrPermission)
 
-			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			err := c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to download k0sctl"))
 		})
@@ -322,11 +323,11 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockFileWriter.EXPECT().Exists(defaultConfigPath()).Return(false)
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false, false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Download(mock.Anything, "", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
-			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(os.ErrPermission)
+			mockK0sctl.EXPECT().Apply(mock.Anything, mock.Anything, "/tmp/k0sctl", false).Return(os.ErrPermission)
 
-			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			err := c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to apply k0sctl config"))
 		})
@@ -335,8 +336,8 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false, false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
-			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
+			mockK0sctl.EXPECT().Download(mock.Anything, "", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Apply(mock.Anything, mock.Anything, "/tmp/k0sctl", false).Return(nil)
 		}
 
 		Context("with --vault flag", func() {
@@ -359,9 +360,9 @@ var _ = Describe("InstallK0sCmd", func() {
 				c.Opts.VaultPrivKey = ageKeyPath
 
 				setupCommonMocks()
-				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
+				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
 
-				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+				err = c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)
 				Expect(err).NotTo(HaveOccurred())
 
 				backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: c.Opts.Vault, AgeKey: ageKeyPath})
@@ -411,9 +412,9 @@ var _ = Describe("InstallK0sCmd", func() {
 				Expect(os.Remove(plainPath)).To(Succeed())
 
 				setupCommonMocks()
-				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
+				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
 
-				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+				err = c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)
 				Expect(err).NotTo(HaveOccurred())
 
 				backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: c.Opts.Vault, AgeKey: ageKeyPath})
@@ -463,9 +464,9 @@ var _ = Describe("InstallK0sCmd", func() {
 				Expect(os.Remove(plainPath)).To(Succeed())
 
 				setupCommonMocks()
-				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\nnew: true\n", nil)
+				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\nnew: true\n", nil)
 
-				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+				err = c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)
 				Expect(err).NotTo(HaveOccurred())
 
 				backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: c.Opts.Vault, AgeKey: ageKeyPath})
@@ -491,10 +492,10 @@ var _ = Describe("InstallK0sCmd", func() {
 				setupCommonMocks()
 
 				// kubeconfig with multiple trailing newlines — should be stripped
-				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").
+				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, mock.Anything, "/tmp/k0sctl").
 					Return("apiVersion: v1\nkind: Config\n\n\n", nil)
 
-				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+				err = c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)
 				Expect(err).NotTo(HaveOccurred())
 
 				backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: c.Opts.Vault, AgeKey: ageKeyPath})
@@ -513,9 +514,9 @@ var _ = Describe("InstallK0sCmd", func() {
 				c.Opts.Vault = filepath.Join(tempDir, "prod.vault.yaml")
 
 				setupCommonMocks()
-				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("", os.ErrPermission)
+				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, mock.Anything, "/tmp/k0sctl").Return("", os.ErrPermission)
 
-				err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+				err := c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to retrieve kubeconfig from k0sctl"))
 			})
@@ -564,9 +565,9 @@ var _ = Describe("InstallK0sCmd", func() {
 				c.Opts.VaultPrivKey = ageKeyPath
 
 				setupCommonMocks()
-				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
+				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
 
-				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+				err = c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify the temporary file was cleaned up.
@@ -623,9 +624,9 @@ var _ = Describe("InstallK0sCmd", func() {
 				c.Opts.VaultPrivKey = filepath.Join(tempDir, "missing_key.txt")
 
 				setupCommonMocks()
-				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
+				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
 
-				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+				err = c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to load vault"))
 
@@ -697,15 +698,15 @@ var _ = Describe("InstallK0sCmd", func() {
 				mockFileWriter.EXPECT().WriteFile(mock.MatchedBy(func(path string) bool {
 					return !strings.HasSuffix(path, ".tmp")
 				}), mock.Anything, mock.Anything).Return(nil)
-				mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
-				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
+				mockK0sctl.EXPECT().Apply(mock.Anything, mock.Anything, "/tmp/k0sctl", false).Return(nil)
+				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
 
 				// Make the vault directory unwritable so the SOPS backend cannot create
 				// its temporary files while the existing vault file stays readable.
 				Expect(os.Chmod(tempDir, 0500)).To(Succeed())
 				DeferCleanup(func() { _ = os.Chmod(tempDir, 0755) })
 
-				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+				err = c.InstallK0s(context.Background(), mockPM, mockK0s, mockK0sctl)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to create temporary plaintext vault"))
 

@@ -4,6 +4,7 @@
 package installer
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -25,9 +26,9 @@ const (
 
 //mockery:generate: true
 type K0sManager interface {
-	GetLatestVersion() (string, error)
-	Download(version string, opts DownloadOptions) (string, error)
-	DownloadAirgapBundle(version, path string, opts DownloadOptions) (string, error)
+	GetLatestVersion(ctx context.Context) (string, error)
+	Download(ctx context.Context, version string, opts DownloadOptions) (string, error)
+	DownloadAirgapBundle(ctx context.Context, version, path string, opts DownloadOptions) (string, error)
 }
 
 type K0s struct {
@@ -48,8 +49,9 @@ func NewK0s(hw portal.Http, env env.Env, fw util.FileIO) K0sManager {
 	}
 }
 
-func (k *K0s) GetLatestVersion() (string, error) {
-	versionBytes, err := k.Http.Get("https://docs.k0sproject.io/stable.txt")
+// GetLatestVersion returns the latest stable k0s version.
+func (k *K0s) GetLatestVersion(ctx context.Context) (string, error) {
+	versionBytes, err := k.Http.Get(ctx, "https://docs.k0sproject.io/stable.txt")
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch version info: %w", err)
 	}
@@ -63,7 +65,7 @@ func (k *K0s) GetLatestVersion() (string, error) {
 }
 
 // Download downloads the k0s binary for the specified version and saves it to the OMS cache dir.
-func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
+func (k *K0s) Download(ctx context.Context, version string, opts DownloadOptions) (string, error) {
 	if k.Goos != "linux" || k.Goarch != "amd64" {
 		return "", fmt.Errorf("codesphere installation is only supported on Linux amd64. Current platform: %s/%s", k.Goos, k.Goarch)
 	}
@@ -78,7 +80,7 @@ func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 	assetName := fmt.Sprintf("%s-%s-%s", k0sBinaryName, version, k.Goarch)
 
 	cachePath := filepath.Join(cacheDir, assetName)
-	if reuseCachedBinary(k.FileWriter, cachePath, version, k0sBinaryName, opts) {
+	if reuseCachedBinary(ctx, k.FileWriter, cachePath, version, k0sBinaryName, opts) {
 		return cachePath, nil
 	}
 
@@ -88,7 +90,7 @@ func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 
 	downloadURL := fmt.Sprintf("%s/%s/%s", k0sReleaseURL, version, assetName)
 
-	if err := downloadToPath(k.FileWriter, k.Http, cachePath, downloadURL, opts.Quiet, 0755); err != nil {
+	if err := downloadToPath(ctx, k.FileWriter, k.Http, cachePath, downloadURL, opts.Quiet, 0755); err != nil {
 		return "", err
 	}
 

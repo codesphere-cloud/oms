@@ -4,6 +4,7 @@
 package apikey
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
@@ -36,7 +37,7 @@ func AddUpdateCmd(parentCmd *cobra.Command) {
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p := portal.NewPortalClient()
-			return cmdState.UpdateAPIKey(p)
+			return cmdState.UpdateAPIKey(cmd.Context(), p)
 		},
 	}
 
@@ -49,7 +50,8 @@ func AddUpdateCmd(parentCmd *cobra.Command) {
 	util.AddCmd(parentCmd, apiKeyCmd)
 }
 
-func (c *UpdateAPIKeyCmd) UpdateAPIKey(p portal.Portal) error {
+// UpdateAPIKey extends the expiration date of the API key given in the options.
+func (c *UpdateAPIKeyCmd) UpdateAPIKey(ctx context.Context, p portal.Portal) error {
 	validForDuration, err := intutil.GetDurationFromString(c.Opts.ValidFor)
 	if err != nil {
 		return err
@@ -57,7 +59,7 @@ func (c *UpdateAPIKeyCmd) UpdateAPIKey(p portal.Portal) error {
 
 	expiresAt := time.Now().Add(validForDuration)
 
-	if err := p.UpdateAPIKey(c.Opts.APIKeyID, expiresAt); err != nil {
+	if err := p.UpdateAPIKey(ctx, c.Opts.APIKeyID, expiresAt); err != nil {
 		return fmt.Errorf("failed to update API key: %w", err)
 	}
 

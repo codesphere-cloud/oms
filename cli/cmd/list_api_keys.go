@@ -20,9 +20,11 @@ type ListAPIKeysCmd struct {
 	TableWriter intutil.TableWriter
 }
 
-func (c *ListAPIKeysCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE lists the API keys of the portal.
+func (c *ListAPIKeysCmd) RunE(cmd *cobra.Command, _ []string) error {
 	p := portal.NewPortalClient()
-	keys, err := p.ListAPIKeys()
+
+	keys, err := p.ListAPIKeys(cmd.Context())
 	if err != nil {
 		return fmt.Errorf("failed to list api keys: %w", err)
 	}

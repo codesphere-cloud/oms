@@ -1487,8 +1487,8 @@ func (_m *MockK0sManager) EXPECT() *MockK0sManager_Expecter {
 }
 
 // Download provides a mock function for the type MockK0sManager
-func (_mock *MockK0sManager) Download(version string, opts DownloadOptions) (string, error) {
-	ret := _mock.Called(version, opts)
+func (_mock *MockK0sManager) Download(ctx context.Context, version string, opts DownloadOptions) (string, error) {
+	ret := _mock.Called(ctx, version, opts)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Download")
@@ -1496,16 +1496,16 @@ func (_mock *MockK0sManager) Download(version string, opts DownloadOptions) (str
 
 	var r0 string
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string, DownloadOptions) (string, error)); ok {
-		return returnFunc(version, opts)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, DownloadOptions) (string, error)); ok {
+		return returnFunc(ctx, version, opts)
 	}
-	if returnFunc, ok := ret.Get(0).(func(string, DownloadOptions) string); ok {
-		r0 = returnFunc(version, opts)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, DownloadOptions) string); ok {
+		r0 = returnFunc(ctx, version, opts)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
-	if returnFunc, ok := ret.Get(1).(func(string, DownloadOptions) error); ok {
-		r1 = returnFunc(version, opts)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, DownloadOptions) error); ok {
+		r1 = returnFunc(ctx, version, opts)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -1518,84 +1518,18 @@ type MockK0sManager_Download_Call struct {
 }
 
 // Download is a helper method to define mock.On call
+//   - ctx context.Context
 //   - version string
 //   - opts DownloadOptions
-func (_e *MockK0sManager_Expecter) Download(version any, opts any) *MockK0sManager_Download_Call {
-	return &MockK0sManager_Download_Call{Call: _e.mock.On("Download", version, opts)}
+func (_e *MockK0sManager_Expecter) Download(ctx any, version any, opts any) *MockK0sManager_Download_Call {
+	return &MockK0sManager_Download_Call{Call: _e.mock.On("Download", ctx, version, opts)}
 }
 
-func (_c *MockK0sManager_Download_Call) Run(run func(version string, opts DownloadOptions)) *MockK0sManager_Download_Call {
+func (_c *MockK0sManager_Download_Call) Run(run func(ctx context.Context, version string, opts DownloadOptions)) *MockK0sManager_Download_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 DownloadOptions
-		if args[1] != nil {
-			arg1 = args[1].(DownloadOptions)
-		}
-		run(
-			arg0,
-			arg1,
-		)
-	})
-	return _c
-}
-
-func (_c *MockK0sManager_Download_Call) Return(s string, err error) *MockK0sManager_Download_Call {
-	_c.Call.Return(s, err)
-	return _c
-}
-
-func (_c *MockK0sManager_Download_Call) RunAndReturn(run func(version string, opts DownloadOptions) (string, error)) *MockK0sManager_Download_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// DownloadAirgapBundle provides a mock function for the type MockK0sManager
-func (_mock *MockK0sManager) DownloadAirgapBundle(version string, path string, opts DownloadOptions) (string, error) {
-	ret := _mock.Called(version, path, opts)
-
-	if len(ret) == 0 {
-		panic("no return value specified for DownloadAirgapBundle")
-	}
-
-	var r0 string
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string, string, DownloadOptions) (string, error)); ok {
-		return returnFunc(version, path, opts)
-	}
-	if returnFunc, ok := ret.Get(0).(func(string, string, DownloadOptions) string); ok {
-		r0 = returnFunc(version, path, opts)
-	} else {
-		r0 = ret.Get(0).(string)
-	}
-	if returnFunc, ok := ret.Get(1).(func(string, string, DownloadOptions) error); ok {
-		r1 = returnFunc(version, path, opts)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockK0sManager_DownloadAirgapBundle_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DownloadAirgapBundle'
-type MockK0sManager_DownloadAirgapBundle_Call struct {
-	*mock.Call
-}
-
-// DownloadAirgapBundle is a helper method to define mock.On call
-//   - version string
-//   - path string
-//   - opts DownloadOptions
-func (_e *MockK0sManager_Expecter) DownloadAirgapBundle(version any, path any, opts any) *MockK0sManager_DownloadAirgapBundle_Call {
-	return &MockK0sManager_DownloadAirgapBundle_Call{Call: _e.mock.On("DownloadAirgapBundle", version, path, opts)}
-}
-
-func (_c *MockK0sManager_DownloadAirgapBundle_Call) Run(run func(version string, path string, opts DownloadOptions)) *MockK0sManager_DownloadAirgapBundle_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
+			arg0 = args[0].(context.Context)
 		}
 		var arg1 string
 		if args[1] != nil {
@@ -1614,19 +1548,97 @@ func (_c *MockK0sManager_DownloadAirgapBundle_Call) Run(run func(version string,
 	return _c
 }
 
+func (_c *MockK0sManager_Download_Call) Return(s string, err error) *MockK0sManager_Download_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *MockK0sManager_Download_Call) RunAndReturn(run func(ctx context.Context, version string, opts DownloadOptions) (string, error)) *MockK0sManager_Download_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DownloadAirgapBundle provides a mock function for the type MockK0sManager
+func (_mock *MockK0sManager) DownloadAirgapBundle(ctx context.Context, version string, path string, opts DownloadOptions) (string, error) {
+	ret := _mock.Called(ctx, version, path, opts)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DownloadAirgapBundle")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, DownloadOptions) (string, error)); ok {
+		return returnFunc(ctx, version, path, opts)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, DownloadOptions) string); ok {
+		r0 = returnFunc(ctx, version, path, opts)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, DownloadOptions) error); ok {
+		r1 = returnFunc(ctx, version, path, opts)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockK0sManager_DownloadAirgapBundle_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DownloadAirgapBundle'
+type MockK0sManager_DownloadAirgapBundle_Call struct {
+	*mock.Call
+}
+
+// DownloadAirgapBundle is a helper method to define mock.On call
+//   - ctx context.Context
+//   - version string
+//   - path string
+//   - opts DownloadOptions
+func (_e *MockK0sManager_Expecter) DownloadAirgapBundle(ctx any, version any, path any, opts any) *MockK0sManager_DownloadAirgapBundle_Call {
+	return &MockK0sManager_DownloadAirgapBundle_Call{Call: _e.mock.On("DownloadAirgapBundle", ctx, version, path, opts)}
+}
+
+func (_c *MockK0sManager_DownloadAirgapBundle_Call) Run(run func(ctx context.Context, version string, path string, opts DownloadOptions)) *MockK0sManager_DownloadAirgapBundle_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 DownloadOptions
+		if args[3] != nil {
+			arg3 = args[3].(DownloadOptions)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
 func (_c *MockK0sManager_DownloadAirgapBundle_Call) Return(s string, err error) *MockK0sManager_DownloadAirgapBundle_Call {
 	_c.Call.Return(s, err)
 	return _c
 }
 
-func (_c *MockK0sManager_DownloadAirgapBundle_Call) RunAndReturn(run func(version string, path string, opts DownloadOptions) (string, error)) *MockK0sManager_DownloadAirgapBundle_Call {
+func (_c *MockK0sManager_DownloadAirgapBundle_Call) RunAndReturn(run func(ctx context.Context, version string, path string, opts DownloadOptions) (string, error)) *MockK0sManager_DownloadAirgapBundle_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // GetLatestVersion provides a mock function for the type MockK0sManager
-func (_mock *MockK0sManager) GetLatestVersion() (string, error) {
-	ret := _mock.Called()
+func (_mock *MockK0sManager) GetLatestVersion(ctx context.Context) (string, error) {
+	ret := _mock.Called(ctx)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetLatestVersion")
@@ -1634,16 +1646,16 @@ func (_mock *MockK0sManager) GetLatestVersion() (string, error) {
 
 	var r0 string
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func() (string, error)); ok {
-		return returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (string, error)); ok {
+		return returnFunc(ctx)
 	}
-	if returnFunc, ok := ret.Get(0).(func() string); ok {
-		r0 = returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(context.Context) string); ok {
+		r0 = returnFunc(ctx)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
-	if returnFunc, ok := ret.Get(1).(func() error); ok {
-		r1 = returnFunc()
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -1656,13 +1668,20 @@ type MockK0sManager_GetLatestVersion_Call struct {
 }
 
 // GetLatestVersion is a helper method to define mock.On call
-func (_e *MockK0sManager_Expecter) GetLatestVersion() *MockK0sManager_GetLatestVersion_Call {
-	return &MockK0sManager_GetLatestVersion_Call{Call: _e.mock.On("GetLatestVersion")}
+//   - ctx context.Context
+func (_e *MockK0sManager_Expecter) GetLatestVersion(ctx any) *MockK0sManager_GetLatestVersion_Call {
+	return &MockK0sManager_GetLatestVersion_Call{Call: _e.mock.On("GetLatestVersion", ctx)}
 }
 
-func (_c *MockK0sManager_GetLatestVersion_Call) Run(run func()) *MockK0sManager_GetLatestVersion_Call {
+func (_c *MockK0sManager_GetLatestVersion_Call) Run(run func(ctx context.Context)) *MockK0sManager_GetLatestVersion_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run()
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -1672,7 +1691,7 @@ func (_c *MockK0sManager_GetLatestVersion_Call) Return(s string, err error) *Moc
 	return _c
 }
 
-func (_c *MockK0sManager_GetLatestVersion_Call) RunAndReturn(run func() (string, error)) *MockK0sManager_GetLatestVersion_Call {
+func (_c *MockK0sManager_GetLatestVersion_Call) RunAndReturn(run func(ctx context.Context) (string, error)) *MockK0sManager_GetLatestVersion_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1856,16 +1875,16 @@ func (_m *MockK0sctlManager) EXPECT() *MockK0sctlManager_Expecter {
 }
 
 // Apply provides a mock function for the type MockK0sctlManager
-func (_mock *MockK0sctlManager) Apply(configPath string, k0sctlPath string, force bool) error {
-	ret := _mock.Called(configPath, k0sctlPath, force)
+func (_mock *MockK0sctlManager) Apply(ctx context.Context, configPath string, k0sctlPath string, force bool) error {
+	ret := _mock.Called(ctx, configPath, k0sctlPath, force)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Apply")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, string, bool) error); ok {
-		r0 = returnFunc(configPath, k0sctlPath, force)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, bool) error); ok {
+		r0 = returnFunc(ctx, configPath, k0sctlPath, force)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -1878,31 +1897,37 @@ type MockK0sctlManager_Apply_Call struct {
 }
 
 // Apply is a helper method to define mock.On call
+//   - ctx context.Context
 //   - configPath string
 //   - k0sctlPath string
 //   - force bool
-func (_e *MockK0sctlManager_Expecter) Apply(configPath any, k0sctlPath any, force any) *MockK0sctlManager_Apply_Call {
-	return &MockK0sctlManager_Apply_Call{Call: _e.mock.On("Apply", configPath, k0sctlPath, force)}
+func (_e *MockK0sctlManager_Expecter) Apply(ctx any, configPath any, k0sctlPath any, force any) *MockK0sctlManager_Apply_Call {
+	return &MockK0sctlManager_Apply_Call{Call: _e.mock.On("Apply", ctx, configPath, k0sctlPath, force)}
 }
 
-func (_c *MockK0sctlManager_Apply_Call) Run(run func(configPath string, k0sctlPath string, force bool)) *MockK0sctlManager_Apply_Call {
+func (_c *MockK0sctlManager_Apply_Call) Run(run func(ctx context.Context, configPath string, k0sctlPath string, force bool)) *MockK0sctlManager_Apply_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(string)
+			arg0 = args[0].(context.Context)
 		}
 		var arg1 string
 		if args[1] != nil {
 			arg1 = args[1].(string)
 		}
-		var arg2 bool
+		var arg2 string
 		if args[2] != nil {
-			arg2 = args[2].(bool)
+			arg2 = args[2].(string)
+		}
+		var arg3 bool
+		if args[3] != nil {
+			arg3 = args[3].(bool)
 		}
 		run(
 			arg0,
 			arg1,
 			arg2,
+			arg3,
 		)
 	})
 	return _c
@@ -1913,14 +1938,14 @@ func (_c *MockK0sctlManager_Apply_Call) Return(err error) *MockK0sctlManager_App
 	return _c
 }
 
-func (_c *MockK0sctlManager_Apply_Call) RunAndReturn(run func(configPath string, k0sctlPath string, force bool) error) *MockK0sctlManager_Apply_Call {
+func (_c *MockK0sctlManager_Apply_Call) RunAndReturn(run func(ctx context.Context, configPath string, k0sctlPath string, force bool) error) *MockK0sctlManager_Apply_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // Download provides a mock function for the type MockK0sctlManager
-func (_mock *MockK0sctlManager) Download(version string, opts DownloadOptions) (string, error) {
-	ret := _mock.Called(version, opts)
+func (_mock *MockK0sctlManager) Download(ctx context.Context, version string, opts DownloadOptions) (string, error) {
+	ret := _mock.Called(ctx, version, opts)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Download")
@@ -1928,16 +1953,16 @@ func (_mock *MockK0sctlManager) Download(version string, opts DownloadOptions) (
 
 	var r0 string
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string, DownloadOptions) (string, error)); ok {
-		return returnFunc(version, opts)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, DownloadOptions) (string, error)); ok {
+		return returnFunc(ctx, version, opts)
 	}
-	if returnFunc, ok := ret.Get(0).(func(string, DownloadOptions) string); ok {
-		r0 = returnFunc(version, opts)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, DownloadOptions) string); ok {
+		r0 = returnFunc(ctx, version, opts)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
-	if returnFunc, ok := ret.Get(1).(func(string, DownloadOptions) error); ok {
-		r1 = returnFunc(version, opts)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, DownloadOptions) error); ok {
+		r1 = returnFunc(ctx, version, opts)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -1950,25 +1975,31 @@ type MockK0sctlManager_Download_Call struct {
 }
 
 // Download is a helper method to define mock.On call
+//   - ctx context.Context
 //   - version string
 //   - opts DownloadOptions
-func (_e *MockK0sctlManager_Expecter) Download(version any, opts any) *MockK0sctlManager_Download_Call {
-	return &MockK0sctlManager_Download_Call{Call: _e.mock.On("Download", version, opts)}
+func (_e *MockK0sctlManager_Expecter) Download(ctx any, version any, opts any) *MockK0sctlManager_Download_Call {
+	return &MockK0sctlManager_Download_Call{Call: _e.mock.On("Download", ctx, version, opts)}
 }
 
-func (_c *MockK0sctlManager_Download_Call) Run(run func(version string, opts DownloadOptions)) *MockK0sctlManager_Download_Call {
+func (_c *MockK0sctlManager_Download_Call) Run(run func(ctx context.Context, version string, opts DownloadOptions)) *MockK0sctlManager_Download_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(string)
+			arg0 = args[0].(context.Context)
 		}
-		var arg1 DownloadOptions
+		var arg1 string
 		if args[1] != nil {
-			arg1 = args[1].(DownloadOptions)
+			arg1 = args[1].(string)
+		}
+		var arg2 DownloadOptions
+		if args[2] != nil {
+			arg2 = args[2].(DownloadOptions)
 		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -1979,14 +2010,14 @@ func (_c *MockK0sctlManager_Download_Call) Return(s string, err error) *MockK0sc
 	return _c
 }
 
-func (_c *MockK0sctlManager_Download_Call) RunAndReturn(run func(version string, opts DownloadOptions) (string, error)) *MockK0sctlManager_Download_Call {
+func (_c *MockK0sctlManager_Download_Call) RunAndReturn(run func(ctx context.Context, version string, opts DownloadOptions) (string, error)) *MockK0sctlManager_Download_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // GetKubeconfig provides a mock function for the type MockK0sctlManager
-func (_mock *MockK0sctlManager) GetKubeconfig(configPath string, k0sctlPath string) (string, error) {
-	ret := _mock.Called(configPath, k0sctlPath)
+func (_mock *MockK0sctlManager) GetKubeconfig(ctx context.Context, configPath string, k0sctlPath string) (string, error) {
+	ret := _mock.Called(ctx, configPath, k0sctlPath)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetKubeconfig")
@@ -1994,16 +2025,16 @@ func (_mock *MockK0sctlManager) GetKubeconfig(configPath string, k0sctlPath stri
 
 	var r0 string
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string, string) (string, error)); ok {
-		return returnFunc(configPath, k0sctlPath)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (string, error)); ok {
+		return returnFunc(ctx, configPath, k0sctlPath)
 	}
-	if returnFunc, ok := ret.Get(0).(func(string, string) string); ok {
-		r0 = returnFunc(configPath, k0sctlPath)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) string); ok {
+		r0 = returnFunc(ctx, configPath, k0sctlPath)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
-	if returnFunc, ok := ret.Get(1).(func(string, string) error); ok {
-		r1 = returnFunc(configPath, k0sctlPath)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, configPath, k0sctlPath)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -2016,25 +2047,31 @@ type MockK0sctlManager_GetKubeconfig_Call struct {
 }
 
 // GetKubeconfig is a helper method to define mock.On call
+//   - ctx context.Context
 //   - configPath string
 //   - k0sctlPath string
-func (_e *MockK0sctlManager_Expecter) GetKubeconfig(configPath any, k0sctlPath any) *MockK0sctlManager_GetKubeconfig_Call {
-	return &MockK0sctlManager_GetKubeconfig_Call{Call: _e.mock.On("GetKubeconfig", configPath, k0sctlPath)}
+func (_e *MockK0sctlManager_Expecter) GetKubeconfig(ctx any, configPath any, k0sctlPath any) *MockK0sctlManager_GetKubeconfig_Call {
+	return &MockK0sctlManager_GetKubeconfig_Call{Call: _e.mock.On("GetKubeconfig", ctx, configPath, k0sctlPath)}
 }
 
-func (_c *MockK0sctlManager_GetKubeconfig_Call) Run(run func(configPath string, k0sctlPath string)) *MockK0sctlManager_GetKubeconfig_Call {
+func (_c *MockK0sctlManager_GetKubeconfig_Call) Run(run func(ctx context.Context, configPath string, k0sctlPath string)) *MockK0sctlManager_GetKubeconfig_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(string)
+			arg0 = args[0].(context.Context)
 		}
 		var arg1 string
 		if args[1] != nil {
 			arg1 = args[1].(string)
 		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -2045,14 +2082,14 @@ func (_c *MockK0sctlManager_GetKubeconfig_Call) Return(s string, err error) *Moc
 	return _c
 }
 
-func (_c *MockK0sctlManager_GetKubeconfig_Call) RunAndReturn(run func(configPath string, k0sctlPath string) (string, error)) *MockK0sctlManager_GetKubeconfig_Call {
+func (_c *MockK0sctlManager_GetKubeconfig_Call) RunAndReturn(run func(ctx context.Context, configPath string, k0sctlPath string) (string, error)) *MockK0sctlManager_GetKubeconfig_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // GetLatestVersion provides a mock function for the type MockK0sctlManager
-func (_mock *MockK0sctlManager) GetLatestVersion() (string, error) {
-	ret := _mock.Called()
+func (_mock *MockK0sctlManager) GetLatestVersion(ctx context.Context) (string, error) {
+	ret := _mock.Called(ctx)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetLatestVersion")
@@ -2060,16 +2097,16 @@ func (_mock *MockK0sctlManager) GetLatestVersion() (string, error) {
 
 	var r0 string
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func() (string, error)); ok {
-		return returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (string, error)); ok {
+		return returnFunc(ctx)
 	}
-	if returnFunc, ok := ret.Get(0).(func() string); ok {
-		r0 = returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(context.Context) string); ok {
+		r0 = returnFunc(ctx)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
-	if returnFunc, ok := ret.Get(1).(func() error); ok {
-		r1 = returnFunc()
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -2082,13 +2119,20 @@ type MockK0sctlManager_GetLatestVersion_Call struct {
 }
 
 // GetLatestVersion is a helper method to define mock.On call
-func (_e *MockK0sctlManager_Expecter) GetLatestVersion() *MockK0sctlManager_GetLatestVersion_Call {
-	return &MockK0sctlManager_GetLatestVersion_Call{Call: _e.mock.On("GetLatestVersion")}
+//   - ctx context.Context
+func (_e *MockK0sctlManager_Expecter) GetLatestVersion(ctx any) *MockK0sctlManager_GetLatestVersion_Call {
+	return &MockK0sctlManager_GetLatestVersion_Call{Call: _e.mock.On("GetLatestVersion", ctx)}
 }
 
-func (_c *MockK0sctlManager_GetLatestVersion_Call) Run(run func()) *MockK0sctlManager_GetLatestVersion_Call {
+func (_c *MockK0sctlManager_GetLatestVersion_Call) Run(run func(ctx context.Context)) *MockK0sctlManager_GetLatestVersion_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run()
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -2098,22 +2142,22 @@ func (_c *MockK0sctlManager_GetLatestVersion_Call) Return(s string, err error) *
 	return _c
 }
 
-func (_c *MockK0sctlManager_GetLatestVersion_Call) RunAndReturn(run func() (string, error)) *MockK0sctlManager_GetLatestVersion_Call {
+func (_c *MockK0sctlManager_GetLatestVersion_Call) RunAndReturn(run func(ctx context.Context) (string, error)) *MockK0sctlManager_GetLatestVersion_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // Reset provides a mock function for the type MockK0sctlManager
-func (_mock *MockK0sctlManager) Reset(configPath string, k0sctlPath string) error {
-	ret := _mock.Called(configPath, k0sctlPath)
+func (_mock *MockK0sctlManager) Reset(ctx context.Context, configPath string, k0sctlPath string) error {
+	ret := _mock.Called(ctx, configPath, k0sctlPath)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Reset")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
-		r0 = returnFunc(configPath, k0sctlPath)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = returnFunc(ctx, configPath, k0sctlPath)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -2126,25 +2170,31 @@ type MockK0sctlManager_Reset_Call struct {
 }
 
 // Reset is a helper method to define mock.On call
+//   - ctx context.Context
 //   - configPath string
 //   - k0sctlPath string
-func (_e *MockK0sctlManager_Expecter) Reset(configPath any, k0sctlPath any) *MockK0sctlManager_Reset_Call {
-	return &MockK0sctlManager_Reset_Call{Call: _e.mock.On("Reset", configPath, k0sctlPath)}
+func (_e *MockK0sctlManager_Expecter) Reset(ctx any, configPath any, k0sctlPath any) *MockK0sctlManager_Reset_Call {
+	return &MockK0sctlManager_Reset_Call{Call: _e.mock.On("Reset", ctx, configPath, k0sctlPath)}
 }
 
-func (_c *MockK0sctlManager_Reset_Call) Run(run func(configPath string, k0sctlPath string)) *MockK0sctlManager_Reset_Call {
+func (_c *MockK0sctlManager_Reset_Call) Run(run func(ctx context.Context, configPath string, k0sctlPath string)) *MockK0sctlManager_Reset_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(string)
+			arg0 = args[0].(context.Context)
 		}
 		var arg1 string
 		if args[1] != nil {
 			arg1 = args[1].(string)
 		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -2155,7 +2205,7 @@ func (_c *MockK0sctlManager_Reset_Call) Return(err error) *MockK0sctlManager_Res
 	return _c
 }
 
-func (_c *MockK0sctlManager_Reset_Call) RunAndReturn(run func(configPath string, k0sctlPath string) error) *MockK0sctlManager_Reset_Call {
+func (_c *MockK0sctlManager_Reset_Call) RunAndReturn(run func(ctx context.Context, configPath string, k0sctlPath string) error) *MockK0sctlManager_Reset_Call {
 	_c.Call.Return(run)
 	return _c
 }

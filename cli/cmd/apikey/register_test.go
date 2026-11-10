@@ -4,6 +4,7 @@
 package apikey_test
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -47,7 +48,8 @@ var _ = Describe("RegisterCmd", func() {
 		DescribeTable("registers the API key with the requested validity", func(validFor string, days int) {
 			c.Opts.ValidFor = validFor
 			start := time.Now()
-			mockPortal.EXPECT().RegisterAPIKey(
+
+			mockPortal.EXPECT().RegisterAPIKey(mock.Anything,
 				owner,
 				organization,
 				role,
@@ -57,7 +59,7 @@ var _ = Describe("RegisterCmd", func() {
 					return expiresAt.After(expected.Add(-2*time.Second)) && expiresAt.Before(expected.Add(2*time.Second))
 				}),
 			).Return(&portal.ApiKey{}, nil)
-			ak, err := c.Register(mockPortal)
+			ak, err := c.Register(context.Background(), mockPortal)
 			Expect(err).To(BeNil())
 			Expect(ak).NotTo(BeNil())
 		},
@@ -66,8 +68,8 @@ var _ = Describe("RegisterCmd", func() {
 		)
 
 		It("returns error if Register fails", func() {
-			mockPortal.EXPECT().RegisterAPIKey(owner, organization, role, mock.Anything).Return((*portal.ApiKey)(nil), fmt.Errorf("some error"))
-			ak, err := c.Register(mockPortal)
+			mockPortal.EXPECT().RegisterAPIKey(mock.Anything, owner, organization, role, mock.Anything).Return((*portal.ApiKey)(nil), fmt.Errorf("some error"))
+			ak, err := c.Register(context.Background(), mockPortal)
 			Expect(ak).To(BeNil())
 			Expect(err).To(MatchError(ContainSubstring("failed to register API key")))
 		})
@@ -76,7 +78,7 @@ var _ = Describe("RegisterCmd", func() {
 	Context("when valid-for duration is invalid", func() {
 		It("returns error for invalid valid-for duration", func() {
 			c.Opts.ValidFor = "invalid-date"
-			ak, err := c.Register(mockPortal)
+			ak, err := c.Register(context.Background(), mockPortal)
 			Expect(ak).To(BeNil())
 			Expect(err).To(MatchError(ContainSubstring("failed to parse valid-for duration")))
 		})
@@ -85,27 +87,27 @@ var _ = Describe("RegisterCmd", func() {
 	Context("when role is valid", func() {
 		It("accepts Admin role", func() {
 			c.Opts.Role = apikey.API_KEY_ROLE_ADMIN
-			mockPortal.EXPECT().RegisterAPIKey(owner, organization, apikey.API_KEY_ROLE_ADMIN, mock.Anything).Return(&portal.ApiKey{}, nil)
+			mockPortal.EXPECT().RegisterAPIKey(mock.Anything, owner, organization, apikey.API_KEY_ROLE_ADMIN, mock.Anything).Return(&portal.ApiKey{}, nil)
 
-			ak, err := c.Register(mockPortal)
+			ak, err := c.Register(context.Background(), mockPortal)
 			Expect(err).To(BeNil())
 			Expect(ak).NotTo(BeNil())
 		})
 
 		It("accepts Dev role", func() {
 			c.Opts.Role = apikey.API_KEY_ROLE_DEV
-			mockPortal.EXPECT().RegisterAPIKey(owner, organization, apikey.API_KEY_ROLE_DEV, mock.Anything).Return(&portal.ApiKey{}, nil)
+			mockPortal.EXPECT().RegisterAPIKey(mock.Anything, owner, organization, apikey.API_KEY_ROLE_DEV, mock.Anything).Return(&portal.ApiKey{}, nil)
 
-			ak, err := c.Register(mockPortal)
+			ak, err := c.Register(context.Background(), mockPortal)
 			Expect(err).To(BeNil())
 			Expect(ak).NotTo(BeNil())
 		})
 
 		It("accepts Ext role", func() {
 			c.Opts.Role = apikey.API_KEY_ROLE_EXT
-			mockPortal.EXPECT().RegisterAPIKey(owner, organization, apikey.API_KEY_ROLE_EXT, mock.Anything).Return(&portal.ApiKey{}, nil)
+			mockPortal.EXPECT().RegisterAPIKey(mock.Anything, owner, organization, apikey.API_KEY_ROLE_EXT, mock.Anything).Return(&portal.ApiKey{}, nil)
 
-			ak, err := c.Register(mockPortal)
+			ak, err := c.Register(context.Background(), mockPortal)
 			Expect(err).To(BeNil())
 			Expect(ak).NotTo(BeNil())
 		})
@@ -114,9 +116,10 @@ var _ = Describe("RegisterCmd", func() {
 	Context("when valid-for duration is not provided", func() {
 		It("passes zero expiration time to portal client", func() {
 			c.Opts.ValidFor = ""
-			mockPortal.EXPECT().RegisterAPIKey(owner, organization, role, time.Time{}).Return(&portal.ApiKey{}, nil)
 
-			ak, err := c.Register(mockPortal)
+			mockPortal.EXPECT().RegisterAPIKey(mock.Anything, owner, organization, role, time.Time{}).Return(&portal.ApiKey{}, nil)
+
+			ak, err := c.Register(context.Background(), mockPortal)
 			Expect(err).To(BeNil())
 			Expect(ak).NotTo(BeNil())
 		})
@@ -125,7 +128,7 @@ var _ = Describe("RegisterCmd", func() {
 	Context("when role is invalid", func() {
 		It("returns error for invalid role", func() {
 			c.Opts.Role = "InvalidRole"
-			ak, err := c.Register(mockPortal)
+			ak, err := c.Register(context.Background(), mockPortal)
 			Expect(ak).To(BeNil())
 			Expect(err).To(MatchError(ContainSubstring("invalid role: InvalidRole")))
 		})
@@ -134,7 +137,7 @@ var _ = Describe("RegisterCmd", func() {
 	Context("when owner is not a valid email address", func() {
 		It("returns error for invalid owner", func() {
 			c.Opts.Owner = "not-an-email"
-			ak, err := c.Register(mockPortal)
+			ak, err := c.Register(context.Background(), mockPortal)
 			Expect(ak).To(BeNil())
 			Expect(err).To(MatchError(ContainSubstring("invalid owner")))
 		})

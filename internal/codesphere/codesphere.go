@@ -33,7 +33,7 @@ type APIClient struct {
 }
 
 // NewClient creates a new Codesphere API client
-func NewClient(baseURL, token string) (*APIClient, error) {
+func NewClient(ctx context.Context, baseURL, token string) (*APIClient, error) {
 	if baseURL == "" {
 		return nil, fmt.Errorf("baseURL is required")
 	}
@@ -46,7 +46,6 @@ func NewClient(baseURL, token string) (*APIClient, error) {
 		return nil, fmt.Errorf("invalid baseURL: %w", err)
 	}
 
-	ctx := context.Background()
 	client := api.NewClient(ctx, api.Configuration{
 		BaseUrl: parsedURL,
 		Token:   token,

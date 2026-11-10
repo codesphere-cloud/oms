@@ -27,13 +27,15 @@ type ListBuildsOpts struct {
 	Sort     string
 }
 
-func (c *ListBuildsCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE lists the packages available on the portal.
+func (c *ListBuildsCmd) RunE(cmd *cobra.Command, _ []string) error {
 	if c.Opts.Sort != portal.SortSemver && c.Opts.Sort != portal.SortDate {
 		return fmt.Errorf("invalid sort parameter: %s (must be '%s' or '%s')", c.Opts.Sort, portal.SortSemver, portal.SortDate)
 	}
 
 	p := portal.NewPortalClient()
-	packages, err := p.ListBuilds(portal.CodesphereProduct, c.Opts.Sort)
+
+	packages, err := p.ListBuilds(cmd.Context(), portal.CodesphereProduct, c.Opts.Sort)
 	if err != nil {
 		return fmt.Errorf("failed to list codesphere packages: %w", err)
 	}

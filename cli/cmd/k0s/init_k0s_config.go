@@ -4,6 +4,7 @@
 package k0s
 
 import (
+	"context"
 	"fmt"
 
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
@@ -37,12 +38,12 @@ type InitK0sConfigOpts struct {
 }
 
 // RunE generates the k0sctl config with the real package, k0s and filesystem implementations.
-func (c *InitK0sConfigCmd) RunE(_ *cobra.Command, _ []string) error {
+func (c *InitK0sConfigCmd) RunE(cmd *cobra.Command, _ []string) error {
 	hw := portal.NewHttpWrapper()
 	pm := installer.NewPackage(c.Env.GetOmsWorkdir(), c.Opts.Package)
 	k0s := installer.NewK0s(hw, c.Env, c.FileWriter)
 
-	return c.InitK0sConfig(pm, k0s)
+	return c.InitK0sConfig(cmd.Context(), pm, k0s)
 }
 
 // AddInitK0sConfigCmd registers the k0s-config command under init.
@@ -93,7 +94,7 @@ func AddInitK0sConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 
 // InitK0sConfig generates the k0sctl config from the command options. It only uses local
 // files and fails if the k0s binary or the airgap bundle have not been downloaded yet.
-func (c *InitK0sConfigCmd) InitK0sConfig(pm installer.PackageManager, k0s installer.K0sManager) error {
+func (c *InitK0sConfigCmd) InitK0sConfig(ctx context.Context, pm installer.PackageManager, k0s installer.K0sManager) error {
 	if c.Opts.AirgapBundlePath != "" && !c.Opts.Airgap {
 		return fmt.Errorf("--path requires --airgapped")
 	}
@@ -112,7 +113,7 @@ func (c *InitK0sConfigCmd) InitK0sConfig(pm installer.PackageManager, k0s instal
 		Prompter:   c.Prompter,
 	}
 
-	if _, err := generator.Generate(pm, k0s, c.Opts.Output); err != nil {
+	if _, err := generator.Generate(ctx, pm, k0s, c.Opts.Output); err != nil {
 		return fmt.Errorf("failed to generate k0sctl config: %w", err)
 	}
 

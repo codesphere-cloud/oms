@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"context"
 	"log"
 	"os"
 
@@ -88,7 +89,11 @@ func Execute() {
 	//Disable printing timestamps on log lines
 	log.SetFlags(0)
 
-	err := GetRootCmd().Execute()
+	ctx, stop := util.NotifySignalContext(context.Background())
+	err := GetRootCmd().ExecuteContext(ctx)
+
+	stop()
+
 	if err != nil {
 		os.Exit(1)
 	}

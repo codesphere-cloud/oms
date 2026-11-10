@@ -39,7 +39,7 @@ var _ = Describe("EnsureCodespherePackage", func() {
 		build = portal.Build{Version: version, Hash: "abc123", Artifacts: []portal.Artifact{{Filename: artifact}}}
 	})
 	It("delegates an existing archive to the shared downloader and verifies only afterwards", func() {
-		p.EXPECT().GetBuild(portal.CodesphereProduct, version, "").Return(build, nil)
+		p.EXPECT().GetBuild(mock.Anything, portal.CodesphereProduct, version, "").Return(build, nil)
 		Expect(os.MkdirAll(workdir, 0755)).To(Succeed())
 		cached := filepath.Join(workdir, build.BuildPackageFilename(artifact))
 
@@ -128,7 +128,7 @@ var _ = Describe("EnsureCodespherePackage", func() {
 	)
 
 	It("downloads and verifies a missing package", func() {
-		p.EXPECT().GetBuild(portal.CodesphereProduct, version, "").Return(build, nil).Once()
+		p.EXPECT().GetBuild(mock.Anything, portal.CodesphereProduct, version, "").Return(build, nil).Once()
 		p.EXPECT().DownloadBuildArtifact(mock.Anything, portal.CodesphereProduct, build, mock.Anything, 0, true).Run(func(_ context.Context, _ portal.Product, _ portal.Build, out io.Writer, _ int, _ bool) {
 			_, err := out.Write([]byte("package contents"))
 			Expect(err).NotTo(HaveOccurred())
@@ -143,7 +143,7 @@ var _ = Describe("EnsureCodespherePackage", func() {
 	It("resumes an interrupted download from its existing byte offset", func() {
 		const prefix = "partial "
 
-		p.EXPECT().GetBuild(portal.CodesphereProduct, version, "").Return(build, nil).Twice()
+		p.EXPECT().GetBuild(mock.Anything, portal.CodesphereProduct, version, "").Return(build, nil).Twice()
 		p.EXPECT().DownloadBuildArtifact(mock.Anything, portal.CodesphereProduct, build, mock.Anything, 0, false).Run(func(_ context.Context, _ portal.Product, _ portal.Build, out io.Writer, _ int, _ bool) {
 			_, err := out.Write([]byte(prefix))
 			Expect(err).NotTo(HaveOccurred())
@@ -169,7 +169,7 @@ var _ = Describe("EnsureCodespherePackage", func() {
 	})
 
 	It("returns no usable package when verification fails", func() {
-		p.EXPECT().GetBuild(portal.CodesphereProduct, version, "").Return(build, nil)
+		p.EXPECT().GetBuild(mock.Anything, portal.CodesphereProduct, version, "").Return(build, nil)
 		p.EXPECT().DownloadBuildArtifact(mock.Anything, portal.CodesphereProduct, build, mock.Anything, 0, false).Return(nil)
 		p.EXPECT().VerifyBuildArtifactDownload(mock.Anything, build).Return(fmt.Errorf("checksum mismatch"))
 		result, err := portal.EnsureCodespherePackage(context.Background(), p, workdir, version, "", artifact, false)
@@ -177,7 +177,7 @@ var _ = Describe("EnsureCodespherePackage", func() {
 		Expect(result).To(BeEmpty())
 	})
 	It("propagates lookup errors without creating a cached package", func() {
-		p.EXPECT().GetBuild(portal.CodesphereProduct, version, "abc").Return(portal.Build{}, fmt.Errorf("unavailable"))
+		p.EXPECT().GetBuild(mock.Anything, portal.CodesphereProduct, version, "abc").Return(portal.Build{}, fmt.Errorf("unavailable"))
 		_, err := portal.EnsureCodespherePackage(context.Background(), p, workdir, version, "abc", artifact, false)
 		Expect(err).To(MatchError(ContainSubstring("unavailable")))
 		Expect(workdir).NotTo(BeADirectory())

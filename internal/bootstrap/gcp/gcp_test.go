@@ -163,7 +163,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("accepts a Codesphere-only install of a released version", func() {
 				csEnv.InstallVersion = "v1.2.3"
 
-				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, "codesphere-v1.2.3", "").Return(portal.Build{
+				mockPortalClient.EXPECT().GetBuild(mock.Anything, portal.CodesphereProduct, "codesphere-v1.2.3", "").Return(portal.Build{
 					Hash:      "abc1234567890",
 					Artifacts: []portal.Artifact{{Filename: "installer-lite.tar.gz"}},
 				}, nil)
@@ -266,7 +266,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv.GitHubPAT = "fake-pat"
 				csEnv.RegistryUser = "fake-registry-user"
 
-				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, "codesphere-v1.2.3", mock.Anything).Return(portal.Build{
+				mockPortalClient.EXPECT().GetBuild(mock.Anything, portal.CodesphereProduct, "codesphere-v1.2.3", mock.Anything).Return(portal.Build{
 					Artifacts: []portal.Artifact{{Filename: "installer-lite.tar.gz"}},
 				}, nil).Maybe()
 			})
@@ -559,7 +559,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				}
 			})
 			JustBeforeEach(func() {
-				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, (files.CodespherePackageConfig{Version: bs.Env.InstallVersion}).FormatVersionForPortal(), bs.Env.InstallHash).Return(portal.Build{
+				mockPortalClient.EXPECT().GetBuild(mock.Anything, portal.CodesphereProduct, (files.CodespherePackageConfig{Version: bs.Env.InstallVersion}).FormatVersionForPortal(), bs.Env.InstallHash).Return(portal.Build{
 					Artifacts: artifacts,
 					Hash:      csEnv.InstallHash,
 					Version:   csEnv.InstallVersion,

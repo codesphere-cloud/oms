@@ -11,8 +11,9 @@ import (
 	"os/exec"
 )
 
-func RunCommand(command string, args []string, cmdDir string) error {
-	cmd := newCommand(command, args, cmdDir)
+// RunCommand runs command with args in cmdDir, forwarding its output, and stops it when ctx is cancelled.
+func RunCommand(ctx context.Context, command string, args []string, cmdDir string) error {
+	cmd := newCommand(ctx, command, args, cmdDir)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -24,8 +25,8 @@ func RunCommand(command string, args []string, cmdDir string) error {
 
 // RunCommandWithOutput runs a command and returns its stdout as a string.
 // Stderr is still forwarded to os.Stderr for visibility.
-func RunCommandWithOutput(command string, args []string, cmdDir string) (string, error) {
-	cmd := newCommand(command, args, cmdDir)
+func RunCommandWithOutput(ctx context.Context, command string, args []string, cmdDir string) (string, error) {
+	cmd := newCommand(ctx, command, args, cmdDir)
 
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
@@ -38,8 +39,8 @@ func RunCommandWithOutput(command string, args []string, cmdDir string) (string,
 }
 
 // newCommand creates an exec.Cmd with context and optional working directory.
-func newCommand(command string, args []string, cmdDir string) *exec.Cmd {
-	cmd := exec.CommandContext(context.Background(), command, args...)
+func newCommand(ctx context.Context, command string, args []string, cmdDir string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, command, args...)
 	if cmdDir != "" {
 		cmd.Dir = cmdDir
 	}

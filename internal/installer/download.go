@@ -4,6 +4,7 @@
 package installer
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -40,8 +41,8 @@ type githubRelease struct {
 
 // getGitHubRelease fetches the GitHub release at url and decodes it. subject names
 // the release in error messages.
-func getGitHubRelease(h portal.Http, url, subject string) (*githubRelease, error) {
-	responseBody, err := h.Get(url)
+func getGitHubRelease(ctx context.Context, h portal.Http, url, subject string) (*githubRelease, error) {
+	responseBody, err := h.Get(ctx, url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch %s: %w", subject, err)
 	}
@@ -69,12 +70,12 @@ func ensureCacheDir(fw util.FileIO, environment env.Env) (string, error) {
 
 // reuseCachedBinary reports whether the cached binary at cachePath exists, matches
 // requestedVersion and opts do not force a fresh download.
-func reuseCachedBinary(fw util.FileIO, cachePath, requestedVersion, name string, opts DownloadOptions) bool {
+func reuseCachedBinary(ctx context.Context, fw util.FileIO, cachePath, requestedVersion, name string, opts DownloadOptions) bool {
 	if !fw.Exists(cachePath) || opts.Force {
 		return false
 	}
 
-	cachedVersion, versionErr := localBinaryVersion(cachePath)
+	cachedVersion, versionErr := localBinaryVersion(ctx, cachePath)
 	if versionErr == nil && cachedVersion == requestedVersion {
 		io.Verbosef(!opts.Quiet, "Using cached %s %s at %s", name, requestedVersion, cachePath)
 
@@ -93,7 +94,7 @@ func reuseCachedBinary(fw util.FileIO, cachePath, requestedVersion, name string,
 // downloadToPath downloads to a uniquely named partial file next to path and moves it
 // into place with perm once complete, so neither an interrupted nor a concurrent
 // download leaves a broken file at path.
-func downloadToPath(fw util.FileIO, http portal.Http, path, downloadURL string, quiet bool, perm os.FileMode) (err error) {
+func downloadToPath(ctx context.Context, fw util.FileIO, http portal.Http, path, downloadURL string, quiet bool, perm os.FileMode) (err error) {
 	partialPath, err := fw.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.partial")
 	if err != nil {
 		return fmt.Errorf("failed to create partial download for %s: %w", path, err)
@@ -110,7 +111,7 @@ func downloadToPath(fw util.FileIO, http portal.Http, path, downloadURL string, 
 		return fmt.Errorf("failed to open %s: %w", partialPath, err)
 	}
 
-	if err := http.Download(downloadURL, dstFile, quiet); err != nil {
+	if err := http.Download(ctx, downloadURL, dstFile, quiet); err != nil {
 		util.CloseFileIgnoreError(dstFile)
 
 		return fmt.Errorf("failed to download %s: %w", downloadURL, err)
@@ -131,8 +132,8 @@ func downloadToPath(fw util.FileIO, http portal.Http, path, downloadURL string, 
 	return nil
 }
 
-func localBinaryVersion(binaryPath string) (string, error) {
-	output, err := util.RunCommandWithOutput(binaryPath, []string{"version"}, "")
+func localBinaryVersion(ctx context.Context, binaryPath string) (string, error) {
+	output, err := util.RunCommandWithOutput(ctx, binaryPath, []string{"version"}, "")
 	if err != nil {
 		return "", fmt.Errorf("failed to get version of application %s: %w", binaryPath, err)
 	}

@@ -178,7 +178,9 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 
 	util.AddCmd(install, codesphere.cmd)
 
-	codesphere.cmd.RunE = util.CancelOnSignal(codesphere.Run)
+	codesphere.cmd.RunE = func(cmd *cobra.Command, _ []string) error {
+		return codesphere.Run(cmd.Context())
+	}
 
 	AddInstallCodesphereInfraCmd(codesphere.cmd, codesphere.Opts)
 	AddInstallCodesphereDepenciesCmd(codesphere.cmd, codesphere.Opts)

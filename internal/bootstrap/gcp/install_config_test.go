@@ -131,7 +131,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 						requestedHash = hash
 					}
 
-					mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, "codesphere-v1.111.0", requestedHash).Return(portal.Build{
+					mockPortalClient.EXPECT().GetBuild(mock.Anything, portal.CodesphereProduct, "codesphere-v1.111.0", requestedHash).Return(portal.Build{
 						Hash: expectedHash, Artifacts: []portal.Artifact{{Filename: "installer-lite.tar.gz"}},
 					}, nil)
 				}
