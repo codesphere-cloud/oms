@@ -190,8 +190,11 @@ var _ = Describe("Step logger", func() {
 			output := captureStepOutput(func() {
 				Expect(logger.StepWithRetry("Example", func() error { return failure }, 2)).To(MatchError(failure))
 			})
-			Expect(strings.Count(output, "Example failed: problem")).To(Equal(2))
+			Expect(output).To(ContainSubstring("Example failed: problem"))
+			Expect(output).To(ContainSubstring("Example (Retry 2/2) failed: problem"))
 			Expect(logger.timings).To(HaveLen(2))
+			Expect(logger.timings[0].name).To(Equal("Example"))
+			Expect(logger.timings[1].name).To(Equal("Example (Retry 2/2)"))
 		})
 	})
 })
