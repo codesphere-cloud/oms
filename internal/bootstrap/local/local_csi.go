@@ -24,6 +24,7 @@ func (b *LocalBootstrapper) InstallLocalCSIProvisioner() error {
 	if err != nil {
 		return err
 	}
+
 	if err := b.installPrerequisiteChart(prerequisiteChartConfig{
 		Name:           localCSIReleaseName,
 		Chart:          localCSIReleaseName,

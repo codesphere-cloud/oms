@@ -143,6 +143,7 @@ func (c *BootstrapGcpCmd) prepareBootstrapOptions() error {
 // BootstrapGcp initializes external clients and starts the selected bootstrap workflow.
 func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	ctx := c.cmd.Context()
+
 	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.StepTimer))
 	defer stlog.PrintSummary()
 
@@ -229,6 +230,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	}
 
 	packageFile := "<package-name>-" + gcp.InstallerArchiveName
+
 	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeGitHub {
 		log.Printf("Images are pulled directly from GHCR, so container images are not loaded from the package.")
 	}

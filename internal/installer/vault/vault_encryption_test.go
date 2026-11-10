@@ -19,9 +19,11 @@ func sopsAndAgeAvailable() bool {
 	if _, err := exec.LookPath("sops"); err != nil {
 		return false
 	}
+
 	if _, err := exec.LookPath("age-keygen"); err != nil {
 		return false
 	}
+
 	return true
 }
 
@@ -37,12 +39,14 @@ var _ = Describe("VaultEncryption", func() {
 
 		BeforeEach(func() {
 			var err error
+
 			tmpDir, err = os.MkdirTemp("", "age-test-*")
 			Expect(err).ToNot(HaveOccurred())
 
 			// Save and clear env vars to isolate tests.
 			origAgeKey, hasOrigAgeKey = os.LookupEnv("SOPS_AGE_KEY")
 			origAgeKeyFile, hasOrigKeyFile = os.LookupEnv("SOPS_AGE_KEY_FILE")
+
 			Expect(os.Unsetenv("SOPS_AGE_KEY")).To(Succeed())
 			Expect(os.Unsetenv("SOPS_AGE_KEY_FILE")).To(Succeed())
 		})
@@ -55,6 +59,7 @@ var _ = Describe("VaultEncryption", func() {
 			} else {
 				Expect(os.Unsetenv("SOPS_AGE_KEY")).To(Succeed())
 			}
+
 			if hasOrigKeyFile {
 				Expect(os.Setenv("SOPS_AGE_KEY_FILE", origAgeKeyFile)).To(Succeed())
 			} else {
@@ -67,6 +72,7 @@ var _ = Describe("VaultEncryption", func() {
 				if !sopsAndAgeAvailable() {
 					Skip("age-keygen not available")
 				}
+
 				keyFile := filepath.Join(tmpDir, "explicit.txt")
 				out, err := exec.Command("age-keygen", "-o", keyFile).CombinedOutput()
 				Expect(err).ToNot(HaveOccurred(), string(out))
@@ -102,12 +108,14 @@ var _ = Describe("VaultEncryption", func() {
 
 				// Extract just the private key line (no comments).
 				var privKeyLine string
+
 				for _, line := range splitLines(string(data)) {
 					if len(line) > 0 && line[0] != '#' {
 						privKeyLine = line
 						break
 					}
 				}
+
 				Expect(privKeyLine).ToNot(BeEmpty())
 
 				Expect(os.Setenv("SOPS_AGE_KEY", privKeyLine)).To(Succeed())
@@ -124,6 +132,7 @@ var _ = Describe("VaultEncryption", func() {
 				if !sopsAndAgeAvailable() {
 					Skip("age-keygen not available")
 				}
+
 				keyFile := filepath.Join(tmpDir, "keys.txt")
 				out, err := exec.Command("age-keygen", "-o", keyFile).CombinedOutput()
 				Expect(err).ToNot(HaveOccurred(), string(out))
@@ -167,6 +176,7 @@ var _ = Describe("VaultEncryption", func() {
 
 		BeforeEach(func() {
 			var err error
+
 			tmpDir, err = os.MkdirTemp("", "load-vault-test-*")
 			Expect(err).ToNot(HaveOccurred())
 		})
@@ -249,15 +259,19 @@ var _ = Describe("VaultEncryption", func() {
 
 func splitLines(s string) []string {
 	var lines []string
+
 	start := 0
+
 	for i := 0; i < len(s); i++ {
 		if s[i] == '\n' {
 			lines = append(lines, s[start:i])
 			start = i + 1
 		}
 	}
+
 	if start < len(s) {
 		lines = append(lines, s[start:])
 	}
+
 	return lines
 }

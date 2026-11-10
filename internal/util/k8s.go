@@ -23,6 +23,7 @@ func RenderTemplate(raw []byte, vars map[string]string) ([]byte, error) {
 	for key, val := range vars {
 		content = strings.ReplaceAll(content, "${"+key+"}", val)
 	}
+
 	return []byte(content), nil
 }
 
@@ -41,14 +42,17 @@ func ApplySecretFromYAML(ctx context.Context, clientset kubernetes.Interface, da
 		if err != nil {
 			return fmt.Errorf("creating secret %s/%s: %w", secret.Namespace, secret.Name, err)
 		}
+
 		return nil
 	}
 
 	secret.ResourceVersion = existing.ResourceVersion
+
 	_, err = secretsClient.Update(ctx, secret, metav1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("updating secret %s/%s: %w", secret.Namespace, secret.Name, err)
 	}
+
 	return nil
 }
 

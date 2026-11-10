@@ -20,5 +20,6 @@ func GetTableWriter() table.Writer {
 	t := table.NewWriter()
 	t.SetStyle(table.StyleDefault)
 	t.SetOutputMirror(os.Stdout)
+
 	return t
 }

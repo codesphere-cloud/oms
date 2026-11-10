@@ -19,7 +19,6 @@ import (
 )
 
 var _ = Describe("DownloadPackages", func() {
-
 	var (
 		c              cmd.DownloadPackageCmd
 		filename       string
@@ -61,8 +60,10 @@ var _ = Describe("DownloadPackages", func() {
 	})
 
 	Context("AddDownloadPackageCmd", func() {
-		var downloadCmd cobra.Command
-		var opts *util.GlobalOptions
+		var (
+			downloadCmd cobra.Command
+			opts        *util.GlobalOptions
+		)
 
 		BeforeEach(func() {
 			downloadCmd = cobra.Command{}

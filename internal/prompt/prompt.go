@@ -60,6 +60,7 @@ func (p *StdinPrompter) String(prompt, defaultValue string) string {
 	if input == "" {
 		return defaultValue
 	}
+
 	return input
 }
 
@@ -83,6 +84,7 @@ func (p *StdinPrompter) Int(prompt string, defaultValue int) int {
 		log.Printf("Invalid number, using default: %d\n", defaultValue)
 		return defaultValue
 	}
+
 	return value
 }
 
@@ -107,6 +109,7 @@ func (p *StdinPrompter) StringSlice(prompt string, defaultValue []string) []stri
 	}
 
 	parts := strings.Split(input, ",")
+
 	result := make([]string, 0, len(parts))
 	for _, part := range parts {
 		trimmed := strings.TrimSpace(part)
@@ -118,6 +121,7 @@ func (p *StdinPrompter) StringSlice(prompt string, defaultValue []string) []stri
 	if len(result) == 0 {
 		return defaultValue
 	}
+
 	return result
 }
 
@@ -132,6 +136,7 @@ func (p *StdinPrompter) Bool(prompt string, defaultValue bool) bool {
 	if defaultValue {
 		defaultStr = "y"
 	}
+
 	log.Printf("%s (y/n, default: %s): ", prompt, defaultStr)
 
 	input, _ := p.reader.ReadString('\n')
@@ -167,5 +172,6 @@ func (p *StdinPrompter) Choice(prompt string, choices []string, defaultValue str
 	}
 
 	log.Printf("Invalid choice, using default: %s\n", defaultValue)
+
 	return defaultValue
 }
