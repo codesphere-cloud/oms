@@ -41,6 +41,7 @@ func (c *ListBuildsCmd) RunE(cmd *cobra.Command, _ []string) error {
 	}
 
 	c.PrintPackagesTable(packages)
+
 	return nil
 }
 
@@ -77,14 +78,17 @@ func (c *ListBuildsCmd) PrintPackagesTable(packages portal.Builds) {
 		}
 
 		artifacts := ""
+
 		for i, art := range build.Artifacts {
 			if i > 0 {
 				artifacts += ", "
 			}
+
 			artifacts = artifacts + art.Filename
 		}
 
 		c.TableWriter.AppendRow(table.Row{int, build.Version, build.Date, build.Hash, artifacts})
 	}
+
 	c.TableWriter.Render()
 }

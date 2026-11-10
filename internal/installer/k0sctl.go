@@ -117,9 +117,11 @@ func (k *K0sctl) requireBinaryAndConfig(configPath, k0sctlPath string) error {
 	if !k.FileWriter.Exists(k0sctlPath) {
 		return fmt.Errorf("k0sctl binary does not exist at '%s', please download first", k0sctlPath)
 	}
+
 	if !k.FileWriter.Exists(configPath) {
 		return fmt.Errorf("k0sctl config does not exist at '%s'", configPath)
 	}
+
 	return nil
 }
 
@@ -146,6 +148,7 @@ func (k *K0sctl) Apply(ctx context.Context, configPath string, k0sctlPath string
 	}
 
 	log.Println("k0sctl apply completed successfully")
+
 	return nil
 }
 
@@ -154,6 +157,7 @@ func (k *K0sctl) Reset(ctx context.Context, configPath string, k0sctlPath string
 	if !k.FileWriter.Exists(k0sctlPath) {
 		return nil
 	}
+
 	if err := k.requireBinaryAndConfig(configPath, k0sctlPath); err != nil {
 		return err
 	}
@@ -168,6 +172,7 @@ func (k *K0sctl) Reset(ctx context.Context, configPath string, k0sctlPath string
 	}
 
 	log.Println("k0sctl reset completed successfully")
+
 	return nil
 }
 

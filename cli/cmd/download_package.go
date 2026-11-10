@@ -114,5 +114,6 @@ func (c *DownloadPackageCmd) DownloadBuild(ctx context.Context, p portal.Portal,
 	}); err != nil {
 		return fmt.Errorf("failed to download and verify build: %w", err)
 	}
+
 	return nil
 }

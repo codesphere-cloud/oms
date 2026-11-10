@@ -28,6 +28,7 @@ func (c *InstallCodesphereInfraCmd) Run(ctx context.Context) error {
 	if c.Opts.LocalComponents {
 		return fmt.Errorf("--local-components requires install codesphere dependencies or install codesphere platform")
 	}
+
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
@@ -65,6 +66,7 @@ func installCodesphereInfra(ctx context.Context, opts *InstallCodesphereOpts, en
 	if err := ci.Install(ctx, pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install infra: %w", err)
 	}
+
 	return nil
 }
 

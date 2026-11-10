@@ -91,5 +91,6 @@ func (c *HttpWrapper) Download(ctx context.Context, url string, file io.Writer, 
 	}
 
 	log.Println("Download finished successfully.")
+
 	return nil
 }

@@ -49,6 +49,7 @@ var _ = Describe("CopyPackageCmd", func() {
 
 		copier := installer.NewMockArtifactCopier(GinkgoT())
 		copier.EXPECT().Copy(context.Background(), "ghcr.io/codesphere/api:v1", "registry.example.com/mirror/ghcr_io/codesphere/api:v1").Return(nil).Once()
+
 		command := &CopyPackageCmd{
 			Opts:     CopyPackageOpts{Dest: "registry.example.com/mirror"},
 			Prompter: prompter,
@@ -79,6 +80,7 @@ var _ = Describe("CopyPackageCmd", func() {
 
 		copier := installer.NewMockArtifactCopier(GinkgoT())
 		copier.EXPECT().Copy(context.Background(), "ghcr.io/codesphere/api:v1", "registry.example.com/mirror/ghcr_io/codesphere/api:v1").Return(nil).Once()
+
 		command := &CopyPackageCmd{
 			Opts:     CopyPackageOpts{Dest: "registry.example.com/mirror", Yes: true},
 			Prompter: prompt.NewMockPrompter(GinkgoT()),

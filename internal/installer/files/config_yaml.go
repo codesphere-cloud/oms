@@ -31,6 +31,7 @@ func (v *InstallVault) GetSecret(name string) *SecretEntry {
 			return &v.Secrets[i]
 		}
 	}
+
 	return nil
 }
 
@@ -42,6 +43,7 @@ func (v *InstallVault) SetSecret(entry SecretEntry) {
 			return
 		}
 	}
+
 	v.Secrets = append(v.Secrets, entry)
 }
 
@@ -51,6 +53,7 @@ func (v *InstallVault) RemoveSecret(name string) bool {
 	v.Secrets = slices.DeleteFunc(v.Secrets, func(s SecretEntry) bool {
 		return s.Name == name
 	})
+
 	return len(v.Secrets) != before
 }
 
@@ -69,10 +72,12 @@ func (v *InstallVault) Clone() *InstallVault {
 			file := *entry.File
 			copied.File = &file
 		}
+
 		if entry.Fields != nil {
 			fields := *entry.Fields
 			copied.Fields = &fields
 		}
+
 		clone.Secrets = append(clone.Secrets, copied)
 	}
 
@@ -818,8 +823,10 @@ func (i *ImageRef) UnmarshalYAML(node *yaml.Node) error {
 	if err := node.Decode(&ref); err != nil {
 		return err
 	}
+
 	i.BomRef = ref.BomRef
 	i.Dockerfile = ref.Dockerfile
+
 	return nil
 }
 
@@ -838,6 +845,7 @@ func (i *ImageRef) GetImageReference() string {
 	if i.ImageName != "" {
 		return i.ImageName
 	}
+
 	return i.BomRef
 }
 
@@ -1030,6 +1038,7 @@ type S3ManagedServiceConfig struct {
 func (c *RootConfig) Marshal() ([]byte, error) {
 	c.buildACMEOverride()
 	c.buildOpenfgaBackupValues()
+
 	return yaml.Marshal(c)
 }
 
@@ -1055,8 +1064,10 @@ func (c *RootConfig) Unmarshal(data []byte) error {
 	if err := yaml.Unmarshal(data, c); err != nil {
 		return err
 	}
+
 	c.extractACMESolverFromOverride()
 	c.migrateLegacyBarmanCloudPlugin()
+
 	return nil
 }
 
@@ -1072,6 +1083,7 @@ func (c *CodesphereConfig) EnsureCertIssuer() *CertIssuerConfig {
 	if c.CertIssuer == nil {
 		c.CertIssuer = &CertIssuerConfig{}
 	}
+
 	return c.CertIssuer
 }
 
@@ -1087,6 +1099,7 @@ func (c *RootConfig) EnsureRegistry() *RegistryConfig {
 
 func (c *RootConfig) ExtractBomRefs() []string {
 	var bomRefs []string
+
 	for _, imageConfig := range c.Codesphere.DeployConfig.Images {
 		for _, flavor := range imageConfig.Flavors {
 			if flavor.Image.BomRef != "" {
@@ -1102,7 +1115,9 @@ func Capitalize(s string) string {
 	if s == "" {
 		return ""
 	}
+
 	s = strings.ReplaceAll(s, "_", "")
+
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
@@ -1121,11 +1136,13 @@ func (c *RootConfig) buildACMEOverride() {
 	// Build dnsSolver section
 	if dns01.Provider != "" {
 		solverConfig := map[string]interface{}{}
+
 		if dns01.Config != nil {
 			for k, v := range dns01.Config {
 				solverConfig[k] = v
 			}
 		}
+
 		acmeOverride["dnsSolver"] = map[string]interface{}{
 			dns01.Provider: solverConfig,
 		}
@@ -1145,6 +1162,7 @@ func (c *RootConfig) buildACMEOverride() {
 	if !ok {
 		existingAcme = map[string]interface{}{}
 	}
+
 	for k, v := range acmeOverride {
 		existingAcme[k] = v
 	}
@@ -1171,12 +1189,15 @@ func (c *RootConfig) buildOpenfgaBackupValues() {
 	if ob.Schedule != "" {
 		backup["schedule"] = ob.Schedule
 	}
+
 	if ob.DestinationPath != "" {
 		backup["destinationPath"] = ob.DestinationPath
 	}
+
 	if ob.EndpointURL != "" {
 		backup["endpointURL"] = ob.EndpointURL
 	}
+
 	if ob.RetentionPolicy != "" {
 		backup["retentionPolicy"] = ob.RetentionPolicy
 	}
@@ -1205,6 +1226,7 @@ func (c *RootConfig) buildOpenfgaBackupValues() {
 	if !ok {
 		valuesObject = map[string]interface{}{}
 	}
+
 	postgres, ok := valuesObject["postgres"].(map[string]interface{})
 	if !ok {
 		postgres = map[string]interface{}{}
@@ -1371,7 +1393,9 @@ func (c *RootConfig) extractACMESolverFromOverride() {
 		if cfgMap, ok := cfg.(map[string]interface{}); ok && len(cfgMap) > 0 {
 			solver.Config = cfgMap
 		}
+
 		c.Codesphere.CertIssuer.Acme.Solver.DNS01 = solver
+
 		break // only one provider expected
 	}
 }

@@ -64,6 +64,7 @@ func (b *LocalBootstrapper) PrepareInstallerBundle() (string, error) {
 		if err != nil {
 			return "", err
 		}
+
 		bundlePath = downloaded
 
 	case b.Env.InstallLocal != "":
@@ -122,6 +123,7 @@ func (b *LocalBootstrapper) PrepareInstaller() error {
 
 func (b *LocalBootstrapper) createTemporaryPostgresNodePortEndpoint() (string, int32, func(), error) {
 	masterdataSvc := &corev1.Service{}
+
 	masterdataSvcKey := types.NamespacedName{Name: "masterdata-rw", Namespace: codesphereNamespace}
 	if err := b.kubeClient.Get(b.ctx, masterdataSvcKey, masterdataSvc); err != nil {
 		return "", 0, nil, fmt.Errorf("failed to get PostgreSQL service %s/%s: %w", codesphereNamespace, "masterdata-rw", err)
@@ -198,9 +200,11 @@ func getPostgresServicePort(svc *corev1.Service) (corev1.ServicePort, error) {
 			if port.TargetPort.Type == intstr.Int && port.TargetPort.IntValue() == 0 {
 				port.TargetPort = intstr.FromInt(5432)
 			}
+
 			if port.TargetPort.Type == intstr.String && port.TargetPort.String() == "" {
 				port.TargetPort = intstr.FromInt(5432)
 			}
+
 			return port, nil
 		}
 	}
@@ -213,6 +217,7 @@ func getPostgresServicePort(svc *corev1.Service) (corev1.ServicePort, error) {
 	if port.TargetPort.Type == intstr.Int && port.TargetPort.IntValue() == 0 {
 		port.TargetPort = intstr.FromInt(int(port.Port))
 	}
+
 	if port.TargetPort.Type == intstr.String && port.TargetPort.String() == "" {
 		port.TargetPort = intstr.FromInt(int(port.Port))
 	}
@@ -236,6 +241,7 @@ func (b *LocalBootstrapper) resolveNodeIPForNodePort() (string, error) {
 				return addr.Address, nil
 			}
 		}
+
 		for _, addr := range node.Status.Addresses {
 			if addr.Type == corev1.NodeExternalIP && addr.Address != "" {
 				return addr.Address, nil
@@ -267,6 +273,7 @@ func (b *LocalBootstrapper) configurePostgresForMigration(host string, port int3
 		if err := b.icg.WriteInstallConfig(b.Env.InstallConfigPath, true); err != nil {
 			return fmt.Errorf("failed to restore install config after installer run: %w", err)
 		}
+
 		return nil
 	}, nil
 }

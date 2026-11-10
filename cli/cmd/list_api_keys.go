@@ -30,6 +30,7 @@ func (c *ListAPIKeysCmd) RunE(cmd *cobra.Command, _ []string) error {
 	}
 
 	c.PrintKeysTable(keys)
+
 	return nil
 }
 

@@ -37,6 +37,7 @@ func NewClient(ctx context.Context, baseURL, token string) (*APIClient, error) {
 	if baseURL == "" {
 		return nil, fmt.Errorf("baseURL is required")
 	}
+
 	if token == "" {
 		return nil, fmt.Errorf("token is required")
 	}
@@ -68,16 +69,19 @@ func (c *APIClient) CreateWorkspace(teamID, planID int, name string, repoURL *st
 	if err != nil {
 		return 0, fmt.Errorf("failed to create workspace: %w", err)
 	}
+
 	return workspace.Id, nil
 }
 
 // SetEnvVar sets an environment variable in the workspace
 func (c *APIClient) SetEnvVar(workspaceID int, key, value string) error {
 	envVars := map[string]string{key: value}
+
 	err := c.client.SetEnvVarOnWorkspace(workspaceID, envVars)
 	if err != nil {
 		return fmt.Errorf("failed to set environment variable: %w", err)
 	}
+
 	return nil
 }
 
@@ -87,6 +91,7 @@ func (c *APIClient) ExecuteCommand(workspaceID int, command string) error {
 	if err != nil {
 		return fmt.Errorf("failed to execute command: %w", err)
 	}
+
 	return nil
 }
 
@@ -96,6 +101,7 @@ func (c *APIClient) SyncLandscape(workspaceID int, profile string) error {
 	if err != nil {
 		return fmt.Errorf("failed to sync landscape: %w", err)
 	}
+
 	return nil
 }
 
@@ -105,6 +111,7 @@ func (c *APIClient) StartPipeline(workspaceID int, profile, stage string) error 
 	if err != nil {
 		return fmt.Errorf("failed to start pipeline: %w", err)
 	}
+
 	return nil
 }
 
@@ -114,6 +121,7 @@ func (c *APIClient) GetPipelineState(workspaceID int, stage string) ([]api.Pipel
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pipeline state: %w", err)
 	}
+
 	return states, nil
 }
 
@@ -123,6 +131,7 @@ func (c *APIClient) DeleteWorkspace(workspaceID int) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete workspace: %w", err)
 	}
+
 	return nil
 }
 
@@ -132,6 +141,7 @@ func (c *APIClient) ListTeams(orgId string) ([]api.Team, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list teams: %w", err)
 	}
+
 	return teams, nil
 }
 
@@ -141,5 +151,6 @@ func (c *APIClient) ListWorkspacePlans() ([]api.WorkspacePlan, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list workspace plans: %w", err)
 	}
+
 	return plans, nil
 }

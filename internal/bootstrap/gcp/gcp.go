@@ -950,6 +950,7 @@ func (b *GCPBootstrapper) ensureAirgappedEgressRules(network string) error {
 		if err := b.GCPClient.EnsurePrivateGoogleAccess(b.Env.ProjectID, b.Env.Region, b.Env.ProjectID+"-vpc", b.Env.ProjectID+"-"+b.Env.Region+"-subnet"); err != nil {
 			return fmt.Errorf("failed to configure private Google API access: %w", err)
 		}
+
 		return b.createFirewallRules(network, airgappedEgressRules())
 	}
 

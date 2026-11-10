@@ -335,12 +335,14 @@ func (b *LocalBootstrapper) CreateCephAdminSecrets() error {
 				Namespace: ns,
 			},
 		}
+
 		_, err := controllerutil.CreateOrUpdate(b.ctx, b.kubeClient, secret, func() error {
 			secret.Type = corev1.SecretTypeOpaque
 			secret.StringData = map[string]string{
 				"ceph-username": b.cephCredentials.CephfsAdmin.Entity,
 				"ceph-secret":   b.cephCredentials.CephfsAdmin.Key,
 			}
+
 			return nil
 		})
 		if err != nil {
@@ -356,6 +358,7 @@ func (b *LocalBootstrapper) CreateCephAdminSecrets() error {
 // CSI plugins and other consumers can discover the Ceph monitor addresses.
 func (b *LocalBootstrapper) SyncCephMonEndpoints() error {
 	source := &corev1.ConfigMap{}
+
 	key := client.ObjectKey{Namespace: "rook-ceph", Name: "rook-ceph-mon-endpoints"}
 	if err := b.kubeClient.Get(b.ctx, key, source); err != nil {
 		return fmt.Errorf("failed to read rook-ceph-mon-endpoints ConfigMap from rook-ceph namespace: %w", err)
@@ -368,6 +371,7 @@ func (b *LocalBootstrapper) SyncCephMonEndpoints() error {
 				Namespace: ns,
 			},
 		}
+
 		_, err := controllerutil.CreateOrUpdate(b.ctx, b.kubeClient, cm, func() error {
 			cm.Data = source.Data
 			return nil
@@ -408,6 +412,7 @@ func (b *LocalBootstrapper) ReadClusterCIDRs() (podCIDR string, serviceCIDR stri
 			err = fmt.Errorf("failed to determine service CIDR: %w", err)
 		}
 	}
+
 	return
 }
 
@@ -417,13 +422,16 @@ func (b *LocalBootstrapper) readPodCIDR() (string, error) {
 	if err := b.kubeClient.List(b.ctx, nodeList); err != nil {
 		return "", fmt.Errorf("failed to list nodes: %w", err)
 	}
+
 	if len(nodeList.Items) == 0 {
 		return "", fmt.Errorf("no nodes found in cluster")
 	}
+
 	podCIDR := nodeList.Items[0].Spec.PodCIDR
 	if podCIDR == "" {
 		return "", fmt.Errorf("node %q does not have a podCIDR set", nodeList.Items[0].Name)
 	}
+
 	return podCIDR, nil
 }
 
@@ -433,10 +441,13 @@ func (b *LocalBootstrapper) readServiceCIDRFromK8s() (serviceCIDR string, err er
 	if err := b.kubeClient.List(b.ctx, nodeList); err != nil {
 		return "", fmt.Errorf("failed to list nodes: %w", err)
 	}
+
 	if len(nodeList.Items) == 0 {
 		return "", fmt.Errorf("no nodes found in cluster")
 	}
+
 	apiServerPod := &corev1.Pod{}
+
 	key := client.ObjectKey{Name: "kube-apiserver-" + nodeList.Items[0].Name, Namespace: "kube-system"}
 	if err = b.kubeClient.Get(b.ctx, key, apiServerPod); err != nil {
 		return "", fmt.Errorf("failed to get kube-apiserver pod: %w", err)
@@ -449,6 +460,7 @@ func (b *LocalBootstrapper) readServiceCIDRFromK8s() (serviceCIDR string, err er
 				break
 			}
 		}
+
 		if serviceCIDR != "" {
 			break
 		}
@@ -468,10 +480,12 @@ func (b *LocalBootstrapper) readServiceCIDRFromProc() (serviceCIDR string, err e
 	matches, _ := filepath.Glob("/proc/*/cmdline")
 	for _, path := range matches {
 		var content []byte
+
 		content, err = os.ReadFile(path)
 		if err != nil {
 			return "", fmt.Errorf("failed to read cmdline from proc FS: %w", err)
 		}
+
 		cmdline := string(content)
 
 		if strings.Contains(cmdline, "kube-apiserver") {
@@ -485,6 +499,7 @@ func (b *LocalBootstrapper) readServiceCIDRFromProc() (serviceCIDR string, err e
 			}
 		}
 	}
+
 	return "", errors.New("can't find service CIDR")
 }
 
@@ -517,6 +532,7 @@ func (b *LocalBootstrapper) EnsureInstallConfig() error {
 	// Has to run before the profile: profiles only set monitoring defaults for
 	// components that aren't configured yet.
 	disableLokiMonitoring(b.icg.GetInstallConfig())
+
 	err := b.icg.ApplyProfile(b.Env.Profile)
 	if err != nil {
 		return fmt.Errorf("failed to apply profile: %w", err)
@@ -554,13 +570,16 @@ func disableLokiMonitoring(config *files.RootConfig) {
 	if config.Cluster.Monitoring == nil {
 		config.Cluster.Monitoring = &files.MonitoringConfig{}
 	}
+
 	monitoring := config.Cluster.Monitoring
 	if monitoring.Loki == nil {
 		monitoring.Loki = &files.LokiConfig{Enabled: false}
 	}
+
 	if monitoring.Grafana == nil {
 		monitoring.Grafana = &files.GrafanaConfig{Enabled: false}
 	}
+
 	if monitoring.GrafanaAlloy == nil {
 		monitoring.GrafanaAlloy = &files.GrafanaAlloyConfig{Enabled: false}
 	}
@@ -570,9 +589,11 @@ func (b *LocalBootstrapper) loadVaultForConfigTemplating() error {
 	if !b.fw.Exists(b.Env.SecretsFilePath) {
 		return nil
 	}
+
 	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file for config templating: %w", err)
 	}
+
 	return nil
 }
 
@@ -581,10 +602,13 @@ func (b *LocalBootstrapper) EnsureSecrets() error {
 		b.Env.Vault = b.icg.GetVault()
 		return nil
 	}
+
 	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file: %w", err)
 	}
+
 	b.Env.Vault = b.icg.GetVault()
+
 	return nil
 }
 
@@ -593,11 +617,14 @@ func (b *LocalBootstrapper) ResolveAgeKey() error {
 	if err != nil {
 		return fmt.Errorf("failed to resolve age key: %w", err)
 	}
+
 	b.ageRecipient = recipient
+
 	b.ageKeyPath = keyPath
 	if keyPath != "" {
 		fmt.Printf("Using age key: %s\n", keyPath)
 	}
+
 	return nil
 }
 
@@ -618,12 +645,14 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	if err := os.MkdirAll(b.Env.InstallConfig.Secrets.BaseDir, 0700); err != nil {
 		return fmt.Errorf("failed to create secrets base directory: %w", err)
 	}
+
 	if err := b.EnsureGitHubAccessConfigured(); err != nil {
 		return fmt.Errorf("failed to ensure GitHub access is configured: %w", err)
 	}
 
 	b.Env.InstallConfig.Postgres.Mode = "external"
 	b.Env.InstallConfig.Postgres.Database = cnpgDatabaseName
+
 	b.Env.InstallConfig.Postgres.CACertPem, err = b.ReadPostgresCA()
 	if err != nil {
 		return fmt.Errorf("failed to read PostgreSQL CA: %w", err)
@@ -633,10 +662,12 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	b.Env.InstallConfig.Postgres.Port = 5432
 	b.Env.InstallConfig.Postgres.Primary = nil
 	b.Env.InstallConfig.Postgres.Replica = nil
+
 	pgPassword, err := b.ReadPostgresSuperuserPassword()
 	if err != nil {
 		return fmt.Errorf("failed to read PostgreSQL superuser password: %w", err)
 	}
+
 	b.Env.Vault.SetSecret(files.SecretEntry{
 		Name: "postgresPassword",
 		Fields: &files.SecretFields{
@@ -650,6 +681,7 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to read kubeconfig: %w", err)
 	}
+
 	b.Env.Vault.SetSecret(files.SecretEntry{
 		Name: "kubeConfig",
 		File: &files.SecretFile{
@@ -659,6 +691,7 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	})
 
 	setLocalClusterComponents(b.Env.InstallConfig)
+
 	b.Env.InstallConfig.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{
 		Enabled: b.Env.StorageEngine != StorageEngineLocal,
 	}
@@ -684,7 +717,9 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to read cluster CIDRs: %w. Use --service-cidr and --pod-cidr to specify them", err)
 	}
+
 	b.Env.InstallConfig.Kubernetes.PodCIDR = podCIDR
+
 	b.Env.InstallConfig.Kubernetes.ServiceCIDR = serviceCIDR
 	if b.Env.ExposeShared {
 		configureSharedExposure(b.Env.InstallConfig)
@@ -704,6 +739,7 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 		b.Env.InstallConfig.Codesphere.WorkspaceHostingBaseDomain = "ws." + b.Env.BaseDomain
 		b.Env.InstallConfig.Codesphere.CustomDomains.CNameBaseDomain = b.Env.InstallConfig.Codesphere.WorkspaceHostingBaseDomain
 	}
+
 	b.Env.InstallConfig.Codesphere.DNSServers = []string{"8.8.8.8"}
 
 	defaultImages := bootstrap.DefaultCodesphereDeployConfig().Images
@@ -716,6 +752,7 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 			}
 		}
 	}
+
 	b.Env.InstallConfig.Codesphere.Plans = bootstrap.DefaultCodespherePlans()
 
 	b.configureStorageValues()
@@ -840,6 +877,7 @@ func (b *LocalBootstrapper) EnsureGitHubAccessConfigured() error {
 
 	registry.ReplaceImagesInBom = false
 	registry.LoadContainerImages = false
+
 	return nil
 }
 
@@ -872,25 +910,31 @@ func (b *LocalBootstrapper) getKubeConfig() (string, error) {
 
 	cluster := clientcmdapi.NewCluster()
 	cluster.Server = cfg.Host
+
 	cluster.CertificateAuthorityData = cfg.CAData
 	if cfg.CAFile != "" && len(cluster.CertificateAuthorityData) == 0 {
 		cluster.CertificateAuthority = cfg.CAFile
 	}
+
 	cluster.InsecureSkipTLSVerify = cfg.Insecure
 
 	authInfo := clientcmdapi.NewAuthInfo()
+
 	authInfo.ClientCertificateData = cfg.CertData
 	if cfg.CertFile != "" && len(authInfo.ClientCertificateData) == 0 {
 		authInfo.ClientCertificate = cfg.CertFile
 	}
+
 	authInfo.ClientKeyData = cfg.KeyData
 	if cfg.KeyFile != "" && len(authInfo.ClientKeyData) == 0 {
 		authInfo.ClientKey = cfg.KeyFile
 	}
+
 	authInfo.Token = cfg.BearerToken
 	if cfg.BearerTokenFile != "" && authInfo.Token == "" {
 		authInfo.TokenFile = cfg.BearerTokenFile
 	}
+
 	if cfg.Username != "" {
 		authInfo.Username = cfg.Username
 		authInfo.Password = cfg.Password

@@ -64,5 +64,6 @@ func (c *UpdateAPIKeyCmd) UpdateAPIKey(ctx context.Context, p portal.Portal) err
 	}
 
 	log.Printf("Successfully updated API key '%s' with new expiration date %s.\n", c.Opts.APIKeyID, expiresAt.Format(time.RFC1123))
+
 	return nil
 }

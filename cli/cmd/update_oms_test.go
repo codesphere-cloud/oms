@@ -53,6 +53,7 @@ var _ = Describe("Update", func() {
 	It("Updates when a newer version exists", func() {
 		current := "0.0.0"
 		latest := "0.0.42"
+
 		mockVersion.EXPECT().Version().Return(current)
 		mockGit.On("Update", mock.Anything, current, selfupdate.ParseSlug(cmd.GitHubRepo)).Return(latest, "notes", nil)
 

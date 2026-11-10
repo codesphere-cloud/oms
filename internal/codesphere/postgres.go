@@ -18,6 +18,7 @@ func (s PostgresService) DBUsername() string {
 	if s.username != "" {
 		return s.username + blueUserSuffix
 	}
+
 	return s.Name + blueUserSuffix
 }
 

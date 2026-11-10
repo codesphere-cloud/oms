@@ -22,6 +22,7 @@ func GetSSHKeysFromGitHubTeam(ctx context.Context, client GitHubClient, org, tea
 	fmt.Printf("Found %d members in team '%s'\n", len(members), teamSlug)
 
 	allKeys := ""
+
 	for _, member := range members {
 		for _, key := range member.Keys {
 			allKeys += fmt.Sprintf("root:%s %sroot\nubuntu:%s %subuntu\n", key, member.Login, key, member.Login)

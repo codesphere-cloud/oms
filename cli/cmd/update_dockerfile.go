@@ -113,6 +113,7 @@ func (c *UpdateDockerfileCmd) UpdateDockerfile(pm installer.PackageManager, im s
 	defer intutil.CloseFileIgnoreError(dockerfileFile)
 
 	dockerfileManager := intutil.NewDockerfileManager()
+
 	updatedContent, err := dockerfileManager.UpdateFromStatement(dockerfileFile, imageName)
 	if err != nil {
 		return fmt.Errorf("failed to update FROM statement: %w", err)

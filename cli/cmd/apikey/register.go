@@ -81,6 +81,7 @@ func (c *RegisterCmd) Register(ctx context.Context, p portal.Portal) (*portal.Ap
 	}
 
 	var expiresAt time.Time
+
 	if c.Opts.ValidFor != "" {
 		validForDuration, err := intutil.GetDurationFromString(c.Opts.ValidFor)
 		if err != nil {
