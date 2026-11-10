@@ -18,12 +18,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// UpdateDockerfileCmd implements the update dockerfile command.
 type UpdateDockerfileCmd struct {
 	cmd  *cobra.Command
 	Opts UpdateDockerfileOpts
 	Env  env.Env
 }
 
+// UpdateDockerfileOpts holds the flags of the update dockerfile command.
 type UpdateDockerfileOpts struct {
 	*util.GlobalOptions
 	Package    string
@@ -32,6 +34,7 @@ type UpdateDockerfileOpts struct {
 	Force      bool
 }
 
+// RunE executes the update dockerfile command.
 func (c *UpdateDockerfileCmd) RunE(_ *cobra.Command, args []string) error {
 	if c.Opts.Package == "" {
 		return errors.New("required option package not set")
@@ -49,6 +52,7 @@ func (c *UpdateDockerfileCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
+// AddUpdateDockerfileCmd registers the dockerfile command on the update command.
 func AddUpdateDockerfileCmd(parentCmd *cobra.Command, opts *util.GlobalOptions) {
 	dockerfileCmd := &UpdateDockerfileCmd{
 		cmd: &cobra.Command{
@@ -81,7 +85,8 @@ in the specified Dockerfile to use that base image. The base image is loaded int
 	dockerfileCmd.cmd.RunE = dockerfileCmd.RunE
 }
 
-func (c *UpdateDockerfileCmd) UpdateDockerfile(pm installer.PackageManager, im system.ImageManager, args []string) error {
+// UpdateDockerfile extracts the package and rewrites the FROM statement of the Dockerfile to use the selected base image.
+func (c *UpdateDockerfileCmd) UpdateDockerfile(pm installer.PackageManager, im system.ImageManager, _ []string) error {
 	err := pm.Extract(c.Opts.Force, c.Opts.Verbose)
 	if err != nil {
 		return fmt.Errorf("failed to extract package: %w", err)

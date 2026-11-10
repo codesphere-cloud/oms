@@ -18,7 +18,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/prompt"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
-	. "github.com/codesphere-cloud/oms/internal/util/testing"
+	inttesting "github.com/codesphere-cloud/oms/internal/util/testing"
 )
 
 var _ = Describe("Interactive profile usage", func() {
@@ -65,7 +65,7 @@ var _ = Describe("Interactive profile usage", func() {
 			Expect(config.Codesphere.CustomDomains.CNameBaseDomain).To(Equal("custom.local"))
 
 			// Apply resource profile
-			authService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["auth_service"])
+			authService := inttesting.MustMap[any](inttesting.MustMap[any](inttesting.MustMap[any](config.Codesphere.Override["global"])["services"])["auth_service"])
 			Expect(authService["requests"]).To(Equal(map[string]string{"cpu": "0", "memory": "0"}))
 			Expect(authService["replicas"]).To(Equal(1))
 			Expect(config.Cluster.Monitoring.Grafana.Enabled).To(BeFalse())
@@ -180,7 +180,7 @@ var _ = Describe("Interactive profile usage", func() {
 					VaultFile:            vaultPath,
 					Profile:              "dev",
 					Interactive:          false,
-					CodesphereOpenBaoUri: "not-a-valid-url",
+					CodesphereOpenBaoURI: "not-a-valid-url",
 				},
 				FileWriter: intutil.NewFilesystemWriter(),
 			}

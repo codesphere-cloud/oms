@@ -1,6 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Package cmd implements the Cobra commands of the OMS CLI.
 package cmd
 
 import (

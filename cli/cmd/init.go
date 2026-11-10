@@ -10,10 +10,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// InitCmd groups the init subcommands.
 type InitCmd struct {
 	cmd *cobra.Command
 }
 
+// AddInitCmd registers the init command and its subcommands on the root command.
 func AddInitCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	init := InitCmd{
 		cmd: &cobra.Command{

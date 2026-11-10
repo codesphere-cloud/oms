@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// InitInstallConfigCmd implements the init install-config command.
 type InitInstallConfigCmd struct {
 	cmd                   *cobra.Command
 	Opts                  *InitInstallConfigOpts
@@ -26,6 +27,7 @@ type InitInstallConfigCmd struct {
 	generatedAgeRecipient string
 }
 
+// InitInstallConfigOpts holds the flags of the init install-config command.
 type InitInstallConfigOpts struct {
 	*util.GlobalOptions
 
@@ -104,7 +106,7 @@ type InitInstallConfigOpts struct {
 	CodesphereWorkspacePlanName            string
 	CodesphereWorkspacePlanMaxReplicas     int
 
-	CodesphereOpenBaoUri      string
+	CodesphereOpenBaoURI      string
 	CodesphereOpenBaoEngine   string
 	CodesphereOpenBaoUser     string
 	CodesphereOpenBaoPassword string
@@ -118,7 +120,8 @@ type InitInstallConfigOpts struct {
 	OpenfgaBackupsSecretAccessKey string
 }
 
-func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE executes the init install-config command.
+func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, _ []string) error {
 	vaultType, err := vault.ParseType(c.Opts.VaultType)
 	if err != nil {
 		return fmt.Errorf("failed to parse vault type %s: %w", c.Opts.VaultType, err)
@@ -178,6 +181,7 @@ func missingAgeKeyError(operation string) error {
 		"or use --vault-type plain. CAUTION: --vault-type plain stores unencrypted secrets on disk, do not use it in production", operation)
 }
 
+// AddInitInstallConfigCmd registers the install-config command on the init command.
 func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	c := InitInstallConfigCmd{
 		cmd: &cobra.Command{
@@ -264,7 +268,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereDomain, "domain", "", "Main Codesphere domain")
 
 	// OpenBao
-	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoUri, "openbao-uri", "", "URI for OpenBao (e.g., https://openbao.example.com)")
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoURI, "openbao-uri", "", "URI for OpenBao (e.g., https://openbao.example.com)")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoEngine, "openbao-engine", "cs-secrets-engine", "Engine for OpenBao")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoUser, "openbao-user", "admin", "Username for OpenBao authentication")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoPassword, "openbao-password", "", "Password for OpenBao authentication")
@@ -285,6 +289,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	util.AddCmd(init, c.cmd)
 }
 
+// InitInstallConfig generates a new install config and vault, or only validates existing ones if requested.
 func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigManager) error {
 	if c.Opts.CodesphereHash != "" && c.Opts.CodesphereVersion == "" {
 		return fmt.Errorf("--codesphere-hash requires --codesphere-version")
@@ -684,12 +689,12 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		}
 	}
 
-	if c.Opts.CodesphereOpenBaoUri != "" {
+	if c.Opts.CodesphereOpenBaoURI != "" {
 		if config.Codesphere.OpenBao == nil {
 			config.Codesphere.OpenBao = &files.OpenBaoConfig{}
 		}
 
-		config.Codesphere.OpenBao.URI = c.Opts.CodesphereOpenBaoUri
+		config.Codesphere.OpenBao.URI = c.Opts.CodesphereOpenBaoURI
 		config.Codesphere.OpenBao.Engine = c.Opts.CodesphereOpenBaoEngine
 
 		config.Codesphere.OpenBao.User = c.Opts.CodesphereOpenBaoUser

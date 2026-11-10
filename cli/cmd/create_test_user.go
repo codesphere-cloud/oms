@@ -14,18 +14,21 @@ import (
 	"github.com/codesphere-cloud/oms/internal/testuser"
 )
 
+// CreateTestUserCmd implements the create test-user command.
 type CreateTestUserCmd struct {
 	cmd  *cobra.Command
 	Opts CreateTestUserOpts
 	Env  env.Env
 }
 
+// CreateTestUserOpts holds the flags of the create test-user command.
 type CreateTestUserOpts struct {
 	*util.GlobalOptions
 	testuser.CreateTestUserOpts
 }
 
-func (c *CreateTestUserCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE creates a test user in the Codesphere database.
+func (c *CreateTestUserCmd) RunE(_ *cobra.Command, _ []string) error {
 	result, err := testuser.CreateTestUser(c.Opts.CreateTestUserOpts)
 	if err != nil {
 		return fmt.Errorf("failed to create test user: %w", err)
@@ -36,6 +39,7 @@ func (c *CreateTestUserCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
+// AddCreateTestUserCmd registers the test-user command on the create command.
 func AddCreateTestUserCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	c := CreateTestUserCmd{
 		cmd: &cobra.Command{

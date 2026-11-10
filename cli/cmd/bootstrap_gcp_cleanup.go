@@ -16,11 +16,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// BootstrapGcpCleanupCmd implements the bootstrap-gcp cleanup command.
 type BootstrapGcpCleanupCmd struct {
 	cmd  *cobra.Command
 	Opts *BootstrapGcpCleanupOpts
 }
 
+// BootstrapGcpCleanupOpts holds the flags of the bootstrap-gcp cleanup command.
 type BootstrapGcpCleanupOpts struct {
 	*util.GlobalOptions
 	ProjectID      string
@@ -32,7 +34,8 @@ type BootstrapGcpCleanupOpts struct {
 	DNSProjectID   string
 }
 
-func (c *BootstrapGcpCleanupCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE removes the resources created by a GCP bootstrap.
+func (c *BootstrapGcpCleanupCmd) RunE(_ *cobra.Command, _ []string) error {
 	ctx := c.cmd.Context()
 
 	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.Opts.StepTimer))
@@ -67,7 +70,7 @@ func (c *BootstrapGcpCleanupCmd) ExecuteCleanup(deps *gcp.CleanupDeps) error {
 	}
 
 	if err := exec.VerifyAndConfirm(); err != nil {
-		return err
+		return fmt.Errorf("failed to verify and confirm cleanup: %w", err)
 	}
 
 	if err := deps.StepLogger.Step("Clean up DNS records", exec.CleanupDNSRecords); err != nil {
@@ -93,6 +96,7 @@ func (c *BootstrapGcpCleanupCmd) ExecuteCleanup(deps *gcp.CleanupDeps) error {
 	return nil
 }
 
+// AddBootstrapGcpCleanupCmd registers the cleanup command on the bootstrap-gcp command.
 func AddBootstrapGcpCleanupCmd(bootstrapGcp *cobra.Command, opts *util.GlobalOptions) {
 	cleanup := BootstrapGcpCleanupCmd{
 		cmd: &cobra.Command{

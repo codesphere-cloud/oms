@@ -15,12 +15,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// ListAPIKeysCmd implements the list api-keys command.
 type ListAPIKeysCmd struct {
 	cmd         *cobra.Command
 	TableWriter intutil.TableWriter
 }
 
-func (c *ListAPIKeysCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE lists the API keys from the portal.
+func (c *ListAPIKeysCmd) RunE(_ *cobra.Command, _ []string) error {
 	p := portal.NewPortalClient()
 
 	keys, err := p.ListAPIKeys()
@@ -33,7 +35,8 @@ func (c *ListAPIKeysCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddListAPIKeysCmd(list *cobra.Command, opts *util.GlobalOptions) {
+// AddListAPIKeysCmd registers the api-keys command on the list command.
+func AddListAPIKeysCmd(list *cobra.Command, _ *util.GlobalOptions) {
 	c := ListAPIKeysCmd{
 		cmd: &cobra.Command{
 			Use:   "api-keys",
@@ -48,6 +51,7 @@ func AddListAPIKeysCmd(list *cobra.Command, opts *util.GlobalOptions) {
 	util.AddCmd(list, c.cmd)
 }
 
+// PrintKeysTable renders the given API keys as a table.
 func (c *ListAPIKeysCmd) PrintKeysTable(keys []portal.ApiKey) {
 	c.TableWriter.AppendHeader(table.Row{"ID", "Owner", "Organization", "Role", "Created", "Expires"})
 

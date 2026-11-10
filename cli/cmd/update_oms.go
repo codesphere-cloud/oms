@@ -15,18 +15,22 @@ import (
 	"github.com/codesphere-cloud/oms/internal/version"
 )
 
+// GitHubRepo is the GitHub repository that OMS CLI releases are fetched from.
 const GitHubRepo = "codesphere-cloud/oms"
 
+// OMSUpdater updates the OMS CLI binary to the latest release.
 type OMSUpdater interface {
 	Update(ctx context.Context, current string, repo selfupdate.Repository) (string, string, error)
 }
 
+// OMSSelfUpdater is the production OMSUpdater that replaces the running binary with the latest GitHub release.
 type OMSSelfUpdater struct{}
 
+// Update installs the latest release if it is newer than current and returns the resulting version and its release notes.
 func (s *OMSSelfUpdater) Update(ctx context.Context, current string, repo selfupdate.Repository) (string, string, error) {
 	latest, found, err := selfupdate.DetectLatest(ctx, repo)
 	if err != nil {
-		return current, "", err
+		return current, "", fmt.Errorf("failed to detect latest release: %w", err)
 	}
 
 	if !found {
@@ -49,11 +53,13 @@ func (s *OMSSelfUpdater) Update(ctx context.Context, current string, repo selfup
 	return latest.Version(), latest.ReleaseNotes, nil
 }
 
+// UpdateOmsCmd implements the update oms command.
 type UpdateOmsCmd struct {
 	Version version.Version
 	Updater OMSUpdater
 }
 
+// AddOmsUpdateCmd registers the oms command on the update command.
 func AddOmsUpdateCmd(parentCmd *cobra.Command) {
 	cmdState := &UpdateOmsCmd{
 		Version: &version.Build{},
@@ -64,13 +70,14 @@ func AddOmsUpdateCmd(parentCmd *cobra.Command) {
 		Use:   "oms",
 		Short: "Update the OMS CLI",
 		Long:  `Updates the OMS CLI to the latest release from GitHub.`,
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return cmdState.SelfUpdate()
 		},
 	}
 	util.AddCmd(parentCmd, omsCmd)
 }
 
+// SelfUpdate updates the OMS CLI to the latest release and prints the release notes.
 func (c *UpdateOmsCmd) SelfUpdate() error {
 	ctx := context.Background()
 	currentVersion := c.Version.Version()

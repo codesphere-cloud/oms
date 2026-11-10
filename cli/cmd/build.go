@@ -14,6 +14,7 @@ type BuildCmd struct {
 	cmd *cobra.Command
 }
 
+// AddBuildCmd registers the build command and its subcommands on the root command.
 func AddBuildCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	build := BuildCmd{
 		cmd: &cobra.Command{

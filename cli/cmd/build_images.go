@@ -23,13 +23,15 @@ type BuildImagesCmd struct {
 	Env  env.Env
 }
 
+// BuildImagesOpts holds the flags of the build images command.
 type BuildImagesOpts struct {
 	*util.GlobalOptions
 	Config string
 	Force  bool
 }
 
-func (c *BuildImagesCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE executes the build images command.
+func (c *BuildImagesCmd) RunE(_ *cobra.Command, _ []string) error {
 	pm := installer.NewPackage(c.Env.GetOmsWorkdir(), c.Opts.Config)
 	cm := installer.NewConfig()
 	im := system.NewImage(context.Background())
@@ -42,6 +44,7 @@ func (c *BuildImagesCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
+// AddBuildImagesCmd registers the images command on the build command.
 func AddBuildImagesCmd(build *cobra.Command, opts *util.GlobalOptions) {
 	buildImages := BuildImagesCmd{
 		cmd: &cobra.Command{
@@ -63,6 +66,7 @@ func AddBuildImagesCmd(build *cobra.Command, opts *util.GlobalOptions) {
 	buildImages.cmd.RunE = buildImages.RunE
 }
 
+// BuildAndPushImages builds all images defined in the config and pushes them to the configured registry.
 func (c *BuildImagesCmd) BuildAndPushImages(pm installer.PackageManager, cm installer.ConfigManager, im system.ImageManager) error {
 	config, err := cm.ParseConfigYaml(c.Opts.Config)
 	if err != nil {

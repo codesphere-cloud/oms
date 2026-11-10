@@ -16,11 +16,13 @@ import (
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
+// BetaVaultSecretCmd implements the beta vault-secret command.
 type BetaVaultSecretCmd struct {
 	cmd  *cobra.Command
 	Opts BetaVaultSecretOpts
 }
 
+// BetaVaultSecretOpts holds the flags of the beta vault-secret command.
 type BetaVaultSecretOpts struct {
 	*util.GlobalOptions
 	VaultFile  string
@@ -30,6 +32,7 @@ type BetaVaultSecretOpts struct {
 	VaultType  string
 }
 
+// RunE executes the beta vault-secret command.
 func (c *BetaVaultSecretCmd) RunE(_ *cobra.Command, _ []string) error {
 	kubeConfig, err := ctrlconfig.GetConfig()
 	if err != nil {
@@ -61,6 +64,7 @@ func (c *BetaVaultSecretCmd) RunE(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
+// AddBetaVaultSecretCmd registers the vault-secret command on the parent command.
 func AddBetaVaultSecretCmd(parentCmd *cobra.Command, opts *util.GlobalOptions) {
 	cmd := BetaVaultSecretCmd{
 		cmd: &cobra.Command{

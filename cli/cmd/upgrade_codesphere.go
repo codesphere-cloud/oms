@@ -14,6 +14,7 @@ type UpgradeCodesphereCmd struct {
 	cmd *cobra.Command
 }
 
+// AddUpgradeCodesphereCmd registers the codesphere command on the upgrade command.
 func AddUpgradeCodesphereCmd(upgrade *cobra.Command) {
 	codesphere := UpgradeCodesphereCmd{
 		cmd: &cobra.Command{

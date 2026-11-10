@@ -11,11 +11,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// LicensesCmd implements the licenses command.
 type LicensesCmd struct {
 	cmd *cobra.Command
 }
 
-func (c *LicensesCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE prints the licenses of the OMS CLI and its dependencies.
+func (c *LicensesCmd) RunE(_ *cobra.Command, _ []string) error {
 	log.Println("OMS License:")
 	log.Println(tmpl.License())
 
@@ -27,6 +29,7 @@ func (c *LicensesCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
+// AddLicensesCmd registers the licenses command on the root command.
 func AddLicensesCmd(rootCmd *cobra.Command) {
 	licenses := LicensesCmd{
 		cmd: &cobra.Command{
