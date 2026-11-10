@@ -4,6 +4,7 @@
 package codesphere
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -473,11 +474,11 @@ var _ = Describe("ensureCodespherePackageForVersion", func() {
 	})
 	It("preserves an explicit package without requiring operations or portal access", func() {
 		opts := &InstallCodesphereOpts{Package: "offline-package.tar.gz"}
-		Expect(ensureCodespherePackageForVersion(opts, files.RootConfig{}, env.NewMockEnv(GinkgoT()))).To(Succeed())
+		Expect(ensureCodespherePackageForVersion(context.Background(), opts, files.RootConfig{}, env.NewMockEnv(GinkgoT()))).To(Succeed())
 		Expect(opts.Package).To(Equal("offline-package.tar.gz"))
 	})
 	It("rejects a missing version before accessing the workdir", func() {
-		Expect(ensureCodespherePackageForVersion(&InstallCodesphereOpts{}, files.RootConfig{}, env.NewMockEnv(GinkgoT()))).To(MatchError(ContainSubstring("operations.codesphere is required")))
+		Expect(ensureCodespherePackageForVersion(context.Background(), &InstallCodesphereOpts{}, files.RootConfig{}, env.NewMockEnv(GinkgoT()))).To(MatchError(ContainSubstring("operations.codesphere is required")))
 	})
 	It("uses the version from the merged config and preserves configured skip steps", func() {
 		dir := GinkgoT().TempDir()
@@ -521,7 +522,7 @@ var _ = Describe("ensureCodespherePackageForVersion", func() {
 
 		environment := env.NewMockEnv(GinkgoT())
 		environment.EXPECT().GetOmsWorkdir().Return(dir)
-		Expect(ensureCodespherePackageForVersion(effective, cfg, environment)).To(Succeed())
+		Expect(ensureCodespherePackageForVersion(context.Background(), effective, cfg, environment)).To(Succeed())
 		Expect(effective.Package).To(Equal(cached))
 		Expect(original.Package).To(BeEmpty())
 		Expect(cfg.Operations.Skip).To(Equal([]string{"ceph"}))

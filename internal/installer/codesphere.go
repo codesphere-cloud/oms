@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -64,8 +63,6 @@ var PlatformSteps = []string{"copy-dependencies", "extract-dependencies", Codesp
 
 // CodesphereInstaller encapsulates the logic for running the private-cloud-installer.js script.
 type CodesphereInstaller struct {
-	// Context cancels the installer process when the caller stops.
-	Context context.Context
 	// ConfigPath is the path to the Codesphere Private Cloud configuration YAML file.
 	ConfigPath string
 	// VaultPath is the path to the SOPS-encrypted vault file used for config templating.
@@ -101,8 +98,8 @@ type CodesphereInstaller struct {
 }
 
 // Install validates the platform, extracts the package, builds any custom workspace images,
-// and runs the private-cloud-installer.js script.
-func (ci *CodesphereInstaller) Install(pm PackageManager, cm ConfigManager, im system.ImageManager, goos, goarch string) error {
+// and runs the private-cloud-installer.js script. Cancelling ctx interrupts the installer process.
+func (ci *CodesphereInstaller) Install(ctx context.Context, pm PackageManager, cm ConfigManager, im system.ImageManager, goos, goarch string) error {
 	if goos != "linux" || goarch != "amd64" {
 		return fmt.Errorf("codesphere installation is only supported on Linux amd64. Current platform: %s/%s", goos, goarch)
 	}
@@ -124,7 +121,7 @@ func (ci *CodesphereInstaller) Install(pm PackageManager, cm ConfigManager, im s
 		return err
 	}
 
-	return ci.runInstaller(pm, config)
+	return ci.runInstaller(ctx, pm, config)
 }
 
 func (ci *CodesphereInstaller) loadConfig(cm ConfigManager) (files.RootConfig, error) {
@@ -364,14 +361,14 @@ func updateDockerfileFromStatement(pm PackageManager, dockerfile, fullImageTag s
 	return nil
 }
 
-func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.RootConfig) error {
+func (ci *CodesphereInstaller) runInstaller(ctx context.Context, pm PackageManager, config files.RootConfig) error {
 	if ci.LocalComponents {
 		// TODO(nate): remove once ESO is persisted, i.e. no release without external secrets is left to roll back to.
-		if err := ci.orphanExternalSecretsForCodesphereStep(config); err != nil {
+		if err := ci.orphanExternalSecretsForCodesphereStep(ctx, config); err != nil {
 			return err
 		}
 
-		return ci.runLocalComponents(pm, config)
+		return ci.runLocalComponents(ctx, pm, config)
 	}
 	nodePath := filepath.Join(pm.GetWorkDir(), "node")
 	if err := os.Chmod(nodePath, 0755); err != nil {
@@ -387,16 +384,11 @@ func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.Root
 	}
 
 	// TODO(nate): remove once ESO is persisted, i.e. no release without external secrets is left to roll back to.
-	if err := ci.orphanExternalSecretsForCodesphereStep(config); err != nil {
+	if err := ci.orphanExternalSecretsForCodesphereStep(ctx, config); err != nil {
 		return err
 	}
 
-	ctx := ci.Context
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	cmd := exec.CommandContext(ctx, nodePath, cmdArgs...)
+	cmd := system.CommandContext(ctx, nodePath, cmdArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -415,14 +407,9 @@ func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.Root
 // install leaves the ExternalSecrets in place.
 //
 // TODO(nate): remove once ESO is persisted, i.e. no release without external secrets is left to roll back to.
-func (ci *CodesphereInstaller) orphanExternalSecretsForCodesphereStep(config files.RootConfig) error {
+func (ci *CodesphereInstaller) orphanExternalSecretsForCodesphereStep(ctx context.Context, config files.RootConfig) error {
 	if !ci.executableInstallerSteps(config)[CodesphereStep] {
 		return nil
-	}
-
-	ctx := ci.Context
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	if err := OrphanCodesphereExternalSecrets(ctx, ci.VaultPath, ci.PrivKey, ci.VaultType, config); err != nil {
@@ -432,7 +419,7 @@ func (ci *CodesphereInstaller) orphanExternalSecretsForCodesphereStep(config fil
 	return nil
 }
 
-func (ci *CodesphereInstaller) runLocalComponents(pm PackageManager, config files.RootConfig) error {
+func (ci *CodesphereInstaller) runLocalComponents(ctx context.Context, pm PackageManager, config files.RootConfig) error {
 	bundleDir, err := filepath.Abs(pm.GetWorkDir())
 	if err != nil {
 		return fmt.Errorf("failed to resolve installer bundle path: %w", err)
@@ -461,12 +448,7 @@ func (ci *CodesphereInstaller) runLocalComponents(pm PackageManager, config file
 			"--dependenciesDir", filepath.Join(bundleDir, "deps"),
 			"--config", ci.ConfigPath, "--privKey", privKey}
 
-		ctx := ci.Context
-		if ctx == nil {
-			ctx = context.Background()
-		}
-
-		cmd := exec.CommandContext(ctx, filepath.Join(bundleDir, "node"), args...)
+		cmd := system.CommandContext(ctx, filepath.Join(bundleDir, "node"), args...)
 
 		cmd.Stdout, cmd.Stderr, cmd.Stdin = os.Stdout, os.Stderr, os.Stdin
 		if err := cmd.Run(); err != nil {

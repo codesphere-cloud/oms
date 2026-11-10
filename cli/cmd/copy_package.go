@@ -49,7 +49,7 @@ type CopyPackageOpts struct {
 
 // RunE resolves the installer package and executes its artifact transfers.
 func (c *CopyPackageCmd) RunE(cmd *cobra.Command, _ []string) error {
-	packagePath, err := c.resolvePackage(portal.NewPortalClient())
+	packagePath, err := c.resolvePackage(cmd.Context(), portal.NewPortalClient())
 	if err != nil {
 		return err
 	}
@@ -156,7 +156,7 @@ func (c *CopyPackageCmd) CopyPackage(ctx context.Context, packageManager install
 	return nil
 }
 
-func (c *CopyPackageCmd) resolvePackage(portalClient portal.Portal) (string, error) {
+func (c *CopyPackageCmd) resolvePackage(ctx context.Context, portalClient portal.Portal) (string, error) {
 	if c.Opts.Package != "" {
 		return c.Opts.Package, nil
 	}
@@ -173,7 +173,7 @@ func (c *CopyPackageCmd) resolvePackage(portalClient portal.Portal) (string, err
 
 	destination := filepath.Join(workdir, build.BuildPackageFilename(c.Opts.Filename))
 
-	if err := portal.DownloadAndVerifyBuild(portalClient, c.FileWriter, portal.CodesphereProduct, build, c.Opts.Filename, destination, portal.DownloadOptions{}); err != nil {
+	if err := portal.DownloadAndVerifyBuild(ctx, portalClient, c.FileWriter, portal.CodesphereProduct, build, c.Opts.Filename, destination, portal.DownloadOptions{}); err != nil {
 		return "", fmt.Errorf("failed to download upstream package: %w", err)
 	}
 

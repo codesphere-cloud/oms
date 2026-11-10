@@ -5,6 +5,7 @@ package portal_test
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -275,7 +276,10 @@ var _ = Describe("PortalClient", func() {
 	})
 
 	Describe("DownloadBuildArtifact", func() {
-		var build portal.Build
+		var (
+			build  portal.Build
+			reqCtx context.Context
+		)
 
 		BeforeEach(func() {
 			buildDate, _ := time.Parse("2006-01-02", "2025-05-01")
@@ -285,6 +289,7 @@ var _ = Describe("PortalClient", func() {
 				func(req *http.Request) (*http.Response, error) {
 					getUrl = *req.URL
 					headers = req.Header
+					reqCtx = req.Context()
 					return &http.Response{
 						StatusCode: http.StatusOK,
 						Body:       io.NopCloser(bytes.NewReader([]byte("fake-file-contents"))),
@@ -297,7 +302,7 @@ var _ = Describe("PortalClient", func() {
 
 		It("downloads the build", func() {
 			fakeWriter := NewFakeWriter()
-			err := client.DownloadBuildArtifact(product, build, fakeWriter, 0, false)
+			err := client.DownloadBuildArtifact(context.Background(), product, build, fakeWriter, 0, false)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(fakeWriter.String()).To(Equal("fake-file-contents"))
 			Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere/download"))
@@ -305,9 +310,18 @@ var _ = Describe("PortalClient", func() {
 
 		It("resumes the build", func() {
 			fakeWriter := NewFakeWriter()
-			err := client.DownloadBuildArtifact(product, build, fakeWriter, 42, false)
+			err := client.DownloadBuildArtifact(context.Background(), product, build, fakeWriter, 42, false)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(headers.Get("Range")).To(Equal("bytes=42-"))
+		})
+
+		It("binds the request to the caller's context so cancellation aborts the download", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			err := client.DownloadBuildArtifact(ctx, product, build, NewFakeWriter(), 0, false)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(reqCtx).To(BeIdenticalTo(ctx))
 		})
 	})
 

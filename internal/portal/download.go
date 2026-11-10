@@ -4,6 +4,7 @@
 package portal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -23,7 +24,7 @@ type DownloadOptions struct {
 // DownloadAndVerifyBuild downloads the named artifact from build to destination
 // and verifies its checksum. It is shared by the download and copy package
 // commands so their download and verify behavior stays in sync.
-func DownloadAndVerifyBuild(p Portal, fileWriter intutil.FileIO, product Product, build Build, filename, destination string, opts DownloadOptions) error {
+func DownloadAndVerifyBuild(ctx context.Context, p Portal, fileWriter intutil.FileIO, product Product, build Build, filename, destination string, opts DownloadOptions) error {
 	download, err := build.GetBuildForDownload(filename)
 	if err != nil {
 		return fmt.Errorf("failed to find artifact in package: %w", err)
@@ -42,7 +43,7 @@ func DownloadAndVerifyBuild(p Portal, fileWriter intutil.FileIO, product Product
 		}
 	}
 
-	if err := p.DownloadBuildArtifact(product, download, out, fileSize, opts.Quiet); err != nil {
+	if err := p.DownloadBuildArtifact(ctx, product, download, out, fileSize, opts.Quiet); err != nil {
 		// A resume at EOF may return 416. Only accept the existing archive if
 		// the portal supplied a checksum and the verification below succeeds.
 		verifyExisting := opts.Resume && fileSize > 0 && download.Artifacts[0].Md5Sum != "" && errors.Is(err, errDownloadRangeNotSatisfiable)
