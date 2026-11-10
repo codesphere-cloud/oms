@@ -151,11 +151,11 @@ func (b *StepLogger) Step(name string, fn func() error) error {
 func (b *StepLogger) StepWithRetry(name string, fn func() error, maxRetries int) error {
 	var lastError error
 	for i := range maxRetries {
-		attemptId := i + 1
+		attemptID := i + 1
 
 		stepName := name
-		if attemptId != 1 {
-			stepName = fmt.Sprintf("%s (Retry %v/%v)", name, attemptId, maxRetries)
+		if attemptID != 1 {
+			stepName = fmt.Sprintf("%s (Retry %v/%v)", name, attemptID, maxRetries)
 		}
 
 		err := b.Step(stepName, fn)
@@ -164,8 +164,8 @@ func (b *StepLogger) StepWithRetry(name string, fn func() error, maxRetries int)
 		}
 
 		lastError = err
-		log.Printf("'%s' failed on attempt %v/%v: %s", name, attemptId, maxRetries, err)
-		if attemptId < maxRetries {
+		log.Printf("'%s' failed on attempt %v/%v: %s", name, attemptID, maxRetries, err)
+		if attemptID < maxRetries {
 			time.Sleep(b.retryDelay)
 			log.Printf("Retrying '%s'...", name)
 		}
