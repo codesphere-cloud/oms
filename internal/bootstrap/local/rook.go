@@ -65,6 +65,7 @@ func (b *LocalBootstrapper) buildRookHelmValues() (map[string]interface{}, error
 		if err != nil {
 			return "", err
 		}
+
 		return string(b), nil
 	}
 
@@ -218,6 +219,7 @@ func (b *LocalBootstrapper) DeployTestCephCluster() error {
 				"cleanup":        {},
 			},
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -273,6 +275,7 @@ func (b *LocalBootstrapper) WaitForTestCephClusterReady() error {
 		}
 
 		cluster := &rookcephv1.CephCluster{}
+
 		err := b.kubeClient.Get(ctx, clusterKey, cluster)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -334,6 +337,7 @@ func (b *LocalBootstrapper) DeployCephBlockPoolAndStorageClass() error {
 				},
 			},
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -367,6 +371,7 @@ func (b *LocalBootstrapper) DeployCephBlockPoolAndStorageClass() error {
 		} else {
 			storageClass.Annotations[defaultStorageClassAnnotation] = "true"
 		}
+
 		storageClass.Provisioner = cephRBDProvisionerName
 		storageClass.Parameters = map[string]string{
 			"clusterID":     rookNamespace,
@@ -384,6 +389,7 @@ func (b *LocalBootstrapper) DeployCephBlockPoolAndStorageClass() error {
 		storageClass.ReclaimPolicy = &reclaimPolicy
 		storageClass.VolumeBindingMode = &volumeBindingMode
 		storageClass.AllowVolumeExpansion = ptr.To(true)
+
 		return nil
 	})
 	if err != nil {

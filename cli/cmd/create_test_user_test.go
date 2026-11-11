@@ -14,8 +14,10 @@ import (
 
 var _ = Describe("CreateTestUser", func() {
 	Context("AddCreateTestUserCmd", func() {
-		var createCmd cobra.Command
-		var opts *util.GlobalOptions
+		var (
+			createCmd cobra.Command
+			opts      *util.GlobalOptions
+		)
 
 		BeforeEach(func() {
 			createCmd = cobra.Command{}

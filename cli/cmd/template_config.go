@@ -102,6 +102,7 @@ func (c *TemplateConfigCmd) Render() ([]byte, error) {
 	}
 
 	store := vault.NewLazyVaultTemplatingSecretStoreWithVault(backend)
+
 	rendered, err := configtemplating.RenderInstallConfigTemplate(data, store)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render config template: %w", err)

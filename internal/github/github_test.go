@@ -82,6 +82,7 @@ var _ = Describe("Github", func() {
 
 					keys, err := github.GetSSHKeysFromGitHubTeam(mockGitHubClient, org, teamSlug)
 					Expect(err).ToNot(HaveOccurred())
+
 					for i := 1; i <= 150; i++ {
 						Expect(keys).To(ContainSubstring(fmt.Sprintf("root:ssh-rsa AAAUSER%d... user%d", i, i)))
 						Expect(keys).To(ContainSubstring(fmt.Sprintf("ubuntu:ssh-rsa AAAUSER%d... user%d", i, i)))
@@ -103,6 +104,5 @@ var _ = Describe("Github", func() {
 				Expect(keys).To(BeEmpty())
 			})
 		})
-
 	})
 })

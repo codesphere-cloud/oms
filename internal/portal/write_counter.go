@@ -42,6 +42,7 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 		if err != nil {
 			log.Printf("error writing progress: %v", err)
 		}
+
 		wc.LastUpdate = time.Now()
 	}
 
@@ -54,16 +55,19 @@ func byteCountToHumanReadable(b int64) string {
 	if b < unit {
 		return fmt.Sprintf("%d B", b)
 	}
+
 	div, exp := int64(unit), 0
 	for n := b / unit; n >= unit; n /= unit {
 		div *= unit
 		exp++
 	}
+
 	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
 func (wc *WriteCounter) animate() byte {
 	anim := "/-\\|"
 	wc.currentAnim = (wc.currentAnim + 1) % len(anim)
+
 	return anim[wc.currentAnim]
 }

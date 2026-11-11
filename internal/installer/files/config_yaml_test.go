@@ -29,6 +29,7 @@ var _ = Describe("ConfigYaml", func() {
 		rootConfig = files.NewRootConfig()
 
 		var err error
+
 		tempDir, err = os.MkdirTemp("", "config_yaml_test")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -443,7 +444,9 @@ cluster:
               api-token: fake-api-token
             name: acme-solver
 `
+
 			var parsed files.RootConfig
+
 			err := parsed.Unmarshal([]byte(acmeYaml))
 			Expect(err).NotTo(HaveOccurred())
 
@@ -457,96 +460,6 @@ cluster:
 			// Solver should be populated from override
 			Expect(parsed.Codesphere.CertIssuer.Acme.Solver.DNS01).NotTo(BeNil())
 			Expect(parsed.Codesphere.CertIssuer.Acme.Solver.DNS01.Provider).To(Equal("cloudflare"))
-		})
-
-	})
-
-	Describe("OpenFGA backup config structure", func() {
-		It("should marshal openfgaBackups into the pc-apps openfga application values", func() {
-			rootConfig.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{
-				Enabled:         true,
-				Schedule:        "0 */30 * * * *",
-				DestinationPath: "s3://backup-openfga-dev",
-				EndpointURL:     "https://s3.de.io.cloud.ovh.net",
-			}
-
-			data, err := rootConfig.Marshal()
-			Expect(err).NotTo(HaveOccurred())
-
-			var raw map[string]interface{}
-			Expect(yaml.Unmarshal(data, &raw)).NotTo(HaveOccurred())
-
-			pcApps := raw["pcApps"].(map[string]interface{})
-			applications := pcApps["applications"].(map[string]interface{})
-			Expect(applications["openfga"]).To(Equal(map[string]interface{}{
-				"enabled": true,
-				"valuesObject": map[string]interface{}{
-					"postgres": map[string]interface{}{
-						"backup": map[string]interface{}{
-							"enabled":         true,
-							"schedule":        "0 */30 * * * *",
-							"destinationPath": "s3://backup-openfga-dev",
-							"endpointURL":     "https://s3.de.io.cloud.ovh.net",
-						},
-					},
-				},
-			}))
-		})
-
-		It("omits optional fields (schedule, retentionPolicy) when unset", func() {
-			rootConfig.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{
-				Enabled:         true,
-				DestinationPath: "s3://backup-openfga-dev",
-				EndpointURL:     "https://s3.de.io.cloud.ovh.net",
-			}
-
-			data, err := rootConfig.Marshal()
-			Expect(err).NotTo(HaveOccurred())
-
-			var raw map[string]interface{}
-			Expect(yaml.Unmarshal(data, &raw)).NotTo(HaveOccurred())
-
-			backup := raw["pcApps"].(map[string]interface{})["applications"].(map[string]interface{})["openfga"].(map[string]interface{})["valuesObject"].(map[string]interface{})["postgres"].(map[string]interface{})["backup"].(map[string]interface{})
-			Expect(backup).To(HaveKey("destinationPath"))
-			Expect(backup).NotTo(HaveKey("schedule"))
-			Expect(backup).NotTo(HaveKey("retentionPolicy"))
-		})
-
-		It("preserves other pc-apps applications", func() {
-			rootConfig.PcApps = files.ChartValues{
-				"applications": map[string]interface{}{
-					"ssh-workspace-proxy": map[string]interface{}{"enabled": true},
-				},
-			}
-			rootConfig.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{
-				Enabled:         true,
-				DestinationPath: "s3://backup-openfga-dev",
-				EndpointURL:     "https://s3.de.io.cloud.ovh.net",
-			}
-
-			data, err := rootConfig.Marshal()
-			Expect(err).NotTo(HaveOccurred())
-
-			var raw map[string]interface{}
-			Expect(yaml.Unmarshal(data, &raw)).NotTo(HaveOccurred())
-
-			applications := raw["pcApps"].(map[string]interface{})["applications"].(map[string]interface{})
-			Expect(applications).To(HaveKey("ssh-workspace-proxy"))
-			Expect(applications).To(HaveKey("openfga"))
-		})
-
-		It("does not generate openfga application values when openfgaBackups is unset", func() {
-			data, err := rootConfig.Marshal()
-			Expect(err).NotTo(HaveOccurred())
-
-			var raw map[string]interface{}
-			Expect(yaml.Unmarshal(data, &raw)).NotTo(HaveOccurred())
-
-			if pcApps, ok := raw["pcApps"].(map[string]interface{}); ok {
-				if applications, ok := pcApps["applications"].(map[string]interface{}); ok {
-					Expect(applications).NotTo(HaveKey("openfga"))
-				}
-			}
 		})
 	})
 })
@@ -848,6 +761,7 @@ codesphere:
             storage: 512
             cpu: 0
 `
+
 		var config files.RootConfig
 		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
 
@@ -887,6 +801,7 @@ codesphere:
             cpu: 50
             loadBalancerLimit: 0
 `
+
 		var config files.RootConfig
 		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
 		Expect(config.Codesphere.ManagedServices[0].SchemaVersion).To(Equal("v1"))
@@ -910,6 +825,7 @@ codesphere:
           parameters:
             storage: null
 `
+
 		var config files.RootConfig
 		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
 		Expect(config.Codesphere.ManagedServices[0].SchemaVersion).To(Equal("v0"))

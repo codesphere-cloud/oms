@@ -19,6 +19,7 @@ func RunCommand(command string, args []string, cmdDir string) error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("command failed with exit status: %w", err)
 	}
+
 	return nil
 }
 
@@ -28,12 +29,14 @@ func RunCommandWithOutput(command string, args []string, cmdDir string) (string,
 	cmd := newCommand(command, args, cmdDir)
 
 	var stdout bytes.Buffer
+
 	cmd.Stdout = &stdout
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("command failed with exit status: %w", err)
 	}
+
 	return stdout.String(), nil
 }
 
@@ -43,5 +46,6 @@ func newCommand(command string, args []string, cmdDir string) *exec.Cmd {
 	if cmdDir != "" {
 		cmd.Dir = cmdDir
 	}
+
 	return cmd
 }
