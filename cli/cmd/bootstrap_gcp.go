@@ -154,7 +154,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 
 	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 	fw := intutil.NewFilesystemWriter()
-	portalClient := portal.NewPortalClient()
+	portalClient := portal.NewPortalClient(ctx)
 
 	githubClient, err := github.NewGitHubClient(ctx, c.CodesphereEnv.GitHubPAT)
 	if err != nil {

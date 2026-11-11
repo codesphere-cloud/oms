@@ -4,9 +4,7 @@
 package apikey_test
 
 import (
-	"context"
 	"fmt"
-	"github.com/stretchr/testify/mock"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -36,16 +34,16 @@ var _ = Describe("RevokeCmd", func() {
 
 	Context("when revoking API key succeeds", func() {
 		It("returns nil error", func() {
-			mockPortal.EXPECT().RevokeAPIKey(mock.Anything, key).Return(nil)
-			err := c.Revoke(context.Background(), mockPortal)
+			mockPortal.EXPECT().RevokeAPIKey(key).Return(nil)
+			err := c.Revoke(mockPortal)
 			Expect(err).To(BeNil())
 		})
 	})
 
 	Context("when revoking API key fails", func() {
 		It("returns error", func() {
-			mockPortal.EXPECT().RevokeAPIKey(mock.Anything, key).Return(fmt.Errorf("some error"))
-			err := c.Revoke(context.Background(), mockPortal)
+			mockPortal.EXPECT().RevokeAPIKey(key).Return(fmt.Errorf("some error"))
+			err := c.Revoke(mockPortal)
 			Expect(err).To(MatchError(ContainSubstring("failed to revoke API key")))
 		})
 	})

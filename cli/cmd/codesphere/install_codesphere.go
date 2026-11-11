@@ -453,7 +453,7 @@ func ensureCodespherePackageForVersion(ctx context.Context, opts *InstallCodesph
 		return fmt.Errorf("failed to resolve install package version: %w", err)
 	}
 
-	opts.Package, err = portal.EnsureCodespherePackage(ctx, portal.NewPortalClient(), environment.GetOmsWorkdir(), version, cfg.Operations.Codesphere.Hash, "installer-lite.tar.gz", false)
+	opts.Package, err = portal.EnsureCodespherePackage(ctx, portal.NewPortalClient(ctx), environment.GetOmsWorkdir(), version, cfg.Operations.Codesphere.Hash, "installer-lite.tar.gz", false)
 	if err != nil {
 		return fmt.Errorf("failed to prepare install package: %w", err)
 	}

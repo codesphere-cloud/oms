@@ -704,7 +704,7 @@ func (b *GCPBootstrapper) validateInstallVersion() error {
 		return nil
 	}
 
-	build, err := b.PortalClient.GetBuild(b.ctx, portal.CodesphereProduct, b.codesphereVersionForPortal(), b.Env.InstallHash)
+	build, err := b.PortalClient.GetBuild(portal.CodesphereProduct, b.codesphereVersionForPortal(), b.Env.InstallHash)
 	if err != nil {
 		return fmt.Errorf("failed to get codesphere package: %w", err)
 	}

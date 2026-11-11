@@ -32,11 +32,11 @@ const DefaultK0sctlVersion = "v0.33.1"
 
 //mockery:generate: true
 type K0sctlManager interface {
-	GetLatestVersion(ctx context.Context) (string, error)
-	Download(ctx context.Context, version string, opts DownloadOptions) (string, error)
-	Apply(ctx context.Context, configPath string, k0sctlPath string, force bool) error
-	Reset(ctx context.Context, configPath string, k0sctlPath string) error
-	GetKubeconfig(ctx context.Context, configPath string, k0sctlPath string) (string, error)
+	GetLatestVersion() (string, error)
+	Download(version string, opts DownloadOptions) (string, error)
+	Apply(configPath string, k0sctlPath string, force bool) error
+	Reset(configPath string, k0sctlPath string) error
+	GetKubeconfig(configPath string, k0sctlPath string) (string, error)
 }
 
 type K0sctl struct {
@@ -45,21 +45,34 @@ type K0sctl struct {
 	FileWriter util.FileIO
 	Goos       string
 	Goarch     string
+	// ctx is the command context. The binaries started by this manager are interrupted with it.
+	ctx context.Context
 }
 
-func NewK0sctl(hw portal.Http, env env.Env, fw util.FileIO) *K0sctl {
+// NewK0sctl returns a K0sctl manager whose started binaries are interrupted once ctx is cancelled.
+// HTTP requests are cancelled through hw, which carries its own context.
+func NewK0sctl(ctx context.Context, hw portal.Http, env env.Env, fw util.FileIO) *K0sctl {
 	return &K0sctl{
 		Env:        env,
 		Http:       hw,
 		FileWriter: fw,
 		Goos:       runtime.GOOS,
 		Goarch:     runtime.GOARCH,
+		ctx:        ctx,
 	}
 }
 
-// GetLatestVersion returns the tag of the latest k0sctl release.
-func (k *K0sctl) GetLatestVersion(ctx context.Context) (string, error) {
-	release, err := getGitHubRelease(ctx, k.Http, k0sctlReleaseAPIURL, "latest k0sctl release")
+// context returns the manager's context, or a background context for one built without it.
+func (k *K0sctl) context() context.Context {
+	if k.ctx == nil {
+		return context.Background()
+	}
+
+	return k.ctx
+}
+
+func (k *K0sctl) GetLatestVersion() (string, error) {
+	release, err := getGitHubRelease(k.Http, k0sctlReleaseAPIURL, "latest k0sctl release")
 	if err != nil {
 		return "", err
 	}
@@ -73,14 +86,14 @@ func (k *K0sctl) GetLatestVersion(ctx context.Context) (string, error) {
 
 // Download stores the k0sctl binary of the requested version in the OMS cache dir and
 // returns its path. An empty version resolves to the latest release.
-func (k *K0sctl) Download(ctx context.Context, version string, opts DownloadOptions) (string, error) {
+func (k *K0sctl) Download(version string, opts DownloadOptions) (string, error) {
 	cacheDir, err := ensureCacheDir(k.FileWriter, k.Env)
 	if err != nil {
 		return "", err
 	}
 
 	if version == "" {
-		version, err = k.GetLatestVersion(ctx)
+		version, err = k.GetLatestVersion()
 		if err != nil {
 			return "", fmt.Errorf("failed to get latest version: %w", err)
 		}
@@ -93,7 +106,7 @@ func (k *K0sctl) Download(ctx context.Context, version string, opts DownloadOpti
 	}
 
 	cachePath := filepath.Join(cacheDir, k0sctlBinaryName)
-	if reuseCachedBinary(ctx, k.FileWriter, cachePath, version, k0sctlBinaryName, opts) {
+	if reuseCachedBinary(k.context(), k.FileWriter, cachePath, version, k0sctlBinaryName, opts) {
 		return cachePath, nil
 	}
 
@@ -102,7 +115,7 @@ func (k *K0sctl) Download(ctx context.Context, version string, opts DownloadOpti
 
 	io.Verbosef(!opts.Quiet, "Downloading k0sctl %s from %s", version, downloadURL)
 
-	if err := downloadToPath(ctx, k.FileWriter, k.Http, cachePath, downloadURL, opts.Quiet, 0755); err != nil {
+	if err := downloadToPath(k.FileWriter, k.Http, cachePath, downloadURL, opts.Quiet, 0755); err != nil {
 		return "", err
 	}
 
@@ -125,8 +138,7 @@ func (k *K0sctl) requireBinaryAndConfig(configPath, k0sctlPath string) error {
 	return nil
 }
 
-// Apply deploys the cluster described by the k0sctl config.
-func (k *K0sctl) Apply(ctx context.Context, configPath string, k0sctlPath string, force bool) error {
+func (k *K0sctl) Apply(configPath string, k0sctlPath string, force bool) error {
 	if err := k.requireBinaryAndConfig(configPath, k0sctlPath); err != nil {
 		return err
 	}
@@ -142,7 +154,7 @@ func (k *K0sctl) Apply(ctx context.Context, configPath string, k0sctlPath string
 
 	log.Printf("Running k0sctl apply with config: %s", configPath)
 
-	err := util.RunCommand(ctx, k0sctlPath, args, "")
+	err := util.RunCommand(k.context(), k0sctlPath, args, "")
 	if err != nil {
 		return fmt.Errorf("k0sctl apply failed: %w", err)
 	}
@@ -152,8 +164,7 @@ func (k *K0sctl) Apply(ctx context.Context, configPath string, k0sctlPath string
 	return nil
 }
 
-// Reset tears down the cluster described by the k0sctl config, if k0sctl is present.
-func (k *K0sctl) Reset(ctx context.Context, configPath string, k0sctlPath string) error {
+func (k *K0sctl) Reset(configPath string, k0sctlPath string) error {
 	if !k.FileWriter.Exists(k0sctlPath) {
 		return nil
 	}
@@ -166,7 +177,7 @@ func (k *K0sctl) Reset(ctx context.Context, configPath string, k0sctlPath string
 
 	args := []string{"reset", "--config", configPath, "--force"}
 
-	err := util.RunCommand(ctx, k0sctlPath, args, "")
+	err := util.RunCommand(k.context(), k0sctlPath, args, "")
 	if err != nil {
 		return fmt.Errorf("k0sctl reset failed: %w", err)
 	}
@@ -176,8 +187,7 @@ func (k *K0sctl) Reset(ctx context.Context, configPath string, k0sctlPath string
 	return nil
 }
 
-// GetKubeconfig returns the admin kubeconfig of the cluster described by the k0sctl config.
-func (k *K0sctl) GetKubeconfig(ctx context.Context, configPath string, k0sctlPath string) (string, error) {
+func (k *K0sctl) GetKubeconfig(configPath string, k0sctlPath string) (string, error) {
 	if err := k.requireBinaryAndConfig(configPath, k0sctlPath); err != nil {
 		return "", err
 	}
@@ -186,7 +196,7 @@ func (k *K0sctl) GetKubeconfig(ctx context.Context, configPath string, k0sctlPat
 
 	log.Println("Retrieving kubeconfig from k0sctl...")
 
-	output, err := util.RunCommandWithOutput(ctx, k0sctlPath, args, "")
+	output, err := util.RunCommandWithOutput(k.context(), k0sctlPath, args, "")
 	if err != nil {
 		return "", fmt.Errorf("k0sctl kubeconfig failed: %w", err)
 	}

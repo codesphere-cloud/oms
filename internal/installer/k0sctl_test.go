@@ -5,7 +5,6 @@ package installer_test
 
 import (
 	"context"
-	"github.com/stretchr/testify/mock"
 	"os"
 	"path/filepath"
 
@@ -37,7 +36,7 @@ var _ = Describe("K0sctl", func() {
 		mockEnv.EXPECT().GetOmsCacheDir().Return(cacheDir, nil)
 		mockFileWriter.EXPECT().MkdirAll(cacheDir, os.FileMode(0755)).Return(nil)
 
-		k0sctl = installer.NewK0sctl(mockHTTP, mockEnv, mockFileWriter)
+		k0sctl = installer.NewK0sctl(context.Background(), mockHTTP, mockEnv, mockFileWriter)
 		k0sctl.Goos = "linux"
 		k0sctl.Goarch = "amd64"
 	})
@@ -53,7 +52,7 @@ var _ = Describe("K0sctl", func() {
 		Expect(err).NotTo(HaveOccurred())
 		mockFileWriter.EXPECT().CreateTemp(filepath.Dir(cachedPath), filepath.Base(cachedPath)+".*.partial").Return(cachedPath+".partial", nil)
 		mockFileWriter.EXPECT().Create(cachedPath+".partial").Return(downloadFile, nil)
-		mockHTTP.EXPECT().Download(mock.Anything, url, downloadFile, false).Return(nil)
+		mockHTTP.EXPECT().Download(url, downloadFile, false).Return(nil)
 		mockFileWriter.EXPECT().Chmod(cachedPath+".partial", os.FileMode(0755)).Return(nil)
 		mockFileWriter.EXPECT().Rename(cachedPath+".partial", cachedPath).Return(nil)
 	}
@@ -62,7 +61,7 @@ var _ = Describe("K0sctl", func() {
 		writeCachedVersion("v0.32.1")
 		mockFileWriter.EXPECT().Exists(cachedPath).Return(true)
 
-		path, err := k0sctl.Download(context.Background(), "v0.32.1", installer.DownloadOptions{})
+		path, err := k0sctl.Download("v0.32.1", installer.DownloadOptions{})
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(path).To(Equal(cachedPath))
@@ -73,7 +72,7 @@ var _ = Describe("K0sctl", func() {
 		mockFileWriter.EXPECT().Exists(cachedPath).Return(true)
 		expectDownload("v0.32.1")
 
-		path, err := k0sctl.Download(context.Background(), "v0.32.1", installer.DownloadOptions{})
+		path, err := k0sctl.Download("v0.32.1", installer.DownloadOptions{})
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(path).To(Equal(cachedPath))
@@ -81,11 +80,11 @@ var _ = Describe("K0sctl", func() {
 
 	It("resolves an unpinned version and reuses the matching binary", func() {
 		writeCachedVersion("v0.32.1")
-		mockHTTP.EXPECT().Get(mock.Anything, "https://api.github.com/repos/k0sproject/k0sctl/releases/latest").
+		mockHTTP.EXPECT().Get("https://api.github.com/repos/k0sproject/k0sctl/releases/latest").
 			Return([]byte(`{"tag_name":"v0.32.1"}`), nil)
 		mockFileWriter.EXPECT().Exists(cachedPath).Return(true)
 
-		path, err := k0sctl.Download(context.Background(), "", installer.DownloadOptions{})
+		path, err := k0sctl.Download("", installer.DownloadOptions{})
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(path).To(Equal(cachedPath))

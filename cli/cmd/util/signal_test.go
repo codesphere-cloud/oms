@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 )
 
 var _ = Describe("NotifySignalContext", func() {
@@ -98,6 +99,6 @@ var _ = Describe("ExitCode", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		Expect(util.ExitCode(ctx, errors.New("stopped waiting for input: context canceled"))).To(Equal(util.InterruptExitCode))
+		Expect(util.ExitCode(ctx, errors.New("stopped waiting for input: context canceled"))).To(Equal(prompt.InterruptExitCode))
 	})
 })

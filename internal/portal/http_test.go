@@ -47,9 +47,9 @@ var _ = Describe("HttpWrapper", func() {
 		mockHttpClient.AssertExpectations(GinkgoT())
 	})
 
-	Describe("NewHttpWrapper", func() {
+	Describe("NewHTTPWrapper", func() {
 		It("creates a new HttpWrapper with default client", func() {
-			wrapper := portal.NewHttpWrapper()
+			wrapper := portal.NewHTTPWrapper(context.Background())
 			Expect(wrapper).ToNot(BeNil())
 			Expect(wrapper.HttpClient).ToNot(BeNil())
 		})
@@ -69,7 +69,7 @@ var _ = Describe("HttpWrapper", func() {
 			})
 
 			It("returns the response body", func() {
-				result, err := httpWrapper.Request(context.Background(), testUrl, testMethod, testBody)
+				result, err := httpWrapper.Request(testUrl, testMethod, testBody)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(Equal(responseBody))
 			})
@@ -93,7 +93,7 @@ var _ = Describe("HttpWrapper", func() {
 			})
 
 			It("returns the response body", func() {
-				result, err := httpWrapper.Request(context.Background(), testUrl, testMethod, testBody)
+				result, err := httpWrapper.Request(testUrl, testMethod, testBody)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(Equal(responseBody))
 			})
@@ -116,7 +116,7 @@ var _ = Describe("HttpWrapper", func() {
 			})
 
 			It("returns an error", func() {
-				result, err := httpWrapper.Request(context.Background(), testUrl, testMethod, testBody)
+				result, err := httpWrapper.Request(testUrl, testMethod, testBody)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to send request"))
 				Expect(err.Error()).To(ContainSubstring("network connection failed"))
@@ -137,7 +137,7 @@ var _ = Describe("HttpWrapper", func() {
 			})
 
 			It("returns an error", func() {
-				result, err := httpWrapper.Request(context.Background(), testUrl, testMethod, testBody)
+				result, err := httpWrapper.Request(testUrl, testMethod, testBody)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed request with status: 400"))
 				Expect(result).To(Equal([]byte{}))
@@ -157,7 +157,7 @@ var _ = Describe("HttpWrapper", func() {
 			})
 
 			It("returns an error", func() {
-				result, err := httpWrapper.Request(context.Background(), testUrl, testMethod, testBody)
+				result, err := httpWrapper.Request(testUrl, testMethod, testBody)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to read response body"))
 				Expect(result).To(Equal([]byte{}))
@@ -179,7 +179,7 @@ var _ = Describe("HttpWrapper", func() {
 			})
 
 			It("returns the response body", func() {
-				result, err := httpWrapper.Get(context.Background(), testUrl)
+				result, err := httpWrapper.Get(testUrl)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(Equal(responseBody))
 			})
@@ -202,7 +202,7 @@ var _ = Describe("HttpWrapper", func() {
 			})
 
 			It("returns an error", func() {
-				result, err := httpWrapper.Get(context.Background(), testUrl)
+				result, err := httpWrapper.Get(testUrl)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to send request"))
 				Expect(err.Error()).To(ContainSubstring("DNS resolution failed"))
@@ -245,7 +245,7 @@ var _ = Describe("HttpWrapper", func() {
 				log.SetOutput(&logBuf)
 				defer log.SetOutput(prev)
 
-				err := httpWrapper.Download(context.Background(), testUrl, testWriter, quiet)
+				err := httpWrapper.Download(testUrl, testWriter, quiet)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(testWriter.String()).To(Equal(downloadContent))
 				Expect(logBuf.String()).To(ContainSubstring("Downloading..."))
@@ -262,7 +262,7 @@ var _ = Describe("HttpWrapper", func() {
 				log.SetOutput(&logBuf)
 				defer log.SetOutput(prev)
 
-				err := httpWrapper.Download(context.Background(), testUrl, testWriter, quiet)
+				err := httpWrapper.Download(testUrl, testWriter, quiet)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(testWriter.String()).To(Equal(downloadContent))
 				Expect(logBuf.String()).To(Not(ContainSubstring("Downloading...")))
@@ -287,7 +287,7 @@ var _ = Describe("HttpWrapper", func() {
 			})
 
 			It("returns an error", func() {
-				err := httpWrapper.Download(context.Background(), testUrl, testWriter, quiet)
+				err := httpWrapper.Download(testUrl, testWriter, quiet)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to send request"))
 				Expect(err.Error()).To(ContainSubstring("connection timeout"))
@@ -308,7 +308,7 @@ var _ = Describe("HttpWrapper", func() {
 			})
 
 			It("returns an error", func() {
-				err := httpWrapper.Download(context.Background(), testUrl, testWriter, quiet)
+				err := httpWrapper.Download(testUrl, testWriter, quiet)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to get body: 403"))
 				Expect(testWriter.String()).To(BeEmpty())
@@ -328,7 +328,7 @@ var _ = Describe("HttpWrapper", func() {
 			})
 
 			It("returns an error", func() {
-				err := httpWrapper.Download(context.Background(), testUrl, testWriter, quiet)
+				err := httpWrapper.Download(testUrl, testWriter, quiet)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to copy response body to file"))
 				Expect(err.Error()).To(ContainSubstring("simulated read error"))
@@ -351,7 +351,7 @@ var _ = Describe("HttpWrapper", func() {
 				// Use a failing writer
 				failingWriter := &FailingWriter{}
 
-				err := httpWrapper.Download(context.Background(), testUrl, failingWriter, quiet)
+				err := httpWrapper.Download(testUrl, failingWriter, quiet)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to copy response body to file"))
 			})

@@ -13,24 +13,36 @@ import (
 
 //mockery:generate: true
 type Http interface {
-	Request(ctx context.Context, url string, method string, body io.Reader) (responseBody []byte, err error)
-	Get(ctx context.Context, url string) (responseBody []byte, err error)
-	Download(ctx context.Context, url string, file io.Writer, quiet bool) error
+	Request(url string, method string, body io.Reader) (responseBody []byte, err error)
+	Get(url string) (responseBody []byte, err error)
+	Download(url string, file io.Writer, quiet bool) error
 }
 
 type HttpWrapper struct {
 	HttpClient HttpClient
+	// ctx is the command context. Requests are cancelled with it.
+	ctx context.Context
 }
 
-func NewHttpWrapper() *HttpWrapper {
+// NewHTTPWrapper returns an HTTP wrapper whose requests are cancelled with ctx.
+func NewHTTPWrapper(ctx context.Context) *HttpWrapper {
 	return &HttpWrapper{
 		HttpClient: http.DefaultClient,
+		ctx:        ctx,
 	}
 }
 
-// Request sends a request and returns the response body, failing on non-2xx statuses.
-func (c *HttpWrapper) Request(ctx context.Context, url string, method string, body io.Reader) (responseBody []byte, err error) {
-	req, err := http.NewRequestWithContext(ctx, method, url, body)
+// context returns the wrapper's context, or a background context for a wrapper built without one.
+func (c *HttpWrapper) context() context.Context {
+	if c.ctx == nil {
+		return context.Background()
+	}
+
+	return c.ctx
+}
+
+func (c *HttpWrapper) Request(url string, method string, body io.Reader) (responseBody []byte, err error) {
+	req, err := http.NewRequestWithContext(c.context(), method, url, body)
 	if err != nil {
 		log.Fatalf("Error creating request: %v", err)
 		return
@@ -56,14 +68,12 @@ func (c *HttpWrapper) Request(ctx context.Context, url string, method string, bo
 	return respBody, nil
 }
 
-// Get sends a GET request and returns the response body.
-func (c *HttpWrapper) Get(ctx context.Context, url string) (responseBody []byte, err error) {
-	return c.Request(ctx, url, http.MethodGet, nil)
+func (c *HttpWrapper) Get(url string) (responseBody []byte, err error) {
+	return c.Request(url, http.MethodGet, nil)
 }
 
-// Download streams the response body of a GET request to file.
-func (c *HttpWrapper) Download(ctx context.Context, url string, file io.Writer, quiet bool) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+func (c *HttpWrapper) Download(url string, file io.Writer, quiet bool) error {
+	req, err := http.NewRequestWithContext(c.context(), http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}

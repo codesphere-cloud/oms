@@ -4,7 +4,6 @@
 package apikey
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
@@ -23,15 +22,13 @@ type RevokeAPIKeyOpts struct {
 	ID string
 }
 
-// RunE revokes the API key with the real portal client.
-func (c *RevokeAPIKeyCmd) RunE(cmd *cobra.Command, _ []string) error {
-	p := portal.NewPortalClient()
-	return c.Revoke(cmd.Context(), p)
+func (c *RevokeAPIKeyCmd) RunE(_ *cobra.Command, args []string) error {
+	p := portal.NewPortalClient(c.cmd.Context())
+	return c.Revoke(p)
 }
 
-// Revoke revokes the API key given in the options.
-func (c *RevokeAPIKeyCmd) Revoke(ctx context.Context, p portal.Portal) error {
-	err := p.RevokeAPIKey(ctx, c.Opts.ID)
+func (c *RevokeAPIKeyCmd) Revoke(p portal.Portal) error {
+	err := p.RevokeAPIKey(c.Opts.ID)
 	if err != nil {
 		return fmt.Errorf("failed to revoke API key: %w", err)
 	}

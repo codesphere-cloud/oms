@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/stretchr/testify/mock"
 	"os"
 	"path/filepath"
 
@@ -41,13 +40,13 @@ var _ = Describe("K0s", func() {
 		workDir = filepath.Join(tempDir, "oms-workdir")
 		k0sPath = filepath.Join(workDir, "k0s-v1.29.1+k0s.0-amd64")
 
-		k0s = installer.NewK0s(mockHttp, mockEnv, mockFileWriter)
+		k0s = installer.NewK0s(context.Background(), mockHttp, mockEnv, mockFileWriter)
 		k0sImpl = k0s.(*installer.K0s)
 	})
 
 	Describe("NewK0s", func() {
 		It("creates a new K0s with correct parameters", func() {
-			newK0s := installer.NewK0s(mockHttp, mockEnv, mockFileWriter)
+			newK0s := installer.NewK0s(context.Background(), mockHttp, mockEnv, mockFileWriter)
 			Expect(newK0s).ToNot(BeNil())
 
 			// Type assertion to access fields
@@ -60,7 +59,7 @@ var _ = Describe("K0s", func() {
 		})
 
 		It("implements K0sManager interface", func() {
-			var manager = installer.NewK0s(mockHttp, mockEnv, mockFileWriter)
+			var manager = installer.NewK0s(context.Background(), mockHttp, mockEnv, mockFileWriter)
 			Expect(manager).ToNot(BeNil())
 		})
 	})
@@ -68,9 +67,9 @@ var _ = Describe("K0s", func() {
 	Describe("GetLatestVersion", func() {
 		Context("when version fetch succeeds", func() {
 			It("returns the latest version", func() {
-				mockHttp.EXPECT().Get(mock.Anything, "https://docs.k0sproject.io/stable.txt").Return([]byte("v1.29.1+k0s.0"), nil)
+				mockHttp.EXPECT().Get("https://docs.k0sproject.io/stable.txt").Return([]byte("v1.29.1+k0s.0"), nil)
 
-				version, err := k0s.GetLatestVersion(context.Background())
+				version, err := k0s.GetLatestVersion()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(version).To(Equal("v1.29.1+k0s.0"))
 			})
@@ -78,9 +77,9 @@ var _ = Describe("K0s", func() {
 
 		Context("when version fetch fails", func() {
 			It("returns an error", func() {
-				mockHttp.EXPECT().Get(mock.Anything, "https://docs.k0sproject.io/stable.txt").Return(nil, errors.New("network error"))
+				mockHttp.EXPECT().Get("https://docs.k0sproject.io/stable.txt").Return(nil, errors.New("network error"))
 
-				_, err := k0s.GetLatestVersion(context.Background())
+				_, err := k0s.GetLatestVersion()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to fetch version info"))
 				Expect(err.Error()).To(ContainSubstring("network error"))
@@ -90,9 +89,9 @@ var _ = Describe("K0s", func() {
 		Context("when version is empty", func() {
 			It("returns an error", func() {
 				emptyVersionBytes := []byte("   \n  ")
-				mockHttp.EXPECT().Get(mock.Anything, "https://docs.k0sproject.io/stable.txt").Return(emptyVersionBytes, nil)
+				mockHttp.EXPECT().Get("https://docs.k0sproject.io/stable.txt").Return(emptyVersionBytes, nil)
 
-				_, err := k0s.GetLatestVersion(context.Background())
+				_, err := k0s.GetLatestVersion()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("version info is empty"))
 			})
@@ -101,9 +100,9 @@ var _ = Describe("K0s", func() {
 		Context("when version has whitespace", func() {
 			It("trims whitespace correctly", func() {
 				versionWithWhitespace := []byte("  v1.29.1+k0s.0  \n")
-				mockHttp.EXPECT().Get(mock.Anything, "https://docs.k0sproject.io/stable.txt").Return(versionWithWhitespace, nil)
+				mockHttp.EXPECT().Get("https://docs.k0sproject.io/stable.txt").Return(versionWithWhitespace, nil)
 
-				version, err := k0s.GetLatestVersion(context.Background())
+				version, err := k0s.GetLatestVersion()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(version).To(Equal("v1.29.1+k0s.0"))
 			})
@@ -116,7 +115,7 @@ var _ = Describe("K0s", func() {
 				k0sImpl.Goos = "windows"
 				k0sImpl.Goarch = "amd64"
 
-				_, err := k0s.Download(context.Background(), "v1.29.1+k0s.0", installer.DownloadOptions{})
+				_, err := k0s.Download("v1.29.1+k0s.0", installer.DownloadOptions{})
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
 				Expect(err.Error()).To(ContainSubstring("windows/amd64"))
@@ -126,7 +125,7 @@ var _ = Describe("K0s", func() {
 				k0sImpl.Goos = "linux"
 				k0sImpl.Goarch = "arm64"
 
-				_, err := k0s.Download(context.Background(), "v1.29.1+k0s.0", installer.DownloadOptions{})
+				_, err := k0s.Download("v1.29.1+k0s.0", installer.DownloadOptions{})
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
 				Expect(err.Error()).To(ContainSubstring("linux/arm64"))
@@ -157,11 +156,11 @@ var _ = Describe("K0s", func() {
 				mockFileWriter.EXPECT().CreateTemp(filepath.Dir(k0sPath), filepath.Base(k0sPath)+".*.partial").Return(k0sPath+".partial", nil)
 
 				mockFileWriter.EXPECT().Create(k0sPath+".partial").Return(realFile, nil)
-				mockHttp.EXPECT().Download(mock.Anything, "https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
+				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
 				mockFileWriter.EXPECT().Chmod(k0sPath+".partial", os.FileMode(0755)).Return(nil)
 				mockFileWriter.EXPECT().Rename(k0sPath+".partial", k0sPath).Return(nil)
 
-				path, err := k0s.Download(context.Background(), "v1.29.1+k0s.0", installer.DownloadOptions{})
+				path, err := k0s.Download("v1.29.1+k0s.0", installer.DownloadOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(path).To(Equal(k0sPath))
 			})
@@ -183,7 +182,7 @@ var _ = Describe("K0s", func() {
 				Expect(err).ToNot(HaveOccurred())
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(true)
 
-				path, err := k0s.Download(context.Background(), "v1.29.1+k0s.0", installer.DownloadOptions{})
+				path, err := k0s.Download("v1.29.1+k0s.0", installer.DownloadOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(path).To(Equal(k0sPath))
 			})
@@ -203,11 +202,11 @@ var _ = Describe("K0s", func() {
 				mockFileWriter.EXPECT().CreateTemp(filepath.Dir(k0sPath), filepath.Base(k0sPath)+".*.partial").Return(k0sPath+".partial", nil)
 
 				mockFileWriter.EXPECT().Create(k0sPath+".partial").Return(realFile, nil)
-				mockHttp.EXPECT().Download(mock.Anything, "https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
+				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
 				mockFileWriter.EXPECT().Chmod(k0sPath+".partial", os.FileMode(0755)).Return(nil)
 				mockFileWriter.EXPECT().Rename(k0sPath+".partial", k0sPath).Return(nil)
 
-				path, err := k0s.Download(context.Background(), "v1.29.1+k0s.0", installer.DownloadOptions{})
+				path, err := k0s.Download("v1.29.1+k0s.0", installer.DownloadOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(path).To(Equal(k0sPath))
 			})
@@ -215,7 +214,7 @@ var _ = Describe("K0s", func() {
 			It("should fail instead of downloading a missing k0s binary when cache only is set", func() {
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(false)
 
-				_, err := k0s.Download(context.Background(), "v1.29.1+k0s.0", installer.DownloadOptions{CacheOnly: true})
+				_, err := k0s.Download("v1.29.1+k0s.0", installer.DownloadOptions{CacheOnly: true})
 				Expect(err).To(MatchError(ContainSubstring("k0s v1.29.1+k0s.0 not found in OMS cache")))
 			})
 
@@ -235,11 +234,11 @@ var _ = Describe("K0s", func() {
 				mockFileWriter.EXPECT().CreateTemp(filepath.Dir(k0sPath), filepath.Base(k0sPath)+".*.partial").Return(k0sPath+".partial", nil)
 
 				mockFileWriter.EXPECT().Create(k0sPath+".partial").Return(realFile, nil)
-				mockHttp.EXPECT().Download(mock.Anything, "https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
+				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
 				mockFileWriter.EXPECT().Chmod(k0sPath+".partial", os.FileMode(0755)).Return(nil)
 				mockFileWriter.EXPECT().Rename(k0sPath+".partial", k0sPath).Return(nil)
 
-				path, err := k0s.Download(context.Background(), "v1.29.1+k0s.0", installer.DownloadOptions{Force: true})
+				path, err := k0s.Download("v1.29.1+k0s.0", installer.DownloadOptions{Force: true})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(path).To(Equal(k0sPath))
 			})
@@ -258,7 +257,7 @@ var _ = Describe("K0s", func() {
 			It("should fail when file creation fails", func() {
 				mockFileWriter.EXPECT().CreateTemp(filepath.Dir(k0sPath), filepath.Base(k0sPath)+".*.partial").Return("", errors.New("permission denied"))
 
-				_, err := k0s.Download(context.Background(), "v1.29.1+k0s.0", installer.DownloadOptions{})
+				_, err := k0s.Download("v1.29.1+k0s.0", installer.DownloadOptions{})
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to create"))
 				Expect(err.Error()).To(ContainSubstring("permission denied"))
@@ -277,11 +276,11 @@ var _ = Describe("K0s", func() {
 				mockFileWriter.EXPECT().CreateTemp(filepath.Dir(k0sPath), filepath.Base(k0sPath)+".*.partial").Return(k0sPath+".partial", nil)
 
 				mockFileWriter.EXPECT().Create(k0sPath+".partial").Return(mockFile, nil)
-				mockHttp.EXPECT().Download(mock.Anything, "https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", mockFile, false).Return(errors.New("download failed"))
+				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", mockFile, false).Return(errors.New("download failed"))
 				// The truncated destination must not stay behind as a reusable cache entry.
 				mockFileWriter.EXPECT().Remove(k0sPath + ".partial").Return(nil)
 
-				_, err = k0s.Download(context.Background(), "v1.29.1+k0s.0", installer.DownloadOptions{})
+				_, err = k0s.Download("v1.29.1+k0s.0", installer.DownloadOptions{})
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to download https://github.com/k0sproject/k0s/releases/download/"))
 				Expect(err.Error()).To(ContainSubstring("download failed"))
@@ -300,11 +299,11 @@ var _ = Describe("K0s", func() {
 				mockFileWriter.EXPECT().CreateTemp(filepath.Dir(k0sPath), filepath.Base(k0sPath)+".*.partial").Return(k0sPath+".partial", nil)
 
 				mockFileWriter.EXPECT().Create(k0sPath+".partial").Return(realFile, nil)
-				mockHttp.EXPECT().Download(mock.Anything, "https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
+				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
 				mockFileWriter.EXPECT().Chmod(k0sPath+".partial", os.FileMode(0755)).Return(nil)
 				mockFileWriter.EXPECT().Rename(k0sPath+".partial", k0sPath).Return(nil)
 
-				path, err := k0s.Download(context.Background(), "v1.29.1+k0s.0", installer.DownloadOptions{})
+				path, err := k0s.Download("v1.29.1+k0s.0", installer.DownloadOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(path).To(Equal(k0sPath))
 			})
@@ -336,11 +335,11 @@ var _ = Describe("K0s", func() {
 				mockFileWriter.EXPECT().CreateTemp(filepath.Dir(k0sPath), filepath.Base(k0sPath)+".*.partial").Return(k0sPath+".partial", nil)
 
 				mockFileWriter.EXPECT().Create(k0sPath+".partial").Return(realFile, nil)
-				mockHttp.EXPECT().Download(mock.Anything, "https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
+				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
 				mockFileWriter.EXPECT().Chmod(k0sPath+".partial", os.FileMode(0755)).Return(nil)
 				mockFileWriter.EXPECT().Rename(k0sPath+".partial", k0sPath).Return(nil)
 
-				path, err := k0s.Download(context.Background(), "v1.29.1+k0s.0", installer.DownloadOptions{})
+				path, err := k0s.Download("v1.29.1+k0s.0", installer.DownloadOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(path).To(Equal(k0sPath))
 			})
@@ -368,7 +367,7 @@ var _ = Describe("K0s", func() {
 		expectAirgapDownload := func(version, assetName string, downloadErr error, otherAssets ...string) {
 			path := bundlePath(version)
 
-			mockHttp.EXPECT().Get(mock.Anything, "https://api.github.com/repos/k0sproject/k0s/releases/tags/"+version).
+			mockHttp.EXPECT().Get("https://api.github.com/repos/k0sproject/k0s/releases/tags/"+version).
 				Return(releaseJSON(append(otherAssets, assetName)...), nil)
 
 			Expect(os.MkdirAll(workDir, 0755)).To(Succeed())
@@ -382,7 +381,7 @@ var _ = Describe("K0s", func() {
 			mockFileWriter.EXPECT().CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.partial").Return(path+".partial", nil)
 
 			mockFileWriter.EXPECT().Create(path+".partial").Return(realFile, nil)
-			mockHttp.EXPECT().Download(mock.Anything,
+			mockHttp.EXPECT().Download(
 				"https://github.com/k0sproject/k0s/releases/download/"+version+"/"+assetName, realFile, false,
 			).Return(downloadErr)
 
@@ -409,7 +408,7 @@ var _ = Describe("K0s", func() {
 				mockFileWriter.EXPECT().Exists(bundlePath(version)).Return(false)
 				expectAirgapDownload(version, assetName, nil, otherAssets...)
 
-				path, err := k0s.DownloadAirgapBundle(context.Background(), version, "", installer.DownloadOptions{})
+				path, err := k0s.DownloadAirgapBundle(version, "", installer.DownloadOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(path).To(Equal(bundlePath(version)))
 			},
@@ -424,7 +423,7 @@ var _ = Describe("K0s", func() {
 		It("reuses a cached bundle without contacting the release API", func() {
 			mockFileWriter.EXPECT().Exists(bundlePath(modernVersion)).Return(true)
 
-			path, err := k0s.DownloadAirgapBundle(context.Background(), modernVersion, "", installer.DownloadOptions{})
+			path, err := k0s.DownloadAirgapBundle(modernVersion, "", installer.DownloadOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal(bundlePath(modernVersion)))
 		})
@@ -432,14 +431,14 @@ var _ = Describe("K0s", func() {
 		It("fails instead of downloading a missing bundle when cache only is set", func() {
 			mockFileWriter.EXPECT().Exists(bundlePath(modernVersion)).Return(false)
 
-			_, err := k0s.DownloadAirgapBundle(context.Background(), modernVersion, "", installer.DownloadOptions{CacheOnly: true})
+			_, err := k0s.DownloadAirgapBundle(modernVersion, "", installer.DownloadOptions{CacheOnly: true})
 			Expect(err).To(MatchError(ContainSubstring("k0s airgap bundle " + modernVersion + " not found")))
 		})
 
 		It("re-downloads a cached bundle when force is set", func() {
 			expectAirgapDownload(modernVersion, modernAsset, nil)
 
-			path, err := k0s.DownloadAirgapBundle(context.Background(), modernVersion, "", installer.DownloadOptions{Force: true})
+			path, err := k0s.DownloadAirgapBundle(modernVersion, "", installer.DownloadOptions{Force: true})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal(bundlePath(modernVersion)))
 		})
@@ -448,25 +447,25 @@ var _ = Describe("K0s", func() {
 			mockFileWriter.EXPECT().Exists(bundlePath(modernVersion)).Return(false)
 			expectAirgapDownload(modernVersion, modernAsset, errors.New("connection reset"))
 
-			_, err := k0s.DownloadAirgapBundle(context.Background(), modernVersion, "", installer.DownloadOptions{})
+			_, err := k0s.DownloadAirgapBundle(modernVersion, "", installer.DownloadOptions{})
 			Expect(err).To(MatchError(ContainSubstring("failed to download")))
 		})
 
 		It("fails when the release metadata cannot be fetched", func() {
 			mockFileWriter.EXPECT().Exists(bundlePath(legacyVersion)).Return(false)
-			mockHttp.EXPECT().Get(mock.Anything, "https://api.github.com/repos/k0sproject/k0s/releases/tags/"+legacyVersion).
+			mockHttp.EXPECT().Get("https://api.github.com/repos/k0sproject/k0s/releases/tags/"+legacyVersion).
 				Return(nil, errors.New("network error"))
 
-			_, err := k0s.DownloadAirgapBundle(context.Background(), legacyVersion, "", installer.DownloadOptions{})
+			_, err := k0s.DownloadAirgapBundle(legacyVersion, "", installer.DownloadOptions{})
 			Expect(err).To(MatchError(ContainSubstring("failed to fetch k0s release")))
 		})
 
 		It("fails when the release has no airgap bundle for the platform", func() {
 			mockFileWriter.EXPECT().Exists(bundlePath(legacyVersion)).Return(false)
-			mockHttp.EXPECT().Get(mock.Anything, "https://api.github.com/repos/k0sproject/k0s/releases/tags/"+legacyVersion).
+			mockHttp.EXPECT().Get("https://api.github.com/repos/k0sproject/k0s/releases/tags/"+legacyVersion).
 				Return(releaseJSON("k0s-v1.31.14+k0s.0-amd64"), nil)
 
-			_, err := k0s.DownloadAirgapBundle(context.Background(), legacyVersion, "", installer.DownloadOptions{})
+			_, err := k0s.DownloadAirgapBundle(legacyVersion, "", installer.DownloadOptions{})
 			Expect(err).To(MatchError(ContainSubstring("no airgap bundle for linux/amd64")))
 		})
 	})
@@ -480,7 +479,7 @@ var _ = Describe("K0s", func() {
 		It("fails when the cache directory cannot be determined", func() {
 			mockEnv.EXPECT().GetOmsCacheDir().Return("", errors.New("no cache dir"))
 
-			_, err := k0s.DownloadAirgapBundle(context.Background(), "v1.31.14+k0s.0", "", installer.DownloadOptions{})
+			_, err := k0s.DownloadAirgapBundle("v1.31.14+k0s.0", "", installer.DownloadOptions{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to determine cache directory"))
 		})
@@ -489,7 +488,7 @@ var _ = Describe("K0s", func() {
 			mockEnv.EXPECT().GetOmsCacheDir().Return(workDir, nil)
 			mockFileWriter.EXPECT().MkdirAll(workDir, os.FileMode(0755)).Return(errors.New("permission denied"))
 
-			_, err := k0s.DownloadAirgapBundle(context.Background(), "v1.31.14+k0s.0", "", installer.DownloadOptions{})
+			_, err := k0s.DownloadAirgapBundle("v1.31.14+k0s.0", "", installer.DownloadOptions{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to create cache directory"))
 		})
@@ -521,15 +520,15 @@ var _ = Describe("K0s", func() {
 
 			mockFileWriter.EXPECT().MkdirAll(bundleDir, os.FileMode(0755)).Return(nil)
 			mockFileWriter.EXPECT().Exists(bundlePath).Return(false)
-			mockHttp.EXPECT().Get(mock.Anything, "https://api.github.com/repos/k0sproject/k0s/releases/tags/"+version).
+			mockHttp.EXPECT().Get("https://api.github.com/repos/k0sproject/k0s/releases/tags/"+version).
 				Return(releaseJSON(assetName), nil)
 			mockFileWriter.EXPECT().CreateTemp(bundleDir, "bundle.tar.*.partial").Return(bundlePath+".partial", nil)
 			mockFileWriter.EXPECT().Create(bundlePath+".partial").Return(realFile, nil)
-			mockHttp.EXPECT().Download(mock.Anything, "https://github.com/k0sproject/k0s/releases/download/"+version+"/"+assetName, realFile, false).Return(nil)
+			mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/"+version+"/"+assetName, realFile, false).Return(nil)
 			mockFileWriter.EXPECT().Chmod(bundlePath+".partial", os.FileMode(0644)).Return(nil)
 			mockFileWriter.EXPECT().Rename(bundlePath+".partial", bundlePath).Return(nil)
 
-			path, err := k0s.DownloadAirgapBundle(context.Background(), version, bundlePath, installer.DownloadOptions{})
+			path, err := k0s.DownloadAirgapBundle(version, bundlePath, installer.DownloadOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal(bundlePath))
 		})
@@ -538,7 +537,7 @@ var _ = Describe("K0s", func() {
 			mockFileWriter.EXPECT().MkdirAll(bundleDir, os.FileMode(0755)).Return(nil)
 			mockFileWriter.EXPECT().Exists(bundlePath).Return(true)
 
-			path, err := k0s.DownloadAirgapBundle(context.Background(), version, bundlePath, installer.DownloadOptions{})
+			path, err := k0s.DownloadAirgapBundle(version, bundlePath, installer.DownloadOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal(bundlePath))
 		})
@@ -546,7 +545,7 @@ var _ = Describe("K0s", func() {
 		It("fails when the directory of the given path cannot be created", func() {
 			mockFileWriter.EXPECT().MkdirAll(bundleDir, os.FileMode(0755)).Return(errors.New("permission denied"))
 
-			_, err := k0s.DownloadAirgapBundle(context.Background(), version, bundlePath, installer.DownloadOptions{})
+			_, err := k0s.DownloadAirgapBundle(version, bundlePath, installer.DownloadOptions{})
 			Expect(err).To(MatchError(ContainSubstring("failed to create directory for airgap bundle")))
 		})
 	})

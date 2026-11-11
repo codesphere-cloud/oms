@@ -4,7 +4,6 @@
 package apikey
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"time"
@@ -35,11 +34,10 @@ type RegisterOpts struct {
 	ValidFor     string
 }
 
-// RunE registers a new API key with the real portal client.
-func (c *RegisterCmd) RunE(cmd *cobra.Command, _ []string) error {
-	p := portal.NewPortalClient()
+func (c *RegisterCmd) RunE(_ *cobra.Command, args []string) error {
+	p := portal.NewPortalClient(c.cmd.Context())
 
-	newKey, err := c.Register(cmd.Context(), p)
+	newKey, err := c.Register(p)
 	if err != nil {
 		return err
 	}
@@ -70,8 +68,7 @@ func AddRegisterCmd(list *cobra.Command, opts *util.GlobalOptions) {
 	util.AddCmd(list, c.cmd)
 }
 
-// Register validates the options and registers a new API key with the portal.
-func (c *RegisterCmd) Register(ctx context.Context, p portal.Portal) (*portal.ApiKey, error) {
+func (c *RegisterCmd) Register(p portal.Portal) (*portal.ApiKey, error) {
 	if c.Opts.Role != API_KEY_ROLE_ADMIN && c.Opts.Role != API_KEY_ROLE_DEV && c.Opts.Role != API_KEY_ROLE_EXT {
 		return nil, fmt.Errorf("invalid role: %s. Available roles are: Admin, Dev, Ext", c.Opts.Role)
 	}
@@ -91,7 +88,7 @@ func (c *RegisterCmd) Register(ctx context.Context, p portal.Portal) (*portal.Ap
 		expiresAt = time.Now().Add(validForDuration)
 	}
 
-	newKey, err := p.RegisterAPIKey(ctx, c.Opts.Owner, c.Opts.Organization, c.Opts.Role, expiresAt)
+	newKey, err := p.RegisterAPIKey(c.Opts.Owner, c.Opts.Organization, c.Opts.Role, expiresAt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to register API key: %w", err)
 	}

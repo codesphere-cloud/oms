@@ -4,7 +4,6 @@
 package k0s_test
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -82,20 +81,20 @@ var _ = Describe("InitK0sConfigCmd", func() {
 	It("writes the k0sctl config to the OMS workdir by default", func() {
 		setupWorkdirMocks()
 		mockFileWriter.EXPECT().Exists(defaultPath).Return(false)
-		mockK0s.EXPECT().Download(mock.Anything, "v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
+		mockK0s.EXPECT().Download("v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
 		mockFileWriter.EXPECT().WriteFile(defaultPath, mock.Anything, os.FileMode(0644)).Return(nil)
 
-		Expect(c.InitK0sConfig(context.Background(), mockPM, mockK0s)).To(Succeed())
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
 	})
 
 	It("overwrites an existing k0sctl config after confirmation", func() {
 		setupWorkdirMocks()
 		mockFileWriter.EXPECT().Exists(defaultPath).Return(true)
 		mockPrompter.EXPECT().Bool(overwriteQuestion, false).Return(true)
-		mockK0s.EXPECT().Download(mock.Anything, "v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
+		mockK0s.EXPECT().Download("v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
 		mockFileWriter.EXPECT().WriteFile(defaultPath, mock.Anything, os.FileMode(0644)).Return(nil)
 
-		Expect(c.InitK0sConfig(context.Background(), mockPM, mockK0s)).To(Succeed())
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
 	})
 
 	It("keeps an existing k0sctl config when overwriting is declined", func() {
@@ -103,17 +102,17 @@ var _ = Describe("InitK0sConfigCmd", func() {
 		mockFileWriter.EXPECT().Exists(defaultPath).Return(true)
 		mockPrompter.EXPECT().Bool(overwriteQuestion, false).Return(false)
 
-		Expect(c.InitK0sConfig(context.Background(), mockPM, mockK0s)).To(MatchError(ContainSubstring("already exists")))
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(MatchError(ContainSubstring("already exists")))
 	})
 
 	It("overwrites an existing k0sctl config without asking with --yes", func() {
 		c.Opts.Yes = true
 
 		setupWorkdirMocks()
-		mockK0s.EXPECT().Download(mock.Anything, "v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
+		mockK0s.EXPECT().Download("v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
 		mockFileWriter.EXPECT().WriteFile(defaultPath, mock.Anything, os.FileMode(0644)).Return(nil)
 
-		Expect(c.InitK0sConfig(context.Background(), mockPM, mockK0s)).To(Succeed())
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
 	})
 
 	It("writes an airgap k0sctl config to --output with the bundle from the OMS cache", func() {
@@ -122,11 +121,11 @@ var _ = Describe("InitK0sConfigCmd", func() {
 
 		setupWorkdirMocks()
 		mockFileWriter.EXPECT().Exists("/etc/codesphere/k0sctl-config.yaml").Return(false)
-		mockK0s.EXPECT().Download(mock.Anything, "v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
-		mockK0s.EXPECT().DownloadAirgapBundle(mock.Anything, "v1.30.0+k0s.0", "", cacheOnly).Return("/cache/bundle.tar", nil)
+		mockK0s.EXPECT().Download("v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
+		mockK0s.EXPECT().DownloadAirgapBundle("v1.30.0+k0s.0", "", cacheOnly).Return("/cache/bundle.tar", nil)
 		mockFileWriter.EXPECT().WriteFile("/etc/codesphere/k0sctl-config.yaml", isAirgapConfig, os.FileMode(0644)).Return(nil)
 
-		Expect(c.InitK0sConfig(context.Background(), mockPM, mockK0s)).To(Succeed())
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
 	})
 
 	It("uses the airgap bundle given with --path", func() {
@@ -135,13 +134,13 @@ var _ = Describe("InitK0sConfigCmd", func() {
 
 		setupWorkdirMocks()
 		mockFileWriter.EXPECT().Exists(defaultPath).Return(false)
-		mockK0s.EXPECT().Download(mock.Anything, "v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
+		mockK0s.EXPECT().Download("v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
 		mockFileWriter.EXPECT().Exists("/opt/k0s/bundle.tar").Return(true)
 		mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.MatchedBy(func(data []byte) bool {
 			return strings.Contains(string(data), "src: /opt/k0s/bundle.tar")
 		}), os.FileMode(0644)).Return(nil)
 
-		Expect(c.InitK0sConfig(context.Background(), mockPM, mockK0s)).To(Succeed())
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
 	})
 
 	It("writes relative --path and --ssh-key-path as absolute paths", func() {
@@ -155,14 +154,14 @@ var _ = Describe("InitK0sConfigCmd", func() {
 
 		setupWorkdirMocks()
 		mockFileWriter.EXPECT().Exists(defaultPath).Return(false)
-		mockK0s.EXPECT().Download(mock.Anything, "v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
+		mockK0s.EXPECT().Download("v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
 		mockFileWriter.EXPECT().Exists(bundlePath).Return(true)
 		mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.MatchedBy(func(data []byte) bool {
 			return strings.Contains(string(data), "src: "+bundlePath) &&
 				strings.Contains(string(data), "keyPath: "+filepath.Join(cwd, "keys/id_rsa"))
 		}), os.FileMode(0644)).Return(nil)
 
-		Expect(c.InitK0sConfig(context.Background(), mockPM, mockK0s)).To(Succeed())
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
 	})
 
 	It("keeps an SSH key path starting with ~ for k0sctl to expand", func() {
@@ -170,12 +169,12 @@ var _ = Describe("InitK0sConfigCmd", func() {
 
 		setupWorkdirMocks()
 		mockFileWriter.EXPECT().Exists(defaultPath).Return(false)
-		mockK0s.EXPECT().Download(mock.Anything, "v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
+		mockK0s.EXPECT().Download("v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
 		mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.MatchedBy(func(data []byte) bool {
 			return strings.Contains(string(data), "keyPath: ~/.ssh/id_rsa")
 		}), os.FileMode(0644)).Return(nil)
 
-		Expect(c.InitK0sConfig(context.Background(), mockPM, mockK0s)).To(Succeed())
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
 	})
 
 	It("takes the k0s binary from the package but still uses the airgap bundle", func() {
@@ -186,10 +185,10 @@ var _ = Describe("InitK0sConfigCmd", func() {
 		mockFileWriter.EXPECT().Exists(defaultPath).Return(false)
 		mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false, false).Return(nil)
 		mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-		mockK0s.EXPECT().DownloadAirgapBundle(mock.Anything, "v1.30.0+k0s.0", "", cacheOnly).Return("/cache/bundle.tar", nil)
+		mockK0s.EXPECT().DownloadAirgapBundle("v1.30.0+k0s.0", "", cacheOnly).Return("/cache/bundle.tar", nil)
 		mockFileWriter.EXPECT().WriteFile(mock.Anything, isAirgapConfig, os.FileMode(0644)).Return(nil)
 
-		Expect(c.InitK0sConfig(context.Background(), mockPM, mockK0s)).To(Succeed())
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
 	})
 
 	It("fails when the airgap bundle given with --path does not exist", func() {
@@ -198,18 +197,18 @@ var _ = Describe("InitK0sConfigCmd", func() {
 
 		setupWorkdirMocks()
 		mockFileWriter.EXPECT().Exists(defaultPath).Return(false)
-		mockK0s.EXPECT().Download(mock.Anything, "v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
+		mockK0s.EXPECT().Download("v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
 		mockFileWriter.EXPECT().Exists("/nonexistent/bundle.tar").Return(false)
 
-		Expect(c.InitK0sConfig(context.Background(), mockPM, mockK0s)).To(MatchError(ContainSubstring("does not exist")))
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(MatchError(ContainSubstring("does not exist")))
 	})
 
 	It("does not download a missing k0s binary", func() {
 		setupWorkdirMocks()
 		mockFileWriter.EXPECT().Exists(defaultPath).Return(false)
-		mockK0s.EXPECT().Download(mock.Anything, "v1.30.0+k0s.0", cacheOnly).Return("", errors.New("k0s v1.30.0+k0s.0 not found in OMS cache"))
+		mockK0s.EXPECT().Download("v1.30.0+k0s.0", cacheOnly).Return("", errors.New("k0s v1.30.0+k0s.0 not found in OMS cache"))
 
-		Expect(c.InitK0sConfig(context.Background(), mockPM, mockK0s)).To(MatchError(ContainSubstring("not found in OMS cache")))
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(MatchError(ContainSubstring("not found in OMS cache")))
 	})
 
 	It("does not download a missing airgap bundle", func() {
@@ -217,16 +216,16 @@ var _ = Describe("InitK0sConfigCmd", func() {
 
 		setupWorkdirMocks()
 		mockFileWriter.EXPECT().Exists(defaultPath).Return(false)
-		mockK0s.EXPECT().Download(mock.Anything, "v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
-		mockK0s.EXPECT().DownloadAirgapBundle(mock.Anything, "v1.30.0+k0s.0", "", cacheOnly).Return("", errors.New("k0s airgap bundle v1.30.0+k0s.0 not found"))
+		mockK0s.EXPECT().Download("v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
+		mockK0s.EXPECT().DownloadAirgapBundle("v1.30.0+k0s.0", "", cacheOnly).Return("", errors.New("k0s airgap bundle v1.30.0+k0s.0 not found"))
 
-		Expect(c.InitK0sConfig(context.Background(), mockPM, mockK0s)).To(MatchError(ContainSubstring("airgap bundle v1.30.0+k0s.0 not found")))
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(MatchError(ContainSubstring("airgap bundle v1.30.0+k0s.0 not found")))
 	})
 
 	It("fails when --path is given without --airgapped", func() {
 		c.Opts.AirgapBundlePath = "/opt/k0s/bundle.tar"
 
-		Expect(c.InitK0sConfig(context.Background(), mockPM, mockK0s)).To(MatchError("--path requires --airgapped"))
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(MatchError("--path requires --airgapped"))
 	})
 
 	It("fails when --no-download is combined with --airgapped", func() {
@@ -235,7 +234,7 @@ var _ = Describe("InitK0sConfigCmd", func() {
 
 		setupWorkdirMocks()
 
-		Expect(c.InitK0sConfig(context.Background(), mockPM, mockK0s)).To(MatchError(ContainSubstring("--no-download cannot be combined with --airgapped")))
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(MatchError(ContainSubstring("--no-download cannot be combined with --airgapped")))
 	})
 
 	It("fails without install-config", func() {
@@ -243,6 +242,6 @@ var _ = Describe("InitK0sConfigCmd", func() {
 
 		setupWorkdirMocks()
 
-		Expect(c.InitK0sConfig(context.Background(), mockPM, mockK0s)).To(MatchError(ContainSubstring("--install-config is required")))
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(MatchError(ContainSubstring("--install-config is required")))
 	})
 })

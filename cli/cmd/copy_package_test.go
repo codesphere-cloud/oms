@@ -150,7 +150,7 @@ var _ = Describe("CopyPackageCmd", func() {
 		})
 
 		It("downloads and verifies the upstream package", func() {
-			mockPortal.EXPECT().GetBuild(mock.Anything, portal.CodesphereProduct, build.Version, "").Return(build, nil)
+			mockPortal.EXPECT().GetBuild(portal.CodesphereProduct, build.Version, "").Return(build, nil)
 
 			destination := filepath.Join(workdir, build.BuildPackageFilename(defaultInstallerPackageArtifact))
 			fakeFile := os.NewFile(uintptr(0), destination)
@@ -165,7 +165,7 @@ var _ = Describe("CopyPackageCmd", func() {
 		})
 
 		It("returns an error when the upstream package cannot be found", func() {
-			mockPortal.EXPECT().GetBuild(mock.Anything, portal.CodesphereProduct, build.Version, "").Return(portal.Build{}, fmt.Errorf("build not found"))
+			mockPortal.EXPECT().GetBuild(portal.CodesphereProduct, build.Version, "").Return(portal.Build{}, fmt.Errorf("build not found"))
 
 			_, err := command.resolvePackage(context.Background(), mockPortal)
 			Expect(err).To(MatchError(ContainSubstring("failed to get upstream package")))

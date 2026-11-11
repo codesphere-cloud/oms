@@ -4,7 +4,6 @@
 package apikey_test
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -36,15 +35,15 @@ var _ = Describe("UpdateAPIKey", func() {
 			c.Opts.APIKeyID = apiKeyID
 			c.Opts.ValidFor = validFor
 
-			mockPortal.EXPECT().UpdateAPIKey(mock.Anything, apiKeyID, mock.Anything).
-				RunAndReturn(func(_ context.Context, id string, gotExpiresAt time.Time) error {
+			mockPortal.EXPECT().UpdateAPIKey(apiKeyID, mock.Anything).
+				RunAndReturn(func(id string, gotExpiresAt time.Time) error {
 					Expect(id).To(Equal(apiKeyID))
 					Expect(gotExpiresAt).To(BeTemporally("~", expectedExpiresAt, 5*time.Second))
 
 					return nil
 				})
 
-			err := c.UpdateAPIKey(context.Background(), mockPortal)
+			err := c.UpdateAPIKey(mockPortal)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -56,15 +55,15 @@ var _ = Describe("UpdateAPIKey", func() {
 			c.Opts.APIKeyID = apiKeyID
 			c.Opts.ValidFor = validFor
 
-			mockPortal.EXPECT().UpdateAPIKey(mock.Anything, apiKeyID, mock.Anything).
-				RunAndReturn(func(_ context.Context, id string, gotExpiresAt time.Time) error {
+			mockPortal.EXPECT().UpdateAPIKey(apiKeyID, mock.Anything).
+				RunAndReturn(func(id string, gotExpiresAt time.Time) error {
 					Expect(id).To(Equal(apiKeyID))
 					Expect(gotExpiresAt).To(BeTemporally("~", expectedExpiresAt, 5*time.Second))
 
 					return fmt.Errorf("invalid api key id format")
 				})
 
-			err := c.UpdateAPIKey(context.Background(), mockPortal)
+			err := c.UpdateAPIKey(mockPortal)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid api key id format"))
 		})
@@ -73,7 +72,7 @@ var _ = Describe("UpdateAPIKey", func() {
 			c.Opts.APIKeyID = "valid id"
 			c.Opts.ValidFor = "invalid-date"
 
-			err := c.UpdateAPIKey(context.Background(), mockPortal)
+			err := c.UpdateAPIKey(mockPortal)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to parse valid-for duration"))

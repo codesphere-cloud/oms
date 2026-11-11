@@ -196,7 +196,7 @@ var _ = Describe("PortalClient", func() {
 			})
 
 			It("executes a request against the right URL", func() {
-				_, _, err := client.GetBody(context.Background(), "/api/fake")
+				_, _, err := client.GetBody("/api/fake")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(getUrl.String()).To(Equal("fake-portal.com/api/fake"))
 			})
@@ -216,7 +216,7 @@ var _ = Describe("PortalClient", func() {
 			})
 
 			It("executes a request against the right URL", func() {
-				_, _, err := client.GetBody(context.Background(), "api/fake")
+				_, _, err := client.GetBody("api/fake")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(getUrl.String()).To(Equal("fake-portal.com/api/fake"))
 			})
@@ -229,7 +229,7 @@ var _ = Describe("PortalClient", func() {
 			})
 
 			It("returns an error", func() {
-				_, _, err := client.GetBody(context.Background(), "/api/fake")
+				_, _, err := client.GetBody("/api/fake")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("fake-error"))
 			})
@@ -265,14 +265,14 @@ var _ = Describe("PortalClient", func() {
 			})
 
 			It("returns the builds", func() {
-				packages, err := client.ListBuilds(context.Background(), portal.CodesphereProduct, portal.SortSemver)
+				packages, err := client.ListBuilds(portal.CodesphereProduct, portal.SortSemver)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(packages.Builds).To(HaveLen(2))
 				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere?sort=semver"))
 			})
 
 			It("appends sort query parameter when provided", func() {
-				packages, err := client.ListBuilds(context.Background(), portal.CodesphereProduct, portal.SortDate)
+				packages, err := client.ListBuilds(portal.CodesphereProduct, portal.SortDate)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(packages.Builds).To(HaveLen(2))
 				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere?sort=date"))
@@ -452,7 +452,7 @@ var _ = Describe("PortalClient", func() {
 
 			It("returns the latest build", func() {
 				lastBuild, _ := time.Parse("2006-01-02", "2025-05-01")
-				build, err := client.GetBuild(context.Background(), portal.OmsProduct, "", "")
+				build, err := client.GetBuild(portal.OmsProduct, "", "")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(build.Hash).To(Equal("lastBuild"))
 				Expect(build.Date).To(Equal(lastBuild))
@@ -461,7 +461,7 @@ var _ = Describe("PortalClient", func() {
 
 			It("returns the build matching version", func() {
 				lastBuild, _ := time.Parse("2006-01-02", "2025-05-01")
-				build, err := client.GetBuild(context.Background(), portal.OmsProduct, "1.42.1", "")
+				build, err := client.GetBuild(portal.OmsProduct, "1.42.1", "")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(build.Hash).To(Equal("lastBuild"))
 				Expect(build.Date).To(Equal(lastBuild))
@@ -469,7 +469,7 @@ var _ = Describe("PortalClient", func() {
 			})
 
 			DescribeTable("rejects hashes that do not contain the stored hash as a prefix", func(hash string) {
-				_, err := client.GetBuild(context.Background(), portal.OmsProduct, "1.42.1", hash)
+				_, err := client.GetBuild(portal.OmsProduct, "1.42.1", hash)
 				Expect(err).To(MatchError(ContainSubstring("not found")))
 			},
 				Entry("prefix", "last"),
@@ -477,14 +477,14 @@ var _ = Describe("PortalClient", func() {
 			)
 
 			It("accepts a full hash when the portal stores an abbreviated hash", func() {
-				build, err := client.GetBuild(context.Background(), portal.OmsProduct, "1.42.1", "lastBuildExtra")
+				build, err := client.GetBuild(portal.OmsProduct, "1.42.1", "lastBuildExtra")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(build.Hash).To(Equal("lastBuild"))
 			})
 
 			It("returns the build matching version and hash", func() {
 				lastBuild, _ := time.Parse("2006-01-02", "2025-05-01")
-				build, err := client.GetBuild(context.Background(), portal.OmsProduct, "1.42.1", "lastBuild")
+				build, err := client.GetBuild(portal.OmsProduct, "1.42.1", "lastBuild")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(build.Hash).To(Equal("lastBuild"))
 				Expect(build.Date).To(Equal(lastBuild))
@@ -504,7 +504,7 @@ var _ = Describe("PortalClient", func() {
 			})
 
 			It("returns an error", func() {
-				_, err := client.GetBuild(context.Background(), portal.OmsProduct, "", "")
+				_, err := client.GetBuild(portal.OmsProduct, "", "")
 				Expect(err).To(MatchError("no builds returned"))
 			})
 		})
@@ -565,7 +565,7 @@ var _ = Describe("PortalClient", func() {
 			})
 
 			It("returns the new API key", func() {
-				key, err := client.RegisterAPIKey(context.Background(), owner, organization, role, expiresAt)
+				key, err := client.RegisterAPIKey(owner, organization, role, expiresAt)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(key.KeyID).To(Equal("key-123"))
 				Expect(key.ApiKey).To(Equal("secret-key-data"))
@@ -573,13 +573,13 @@ var _ = Describe("PortalClient", func() {
 
 			It("preserves a two-day expiration in the registration request", func() {
 				expiresAt = time.Date(2026, 10, 18, 15, 12, 46, 273866000, time.UTC).Add(48 * time.Hour)
-				_, err := client.RegisterAPIKey(context.Background(), owner, organization, role, expiresAt)
+				_, err := client.RegisterAPIKey(owner, organization, role, expiresAt)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("passes zero expiration for the portal's default validity", func() {
 				expiresAt = time.Time{}
-				_, err := client.RegisterAPIKey(context.Background(), owner, organization, role, expiresAt)
+				_, err := client.RegisterAPIKey(owner, organization, role, expiresAt)
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -598,7 +598,7 @@ var _ = Describe("PortalClient", func() {
 			})
 
 			It("completes without error", func() {
-				err := client.RevokeAPIKey(context.Background(), "key-to-revoke")
+				err := client.RevokeAPIKey("key-to-revoke")
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -618,7 +618,7 @@ var _ = Describe("PortalClient", func() {
 
 			It("completes without error", func() {
 				expiresAt, _ := time.Parse("2006-01-02", "2027-01-01")
-				err := client.UpdateAPIKey(context.Background(), "key-to-update", expiresAt)
+				err := client.UpdateAPIKey("key-to-update", expiresAt)
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -644,7 +644,7 @@ var _ = Describe("PortalClient", func() {
 			})
 
 			It("returns the list of API keys", func() {
-				keys, err := client.ListAPIKeys(context.Background())
+				keys, err := client.ListAPIKeys()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(keys).To(HaveLen(2))
 				Expect(keys[0].KeyID).To(Equal("key-1"))
@@ -667,7 +667,7 @@ var _ = Describe("PortalClient", func() {
 			})
 
 			It("returns healthy status", func() {
-				err := client.GetHealth(context.Background())
+				err := client.GetHealth()
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -685,7 +685,7 @@ var _ = Describe("PortalClient", func() {
 			})
 
 			It("returns unhealthy status", func() {
-				err := client.GetHealth(context.Background())
+				err := client.GetHealth()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("healthcheck returned non-OK status"))
 			})
@@ -702,7 +702,7 @@ var _ = Describe("PortalClient", func() {
 			})
 
 			It("returns a healthy status without headers", func() {
-				err := client.GetHealth(context.Background())
+				err := client.GetHealth()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("unexpected service name in healthcheck response"))
 			})

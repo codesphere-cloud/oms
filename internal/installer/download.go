@@ -41,8 +41,8 @@ type githubRelease struct {
 
 // getGitHubRelease fetches the GitHub release at url and decodes it. subject names
 // the release in error messages.
-func getGitHubRelease(ctx context.Context, h portal.Http, url, subject string) (*githubRelease, error) {
-	responseBody, err := h.Get(ctx, url)
+func getGitHubRelease(h portal.Http, url, subject string) (*githubRelease, error) {
+	responseBody, err := h.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch %s: %w", subject, err)
 	}
@@ -94,7 +94,7 @@ func reuseCachedBinary(ctx context.Context, fw util.FileIO, cachePath, requested
 // downloadToPath downloads to a uniquely named partial file next to path and moves it
 // into place with perm once complete, so neither an interrupted nor a concurrent
 // download leaves a broken file at path.
-func downloadToPath(ctx context.Context, fw util.FileIO, http portal.Http, path, downloadURL string, quiet bool, perm os.FileMode) (err error) {
+func downloadToPath(fw util.FileIO, http portal.Http, path, downloadURL string, quiet bool, perm os.FileMode) (err error) {
 	partialPath, err := fw.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.partial")
 	if err != nil {
 		return fmt.Errorf("failed to create partial download for %s: %w", path, err)
@@ -111,7 +111,7 @@ func downloadToPath(ctx context.Context, fw util.FileIO, http portal.Http, path,
 		return fmt.Errorf("failed to open %s: %w", partialPath, err)
 	}
 
-	if err := http.Download(ctx, downloadURL, dstFile, quiet); err != nil {
+	if err := http.Download(downloadURL, dstFile, quiet); err != nil {
 		util.CloseFileIgnoreError(dstFile)
 
 		return fmt.Errorf("failed to download %s: %w", downloadURL, err)

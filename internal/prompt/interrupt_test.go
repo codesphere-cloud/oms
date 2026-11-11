@@ -52,19 +52,14 @@ var _ = Describe("ContextReader", func() {
 })
 
 var _ = Describe("interruptReader", func() {
-	var (
-		notifier *MockSignalNotifier
-		exiter   *MockExiter
-	)
+	var exiter *MockExiter
 
 	BeforeEach(func() {
-		notifier = NewMockSignalNotifier(GinkgoT())
 		exiter = NewMockExiter(GinkgoT())
 	})
 
 	It("returns the input when there is no interrupt", func() {
-		notifier.EXPECT().NotifyContext(context.Background()).Return(context.WithCancel(context.Background())).Once()
-		reader := &interruptReader{ctx: context.Background(), reader: strings.NewReader("yes\n"), notifier: notifier, exiter: exiter}
+		reader := &interruptReader{ctx: context.Background(), reader: strings.NewReader("yes\n"), exiter: exiter}
 
 		line, err := bufio.NewReader(reader).ReadString('\n')
 
@@ -73,11 +68,12 @@ var _ = Describe("interruptReader", func() {
 	})
 
 	It("ends the process with exit code 130 when interrupted while waiting for input", func() {
-		interrupted, cancel := context.WithCancel(context.Background())
-		cancel()
-		notifier.EXPECT().NotifyContext(context.Background()).Return(interrupted, cancel).Once()
+		commandCtx, interruptCommand := context.WithCancel(context.Background())
+
 		exiter.EXPECT().Exit(130).Once()
-		reader := &interruptReader{ctx: context.Background(), reader: blockingReader(), notifier: notifier, exiter: exiter}
+		reader := &interruptReader{ctx: commandCtx, reader: blockingReader(), exiter: exiter}
+
+		go interruptCommand()
 
 		_, err := reader.Read(make([]byte, 8))
 
@@ -87,11 +83,8 @@ var _ = Describe("interruptReader", func() {
 	It("ends the process when the command was interrupted before the prompt started", func() {
 		commandCtx, interruptCommand := context.WithCancel(context.Background())
 		interruptCommand()
-		notifier.EXPECT().NotifyContext(commandCtx).RunAndReturn(func(parent context.Context) (context.Context, context.CancelFunc) {
-			return context.WithCancel(parent)
-		}).Once()
 		exiter.EXPECT().Exit(130).Once()
-		reader := &interruptReader{ctx: commandCtx, reader: blockingReader(), notifier: notifier, exiter: exiter}
+		reader := &interruptReader{ctx: commandCtx, reader: blockingReader(), exiter: exiter}
 
 		_, err := reader.Read(make([]byte, 8))
 
@@ -113,14 +106,15 @@ var _ = Describe("interruptReader", func() {
 	})
 
 	It("ends the process when a prompt is interrupted", func() {
-		interrupted, cancel := context.WithCancel(context.Background())
-		cancel()
-		notifier.EXPECT().NotifyContext(context.Background()).Return(interrupted, cancel).Once()
+		commandCtx, interruptCommand := context.WithCancel(context.Background())
+
 		exiter.EXPECT().Exit(130).Once()
 		p := &StdinPrompter{
-			reader:      bufio.NewReader(&interruptReader{ctx: context.Background(), reader: blockingReader(), notifier: notifier, exiter: exiter}),
+			reader:      bufio.NewReader(&interruptReader{ctx: commandCtx, reader: blockingReader(), exiter: exiter}),
 			interactive: true,
 		}
+
+		go interruptCommand()
 
 		Expect(p.Bool("Continue?", false)).To(BeFalse())
 	})

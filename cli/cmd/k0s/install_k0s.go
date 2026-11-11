@@ -64,14 +64,15 @@ func (c *InstallK0sCmd) RunE(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("--install-config or --config is required unless --single is set")
 	}
 
-	hw := portal.NewHttpWrapper()
+	ctx := cmd.Context()
+	hw := portal.NewHTTPWrapper(ctx)
 	env := c.Env
 	pm := installer.NewPackage(env.GetOmsWorkdir(), c.Opts.Package)
-	k0s := installer.NewK0s(hw, env, c.FileWriter)
-	k0sctl := installer.NewK0sctl(hw, env, c.FileWriter)
-	c.Prompter = prompt.NewPrompter(cmd.Context(), true)
+	k0s := installer.NewK0s(ctx, hw, env, c.FileWriter)
+	k0sctl := installer.NewK0sctl(ctx, hw, env, c.FileWriter)
+	c.Prompter = prompt.NewPrompter(ctx, true)
 
-	return c.InstallK0s(cmd.Context(), pm, k0s, k0sctl)
+	return c.InstallK0s(ctx, pm, k0s, k0sctl)
 }
 
 func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
@@ -149,22 +150,22 @@ func (c *InstallK0sCmd) InstallK0s(ctx context.Context, pm installer.PackageMana
 		return c.installSingle(ctx, pm, k0s)
 	}
 
-	k0sctlConfigPath, err := c.getK0sctlConfigPath(ctx, pm, k0s)
+	k0sctlConfigPath, err := c.getK0sctlConfigPath(pm, k0s)
 	if err != nil {
 		return err
 	}
 
-	k0sctlPath, err := c.downloadK0sctl(ctx, k0sctl)
+	k0sctlPath, err := c.downloadK0sctl(k0sctl)
 	if err != nil {
 		return err
 	}
 
-	if err := c.deployK0sCluster(ctx, k0sctl, k0sctlPath, k0sctlConfigPath); err != nil {
+	if err := c.deployK0sCluster(k0sctl, k0sctlPath, k0sctlConfigPath); err != nil {
 		return fmt.Errorf("failed to deploy k0s cluster: %w", err)
 	}
 
 	if c.Opts.Vault != "" {
-		if err := c.saveKubeconfigToVault(ctx, k0sctl, k0sctlConfigPath, k0sctlPath); err != nil {
+		if err := c.saveKubeconfigToVault(k0sctl, k0sctlConfigPath, k0sctlPath); err != nil {
 			return fmt.Errorf("failed to save kubeconfig to vault: %w", err)
 		}
 	}
@@ -174,7 +175,7 @@ func (c *InstallK0sCmd) InstallK0s(ctx context.Context, pm installer.PackageMana
 
 // getK0sctlConfigPath returns the k0sctl config given with --config, or generates one
 // into the OMS workdir.
-func (c *InstallK0sCmd) getK0sctlConfigPath(ctx context.Context, pm installer.PackageManager, k0s installer.K0sManager) (string, error) {
+func (c *InstallK0sCmd) getK0sctlConfigPath(pm installer.PackageManager, k0s installer.K0sManager) (string, error) {
 	if c.Opts.K0sctlConfig != "" {
 		if !c.FileWriter.Exists(c.Opts.K0sctlConfig) {
 			return "", fmt.Errorf("k0sctl config '%s' does not exist", c.Opts.K0sctlConfig)
@@ -192,7 +193,7 @@ func (c *InstallK0sCmd) getK0sctlConfigPath(ctx context.Context, pm installer.Pa
 		Prompter:   c.Prompter,
 	}
 
-	path, err := generator.Generate(ctx, pm, k0s, "")
+	path, err := generator.Generate(pm, k0s, "")
 	if err != nil {
 		return "", fmt.Errorf("failed to generate k0sctl config: %w", err)
 	}
@@ -200,10 +201,10 @@ func (c *InstallK0sCmd) getK0sctlConfigPath(ctx context.Context, pm installer.Pa
 	return path, nil
 }
 
-func (c *InstallK0sCmd) downloadK0sctl(ctx context.Context, k0sctl installer.K0sctlManager) (string, error) {
+func (c *InstallK0sCmd) downloadK0sctl(k0sctl installer.K0sctlManager) (string, error) {
 	log.Println("Downloading k0sctl...")
 
-	k0sctlPath, err := k0sctl.Download(ctx, c.Opts.K0sctlVersion, installer.DownloadOptions{Force: c.Opts.Force})
+	k0sctlPath, err := k0sctl.Download(c.Opts.K0sctlVersion, installer.DownloadOptions{Force: c.Opts.Force})
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0sctl: %w", err)
 	}
@@ -211,10 +212,10 @@ func (c *InstallK0sCmd) downloadK0sctl(ctx context.Context, k0sctl installer.K0s
 	return k0sctlPath, nil
 }
 
-func (c *InstallK0sCmd) deployK0sCluster(ctx context.Context, k0sctl installer.K0sctlManager, k0sctlPath string, k0sctlConfigPath string) error {
+func (c *InstallK0sCmd) deployK0sCluster(k0sctl installer.K0sctlManager, k0sctlPath string, k0sctlConfigPath string) error {
 	log.Println("Applying k0sctl configuration to deploy k0s cluster...")
 
-	if err := k0sctl.Apply(ctx, k0sctlConfigPath, k0sctlPath, c.Opts.Force); err != nil {
+	if err := k0sctl.Apply(k0sctlConfigPath, k0sctlPath, c.Opts.Force); err != nil {
 		return fmt.Errorf("failed to apply k0sctl config: %w", err)
 	}
 
@@ -224,10 +225,10 @@ func (c *InstallK0sCmd) deployK0sCluster(ctx context.Context, k0sctl installer.K
 	return nil
 }
 
-func (c *InstallK0sCmd) saveKubeconfigToVault(ctx context.Context, k0sctl installer.K0sctlManager, k0sctlConfigPath, k0sctlPath string) error {
+func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0sctlConfigPath, k0sctlPath string) error {
 	log.Println("Retrieving kubeconfig from k0sctl for vault...")
 
-	kubeconfigContent, err := k0sctl.GetKubeconfig(ctx, k0sctlConfigPath, k0sctlPath)
+	kubeconfigContent, err := k0sctl.GetKubeconfig(k0sctlConfigPath, k0sctlPath)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve kubeconfig from k0sctl: %w", err)
 	}
@@ -310,12 +311,12 @@ func (c *InstallK0sCmd) installSingle(ctx context.Context, pm installer.PackageM
 		return fmt.Errorf("--single requires root privileges")
 	}
 
-	version, err := installer.ResolveK0sVersion(ctx, k0s, c.Opts.Version)
+	version, err := installer.ResolveK0sVersion(k0s, c.Opts.Version)
 	if err != nil {
 		return fmt.Errorf("failed to resolve k0s version: %w", err)
 	}
 
-	path, err := c.getK0sBinaryPath(ctx, pm, k0s, version)
+	path, err := c.getK0sBinaryPath(pm, k0s, version)
 	if err != nil {
 		return err
 	}
@@ -460,7 +461,7 @@ func waitForK0sReady(ctx context.Context, interval time.Duration, readiness inst
 	}
 }
 
-func (c *InstallK0sCmd) getK0sBinaryPath(ctx context.Context, pm installer.PackageManager, k0s installer.K0sManager, k0sVersion string) (string, error) {
+func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s installer.K0sManager, k0sVersion string) (string, error) {
 	if c.Opts.NoDownload {
 		return "", nil
 	}
@@ -473,7 +474,7 @@ func (c *InstallK0sCmd) getK0sBinaryPath(ctx context.Context, pm installer.Packa
 		return pm.GetDependencyPath("kubernetes/files/k0s"), nil
 	}
 
-	k0sBinaryPath, err := k0s.Download(ctx, k0sVersion, installer.DownloadOptions{Force: c.Opts.Force})
+	k0sBinaryPath, err := k0s.Download(k0sVersion, installer.DownloadOptions{Force: c.Opts.Force})
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0s: %w", err)
 	}

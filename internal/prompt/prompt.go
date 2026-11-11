@@ -44,7 +44,7 @@ type StdinPrompter struct {
 // question asked after ctx was already cancelled, so an earlier interrupt is not lost.
 func NewPrompter(ctx context.Context, interactive bool) *StdinPrompter {
 	return &StdinPrompter{
-		reader:      bufio.NewReader(&interruptReader{ctx: ctx, reader: os.Stdin, notifier: OSSignalNotifier{}, exiter: OSExiter{}}),
+		reader:      bufio.NewReader(&interruptReader{ctx: ctx, reader: os.Stdin, exiter: OSExiter{}}),
 		interactive: interactive,
 		ctx:         ctx,
 		exiter:      OSExiter{},
@@ -59,7 +59,7 @@ func (p *StdinPrompter) exitIfInterrupted() {
 	}
 
 	log.Println("Interrupted")
-	p.exiter.Exit(interruptExitCode)
+	p.exiter.Exit(InterruptExitCode)
 }
 
 // String asks for a line of text.

@@ -10,10 +10,9 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-)
 
-// InterruptExitCode is the conventional exit code of a process ended by SIGINT.
-const InterruptExitCode = 130
+	"github.com/codesphere-cloud/oms/internal/prompt"
+)
 
 // SignalSource delivers the process signals that cancel a command.
 //
@@ -72,7 +71,7 @@ func NewSignalContext(parent context.Context, source SignalSource, out io.Writer
 }
 
 // ExitCode returns the process exit code for the result of a command run with ctx: 0 on success,
-// InterruptExitCode when the command failed after ctx was cancelled by a signal, and 1 otherwise.
+// prompt.InterruptExitCode when the command failed after ctx was cancelled by a signal, and 1 otherwise.
 // Call it before releasing ctx, since stop cancels it as well.
 func ExitCode(ctx context.Context, err error) int {
 	if err == nil {
@@ -80,7 +79,7 @@ func ExitCode(ctx context.Context, err error) int {
 	}
 
 	if ctx.Err() != nil {
-		return InterruptExitCode
+		return prompt.InterruptExitCode
 	}
 
 	return 1

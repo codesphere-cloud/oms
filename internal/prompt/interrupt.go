@@ -9,33 +9,16 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/signal"
-	"syscall"
 )
 
-// interruptExitCode is the conventional exit code of a process ended by SIGINT.
-const interruptExitCode = 130
-
-// SignalNotifier returns a context that is cancelled when the process receives an interrupt.
-//
-//mockery:generate: true
-type SignalNotifier interface {
-	NotifyContext(parent context.Context) (context.Context, context.CancelFunc)
-}
+// InterruptExitCode is the conventional exit code of a process ended by SIGINT.
+const InterruptExitCode = 130
 
 // Exiter ends the process.
 //
 //mockery:generate: true
 type Exiter interface {
 	Exit(code int)
-}
-
-// OSSignalNotifier notifies on SIGINT and SIGTERM.
-type OSSignalNotifier struct{}
-
-// NotifyContext returns a context cancelled on SIGINT or SIGTERM.
-func (OSSignalNotifier) NotifyContext(parent context.Context) (context.Context, context.CancelFunc) {
-	return signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 }
 
 // OSExiter ends the process with os.Exit.
@@ -86,30 +69,26 @@ func (c *contextReader) Read(p []byte) (int, error) {
 	}
 }
 
-// interruptReader ends the process when it is interrupted while waiting for input. Prompts
-// cannot return errors, and the root signal handler only cancels the command context, so
-// without this an interrupt at a prompt would be swallowed until the next one. The wait is
-// derived from the command context, so an interrupt that arrived before the prompt (for
-// example while a package was being extracted) ends the process instead of being lost.
+// interruptReader ends the process once the command context is cancelled while it waits for
+// input. Prompts cannot return errors, and the root signal handler only cancels the command
+// context, so without this an interrupt at a prompt would be swallowed until the next one. An
+// interrupt that arrived before the prompt (for example while a package was being extracted)
+// ends the process as well instead of being lost.
 type interruptReader struct {
-	ctx      context.Context
-	reader   io.Reader
-	notifier SignalNotifier
-	exiter   Exiter
+	ctx    context.Context
+	reader io.Reader
+	exiter Exiter
 }
 
 func (i *interruptReader) Read(p []byte) (int, error) {
-	ctx, stop := i.notifier.NotifyContext(i.ctx)
-	defer stop()
-
 	// The concrete reader passes io.EOF through unwrapped, as io.Reader callers compare it directly.
-	n, err := (&contextReader{ctx: ctx, reader: i.reader}).Read(p)
-	if ctx.Err() == nil {
+	n, err := (&contextReader{ctx: i.ctx, reader: i.reader}).Read(p)
+	if i.ctx.Err() == nil {
 		return n, err
 	}
 
 	log.Println("Interrupted")
-	i.exiter.Exit(interruptExitCode)
+	i.exiter.Exit(InterruptExitCode)
 
 	return 0, io.EOF
 }

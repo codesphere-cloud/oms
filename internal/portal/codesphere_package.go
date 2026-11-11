@@ -19,7 +19,7 @@ func EnsureCodespherePackage(ctx context.Context, p Portal, workdir, version, ha
 		return "", fmt.Errorf("codesphere package version is required")
 	}
 
-	build, err := p.GetBuild(ctx, CodesphereProduct, version, hash)
+	build, err := p.GetBuild(CodesphereProduct, version, hash)
 	if err != nil {
 		return "", fmt.Errorf("failed to get codesphere package: %w", err)
 	}

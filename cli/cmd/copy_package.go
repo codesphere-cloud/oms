@@ -49,7 +49,7 @@ type CopyPackageOpts struct {
 
 // RunE resolves the installer package and executes its artifact transfers.
 func (c *CopyPackageCmd) RunE(cmd *cobra.Command, _ []string) error {
-	packagePath, err := c.resolvePackage(cmd.Context(), portal.NewPortalClient())
+	packagePath, err := c.resolvePackage(cmd.Context(), portal.NewPortalClient(cmd.Context()))
 	if err != nil {
 		return err
 	}
@@ -169,7 +169,7 @@ func (c *CopyPackageCmd) resolvePackage(ctx context.Context, portalClient portal
 		return "", fmt.Errorf("failed to create OMS workdir: %w", err)
 	}
 
-	build, err := portalClient.GetBuild(ctx, portal.CodesphereProduct, c.Opts.Version, c.Opts.Hash)
+	build, err := portalClient.GetBuild(portal.CodesphereProduct, c.Opts.Version, c.Opts.Hash)
 	if err != nil {
 		return "", fmt.Errorf("failed to get upstream package: %w", err)
 	}

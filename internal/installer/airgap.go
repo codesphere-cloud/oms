@@ -4,7 +4,6 @@
 package installer
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -26,7 +25,7 @@ const (
 // unless a file already exists there, and returns its path. An empty path stores the
 // bundle in the OMS cache dir under a fixed name, so a cached bundle is found without
 // contacting the release API.
-func (k *K0s) DownloadAirgapBundle(ctx context.Context, version, path string, opts DownloadOptions) (string, error) {
+func (k *K0s) DownloadAirgapBundle(version, path string, opts DownloadOptions) (string, error) {
 	if path == "" {
 		cacheDir, err := ensureCacheDir(k.FileWriter, k.Env)
 		if err != nil {
@@ -48,7 +47,7 @@ func (k *K0s) DownloadAirgapBundle(ctx context.Context, version, path string, op
 		return "", fmt.Errorf("k0s airgap bundle %s not found at '%s', download it first with 'oms download k0s --version %s --airgapped'", version, path, version)
 	}
 
-	assetName, err := k.resolveAirgapBundleAssetName(ctx, version)
+	assetName, err := k.resolveAirgapBundleAssetName(version)
 	if err != nil {
 		return "", err
 	}
@@ -56,7 +55,7 @@ func (k *K0s) DownloadAirgapBundle(ctx context.Context, version, path string, op
 	downloadURL := fmt.Sprintf("%s/%s/%s", k0sReleaseURL, version, assetName)
 	io.Verbosef(!opts.Quiet, "Downloading k0s airgap bundle from %s", downloadURL)
 
-	if err := downloadToPath(ctx, k.FileWriter, k.Http, path, downloadURL, opts.Quiet, 0644); err != nil {
+	if err := downloadToPath(k.FileWriter, k.Http, path, downloadURL, opts.Quiet, 0644); err != nil {
 		return "", err
 	}
 
@@ -70,8 +69,8 @@ func (k *K0s) DownloadAirgapBundle(ctx context.Context, version, path string, op
 // "k0s-airgap-bundle-<version>-<arch>" to
 // "k0s-airgap-bundle-<version>-<os>-<arch>.tar", so the name is resolved from the
 // release metadata instead of being constructed.
-func (k *K0s) resolveAirgapBundleAssetName(ctx context.Context, version string) (string, error) {
-	release, err := getGitHubRelease(ctx, k.Http, k0sReleaseAPIURL+"/"+version, "k0s release "+version)
+func (k *K0s) resolveAirgapBundleAssetName(version string) (string, error) {
+	release, err := getGitHubRelease(k.Http, k0sReleaseAPIURL+"/"+version, "k0s release "+version)
 	if err != nil {
 		return "", err
 	}
