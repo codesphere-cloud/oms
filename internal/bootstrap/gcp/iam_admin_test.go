@@ -157,6 +157,32 @@ var _ = Describe("IAM & Admin", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to update project"))
 			})
+
+			It("keeps the environment unchanged when UpdateProject fails", func() {
+				gc.EXPECT().GetProjectByName(csEnv.FolderID, "test-project").Return(&resourcemanagerpb.Project{ProjectId: "existing-id", Name: "projects/123"}, nil)
+				gc.EXPECT().UpdateProject("existing-id", mock.Anything).Return(fmt.Errorf("transient error"))
+
+				err := bs.EnsureProject()
+				Expect(err).To(HaveOccurred())
+				Expect(bs.Env.ProjectName).To(Equal("test-project"))
+				Expect(bs.Env.ProjectID).To(Equal("pid"))
+			})
+		})
+
+		Describe("Retry after failed update", func() {
+			It("looks up the existing project by display name again instead of creating a new one", func() {
+				gc.EXPECT().GetProjectByName(csEnv.FolderID, "test-project").Return(&resourcemanagerpb.Project{ProjectId: "existing-id", Name: "projects/123"}, nil).Times(2)
+				gc.EXPECT().UpdateProject("existing-id", mock.Anything).Return(fmt.Errorf("transient error")).Once()
+				gc.EXPECT().UpdateProject("existing-id", mock.Anything).Return(nil).Once()
+
+				err := bs.EnsureProject()
+				Expect(err).To(HaveOccurred())
+
+				err = bs.EnsureProject()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(bs.Env.ProjectID).To(Equal("existing-id"))
+				Expect(bs.Env.ProjectName).To(Equal("projects/123"))
+			})
 		})
 	})
 
