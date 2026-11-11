@@ -278,7 +278,8 @@ const k0sControllerUnitPath = "/etc/systemd/system/k0scontroller.service"
 
 // K0sControllerUnitInstalled reports whether `k0s install controller` already wrote the systemd unit
 // at unitPath. k0s creates the unit empty and fills it shortly after, so an interrupted install can
-// leave a 0-byte unit behind. Such a unit is removed and reported as missing so the install is retried.
+// leave an empty or incomplete unit behind. A unit without an ExecStart= line is removed and reported
+// as missing so the install is retried.
 func (c *InstallK0sCmd) K0sControllerUnitInstalled(unitPath string) (bool, error) {
 	content, err := c.FileWriter.ReadFile(unitPath)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -289,7 +290,7 @@ func (c *InstallK0sCmd) K0sControllerUnitInstalled(unitPath string) (bool, error
 		return false, fmt.Errorf("failed to inspect k0s service: %w", err)
 	}
 
-	if len(strings.TrimSpace(string(content))) > 0 {
+	if strings.Contains(string(content), "ExecStart=") {
 		return true, nil
 	}
 
@@ -341,7 +342,11 @@ func (c *InstallK0sCmd) installSingle(ctx context.Context, pm installer.PackageM
 	}
 
 	if !unitInstalled {
-		if out, err := system.CommandContext(ctx, installedPath, "install", "controller", "--single", "--enable-worker", "--no-taints=true").CombinedOutput(); err != nil {
+		// Not cancelled with the command: k0s writes the unit in many small writes, and on a terminal
+		// Ctrl-C it already gets the terminal's SIGINT. A second one from the cancellation could stop
+		// it mid-write and leave an incomplete unit. The step only takes a moment.
+		installCtx := context.WithoutCancel(ctx)
+		if out, err := exec.CommandContext(installCtx, installedPath, "install", "controller", "--single", "--enable-worker", "--no-taints=true").CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to install k0s controller: %w: %s", err, strings.TrimSpace(string(out)))
 		}
 	}

@@ -85,10 +85,17 @@ var _ = Describe("InstallK0sCmd", func() {
 			Expect(c.K0sControllerUnitInstalled(unitPath)).To(BeFalse())
 		})
 
-		It("reports a unit with content as installed", func() {
-			mockFileWriter.EXPECT().ReadFile(unitPath).Return([]byte("[Unit]\nDescription=k0s\n"), nil)
+		It("reports a complete unit as installed", func() {
+			mockFileWriter.EXPECT().ReadFile(unitPath).Return([]byte("[Unit]\nDescription=k0s\n[Service]\nExecStart=/usr/local/bin/k0s controller --single\n"), nil)
 
 			Expect(c.K0sControllerUnitInstalled(unitPath)).To(BeTrue())
+		})
+
+		It("removes a unit cut off before its ExecStart line and reports it as not installed", func() {
+			mockFileWriter.EXPECT().ReadFile(unitPath).Return([]byte("[Unit]\nDescription=k0s\n"), nil)
+			mockFileWriter.EXPECT().Remove(unitPath).Return(nil)
+
+			Expect(c.K0sControllerUnitInstalled(unitPath)).To(BeFalse())
 		})
 
 		It("removes an empty unit left by an interrupted install and reports it as not installed", func() {
