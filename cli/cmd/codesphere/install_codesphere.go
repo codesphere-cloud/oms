@@ -248,8 +248,8 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 
 	cleanupFns := []func(){}
 	cleanup := func() {
-		for i := len(cleanupFns) - 1; i >= 0; i-- {
-			cleanupFns[i]()
+		for _, cleanupFn := range slices.Backward(cleanupFns) {
+			cleanupFn()
 		}
 	}
 

@@ -14,7 +14,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"go.yaml.in/yaml/v3"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -92,10 +91,8 @@ func (v *VaultSecretCreator) CreateSecretFromVault(ctx context.Context, vault *f
 	}
 
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: namespace,
-		},
+		Name:      secretName,
+		Namespace: namespace,
 	}
 
 	_, err = controllerutil.CreateOrUpdate(ctx, v.client, secret, func() error {
@@ -115,7 +112,7 @@ func (v *VaultSecretCreator) CreateSecretFromVault(ctx context.Context, vault *f
 
 func (v *VaultSecretCreator) ensureNamespace(ctx context.Context, namespace string) error {
 	ns := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{Name: namespace},
+		Name: namespace,
 	}
 	if _, err := controllerutil.CreateOrUpdate(ctx, v.client, ns, func() error { return nil }); err != nil {
 		return fmt.Errorf("failed to ensure namespace %q: %w", namespace, err)
