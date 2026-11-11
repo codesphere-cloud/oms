@@ -25,10 +25,14 @@ var _ = Describe("InstalledVersion", func() {
 		return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
 	}
 
-	deployed := func(name string, revisions ...string) *argo.Application {
+	deployed := func(name string, targetRevisions ...string) *argo.Application {
 		app := &argo.Application{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "argocd"}}
-		for i, revision := range revisions {
-			app.Status.History = append(app.Status.History, argo.RevisionHistory{ID: int64(i), Revision: revision})
+		for i, targetRevision := range targetRevisions {
+			app.Status.History = append(app.Status.History, argo.RevisionHistory{
+				ID:       int64(i),
+				Revision: targetRevision,
+				Source:   argo.ApplicationSource{TargetRevision: targetRevision},
+			})
 		}
 
 		return app
@@ -36,6 +40,16 @@ var _ = Describe("InstalledVersion", func() {
 
 	It("last deployed chart 1.113.0 with an image tag -> 1.113.0", func() {
 		app := deployed("pr-1-cs-applications", "1.112.0-old-tag-1234567890", "1.113.0-nate-test-pre-7a1cd4d4-ca735854c8")
+
+		version, err := csapps.InstalledVersion(context.Background(), clientWith(app), fullConfig("pr-1"))
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(version).To(Equal("1.113.0"))
+	})
+
+	It("last deployed chart pinned by digest -> version in front of the digest", func() {
+		app := deployed("pr-1-cs-applications", "1.113.0-nate-test-pre-7a1cd4d4-ca735854c8@sha256:4f5e6d")
+		app.Status.History[0].Revision = "sha256:4f5e6d"
 
 		version, err := csapps.InstalledVersion(context.Background(), clientWith(app), fullConfig("pr-1"))
 
