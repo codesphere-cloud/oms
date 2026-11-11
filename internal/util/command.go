@@ -9,9 +9,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+
+	"github.com/codesphere-cloud/oms/internal/system"
 )
 
-// RunCommand runs command with args in cmdDir, forwarding its output, and stops it when ctx is cancelled.
+// RunCommand runs command with args in cmdDir, forwarding its output, and interrupts it when ctx is cancelled.
 func RunCommand(ctx context.Context, command string, args []string, cmdDir string) error {
 	cmd := newCommand(ctx, command, args, cmdDir)
 	cmd.Stdout = os.Stdout
@@ -41,9 +43,11 @@ func RunCommandWithOutput(ctx context.Context, command string, args []string, cm
 	return stdout.String(), nil
 }
 
-// newCommand creates an exec.Cmd with context and optional working directory.
+// newCommand creates an exec.Cmd with context and optional working directory. On cancellation the
+// command is interrupted first so it can run its own clean-up (for example k0sctl removing partial
+// downloads), and only killed after system.InterruptGracePeriod.
 func newCommand(ctx context.Context, command string, args []string, cmdDir string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, command, args...)
+	cmd := system.CommandContext(ctx, command, args...)
 	if cmdDir != "" {
 		cmd.Dir = cmdDir
 	}

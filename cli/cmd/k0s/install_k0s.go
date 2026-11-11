@@ -24,6 +24,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/prompt"
+	"github.com/codesphere-cloud/oms/internal/system"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
@@ -271,6 +272,32 @@ func (c *InstallK0sCmd) vaultStore() (vault.Vault, error) {
 	return vault, nil
 }
 
+const k0sControllerUnitPath = "/etc/systemd/system/k0scontroller.service"
+
+// K0sControllerUnitInstalled reports whether `k0s install controller` already wrote the systemd unit
+// at unitPath. k0s creates the unit empty and fills it shortly after, so an interrupted install can
+// leave a 0-byte unit behind. Such a unit is removed and reported as missing so the install is retried.
+func (c *InstallK0sCmd) K0sControllerUnitInstalled(unitPath string) (bool, error) {
+	if !c.FileWriter.Exists(unitPath) {
+		return false, nil
+	}
+
+	content, err := c.FileWriter.ReadFile(unitPath)
+	if err != nil {
+		return false, fmt.Errorf("failed to inspect k0s service: %w", err)
+	}
+
+	if len(strings.TrimSpace(string(content))) > 0 {
+		return true, nil
+	}
+
+	if err := c.FileWriter.Remove(unitPath); err != nil {
+		return false, fmt.Errorf("failed to remove incomplete k0s service %s: %w", unitPath, err)
+	}
+
+	return false, nil
+}
+
 func (c *InstallK0sCmd) installSingle(ctx context.Context, pm installer.PackageManager, k0s installer.K0sManager) error {
 	if c.Opts.SSHKeyPath != "" || c.Opts.Vault != "" {
 		return fmt.Errorf("--ssh-key-path and --vault are not supported with --single")
@@ -306,16 +333,19 @@ func (c *InstallK0sCmd) installSingle(ctx context.Context, pm installer.PackageM
 		return fmt.Errorf("k0s binary is unavailable at %s: %w", installedPath, err)
 	}
 
-	if _, err := os.Stat("/etc/systemd/system/k0scontroller.service"); os.IsNotExist(err) {
-		if out, err := exec.CommandContext(ctx, installedPath, "install", "controller", "--single", "--enable-worker", "--no-taints=true").CombinedOutput(); err != nil {
+	unitInstalled, err := c.K0sControllerUnitInstalled(k0sControllerUnitPath)
+	if err != nil {
+		return err
+	}
+
+	if !unitInstalled {
+		if out, err := system.CommandContext(ctx, installedPath, "install", "controller", "--single", "--enable-worker", "--no-taints=true").CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to install k0s controller: %w: %s", err, strings.TrimSpace(string(out)))
 		}
-	} else if err != nil {
-		return fmt.Errorf("failed to inspect k0s service: %w", err)
 	}
 
 	if err := exec.CommandContext(ctx, "systemctl", "is-active", "--quiet", "k0scontroller").Run(); err != nil {
-		if out, err := exec.CommandContext(ctx, installedPath, "start").CombinedOutput(); err != nil {
+		if out, err := system.CommandContext(ctx, installedPath, "start").CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to start k0s: %w: %s", err, strings.TrimSpace(string(out)))
 		}
 	}
