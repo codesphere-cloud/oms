@@ -7,7 +7,6 @@ package bootstrap
 // Line resets don't work with log.Print as expected.
 import (
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -169,11 +168,11 @@ func (b *StepLogger) StepWithRetry(name string, fn func() error, maxRetries int)
 		}
 
 		lastError = err
-		log.Printf("'%s' failed on attempt %v/%v: %s", name, attemptID, maxRetries, err)
+		fmt.Printf("'%s' failed on attempt %v/%v: %s", name, attemptID, maxRetries, err)
 
 		if attemptID < maxRetries {
 			time.Sleep(b.retryDelay)
-			log.Printf("Retrying '%s'...", name)
+			fmt.Printf("Retrying '%s'...", name)
 		}
 	}
 
