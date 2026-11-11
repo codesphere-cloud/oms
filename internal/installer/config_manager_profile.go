@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -289,7 +290,7 @@ func (g *InstallConfig) applyProfileMinimal() error {
 
 	if g.Config.Cluster.RgwLoadBalancer == nil {
 		g.Config.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{
-			Enabled: true,
+			Enabled: ptr.To(true),
 		}
 	}
 

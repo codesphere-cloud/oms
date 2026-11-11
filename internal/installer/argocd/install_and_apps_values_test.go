@@ -12,9 +12,8 @@ import (
 
 var _ = Describe("AppInstaller getPcAppsValues", func() {
 	var (
-		installerConfig map[string]any
-		config          files.RootConfig
-		skipSteps       []string
+		config    files.RootConfig
+		skipSteps []string
 	)
 
 	// vaultWithRegistryPassword is the vault cluster-config needs: its registry credentials come from it.
@@ -25,10 +24,9 @@ var _ = Describe("AppInstaller getPcAppsValues", func() {
 	}
 	pcAppsValues := func() files.ChartValues {
 		install := NewAppInstaller(AppInstallerConfig{
-			Config:          config,
-			Vault:           vaultWithRegistryPassword(),
-			InstallerConfig: installerConfig,
-			SkipSteps:       skipSteps,
+			Config:    config,
+			Vault:     vaultWithRegistryPassword(),
+			SkipSteps: skipSteps,
 		})
 
 		values, err := install.getPcAppsValues()
@@ -44,16 +42,15 @@ var _ = Describe("AppInstaller getPcAppsValues", func() {
 	}
 
 	BeforeEach(func() {
-		config = files.RootConfig{}
-		skipSteps = nil
-		installerConfig = map[string]any{
-			"ceph":    map[string]any{"hosts": []any{map[string]any{"ipAddress": "10.0.0.11"}}},
-			"cluster": map[string]any{"rgw": map[string]any{}},
+		config = files.RootConfig{
+			Ceph:    files.CephConfig{Hosts: []files.CephHost{{IPAddress: "10.0.0.11"}}},
+			Cluster: files.ClusterConfig{Rgw: &files.RgwConfig{}},
 		}
+		skipSteps = nil
 	})
 
 	It("turns off an installer chart the config does not ask for", func() {
-		delete(installerConfig, "cluster")
+		config.Cluster.Rgw = nil
 
 		Expect(application("rgw")).To(Equal(files.ChartValues{"enabled": false}))
 	})

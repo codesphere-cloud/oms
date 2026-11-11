@@ -225,15 +225,14 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 		}
 
 		install = argocdinstaller.NewAppInstaller(argocdinstaller.AppInstallerConfig{
-			Config:          cfg,
-			Vault:           installVault,
-			RESTConfig:      restConfig,
-			KubeClient:      kubeClient,
-			HelmClient:      argoCDInstall.Helm,
-			Installer:       argoCDInstall,
-			PCAppsValues:    opts.PCAppsValues,
-			InstallerConfig: opts.InstallerConfig,
-			SkipSteps:       opts.SkipSteps,
+			Config:       cfg,
+			Vault:        installVault,
+			RESTConfig:   restConfig,
+			KubeClient:   kubeClient,
+			HelmClient:   argoCDInstall.Helm,
+			Installer:    argoCDInstall,
+			PCAppsValues: opts.PCAppsValues,
+			SkipSteps:    opts.SkipSteps,
 		})
 
 		return nil

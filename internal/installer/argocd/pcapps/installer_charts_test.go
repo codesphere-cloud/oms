@@ -12,33 +12,45 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-)
-
-type (
-	m = map[string]any
-	l = []any
+	"k8s.io/utils/ptr"
 )
 
 var _ = Describe("InstallerChartsPcAppsValues", func() {
 	allCharts := []string{pcapps.MsBackendS3, pcapps.Rgw, pcapps.RgwLoadBalancer}
 
-	ceph := func() m { return m{"hosts": l{m{"ipAddress": "10.0.0.11"}}} }
-	withRgw := func() m { return m{"ceph": ceph(), "cluster": m{"rgw": m{}}} }
+	ceph := func(ips ...string) files.CephConfig {
+		if len(ips) == 0 {
+			ips = []string{"10.0.0.11"}
+		}
 
-	valuesOf := func(config m, skipped ...string) files.ChartValues {
+		hosts := make([]files.CephHost, 0, len(ips))
+		for _, ip := range ips {
+			hosts = append(hosts, files.CephHost{IPAddress: ip})
+		}
+
+		return files.CephConfig{Hosts: hosts}
+	}
+	withRgw := func() *files.RootConfig {
+		return &files.RootConfig{Ceph: ceph(), Cluster: files.ClusterConfig{Rgw: &files.RgwConfig{}}}
+	}
+	withS3 := func(s3 *files.S3ManagedServiceConfig) *files.ManagedServiceBackendsConfig {
+		return &files.ManagedServiceBackendsConfig{S3: s3}
+	}
+
+	valuesOf := func(config *files.RootConfig, skipped ...string) files.ChartValues {
 		return pcapps.InstallerChartsPcAppsValues(config, func(step string) bool { return slices.Contains(skipped, step) })
 	}
-	application := func(config m, chart string) files.ChartValues {
+	application := func(config *files.RootConfig, chart string) files.ChartValues {
 		applications, _ := valuesOf(config)["applications"].(files.ChartValues)
 		app, _ := applications[chart].(files.ChartValues)
 
 		return app
 	}
-	valuesObject := func(config m, chart string) any {
+	valuesObject := func(config *files.RootConfig, chart string) any {
 		return application(config, chart)["valuesObject"]
 	}
 	// turnedOff lists the charts the values switch off with `enabled: false`.
-	turnedOff := func(config m, skipped ...string) []string {
+	turnedOff := func(config *files.RootConfig, skipped ...string) []string {
 		applications, _ := valuesOf(config, skipped...)["applications"].(files.ChartValues)
 		off := []string{}
 
@@ -52,7 +64,7 @@ var _ = Describe("InstallerChartsPcAppsValues", func() {
 
 		return off
 	}
-	writesEnabledTrue := func(config m) bool {
+	writesEnabledTrue := func(config *files.RootConfig) bool {
 		applications, _ := valuesOf(config)["applications"].(files.ChartValues)
 
 		return slices.ContainsFunc(slices.Collect(maps.Values(applications)), func(app any) bool {
@@ -60,7 +72,7 @@ var _ = Describe("InstallerChartsPcAppsValues", func() {
 		})
 	}
 	// wanted lists the charts the values leave to the pc-applications default.
-	wanted := func(config m, skipped ...string) []string {
+	wanted := func(config *files.RootConfig, skipped ...string) []string {
 		off := turnedOff(config, skipped...)
 
 		return slices.DeleteFunc(slices.Clone(allCharts), func(chart string) bool { return slices.Contains(off, chart) })
@@ -72,55 +84,91 @@ var _ = Describe("InstallerChartsPcAppsValues", func() {
 		})
 
 		It("asks for rgw only with ceph and an enabled cluster.rgw", func() {
-			noCeph := m{"cluster": m{"rgw": m{}}}
-			disabled := m{"ceph": ceph(), "cluster": m{"rgw": m{"enabled": false}}}
+			noCeph := &files.RootConfig{Cluster: files.ClusterConfig{Rgw: &files.RgwConfig{}}}
+			disabled := &files.RootConfig{Ceph: ceph(), Cluster: files.ClusterConfig{Rgw: &files.RgwConfig{Enabled: ptr.To(false)}}}
 
 			Expect(wanted(noCeph)).ToNot(ContainElement(pcapps.Rgw))
 			Expect(wanted(disabled)).ToNot(ContainElement(pcapps.Rgw))
-			Expect(wanted(m{"ceph": ceph()})).ToNot(ContainElement(pcapps.Rgw))
+			Expect(wanted(&files.RootConfig{Ceph: ceph()})).ToNot(ContainElement(pcapps.Rgw))
 		})
 
 		It("asks for the load balancer with ceph unless the user disabled it", func() {
-			disabled := m{"ceph": ceph(), "cluster": m{"rgwLoadBalancer": m{"enabled": false, "override": m{"replicas": 1}}}}
+			disabled := &files.RootConfig{Ceph: ceph(), Cluster: files.ClusterConfig{RgwLoadBalancer: &files.RgwLoadBalancerConfig{
+				Enabled: ptr.To(false), Override: files.ChartOverride{"replicas": 1},
+			}}}
 
-			Expect(wanted(m{"ceph": ceph()})).To(ContainElement(pcapps.RgwLoadBalancer))
-			Expect(wanted(m{})).ToNot(ContainElement(pcapps.RgwLoadBalancer))
+			Expect(wanted(&files.RootConfig{Ceph: ceph()})).To(ContainElement(pcapps.RgwLoadBalancer))
+			Expect(wanted(&files.RootConfig{})).ToNot(ContainElement(pcapps.RgwLoadBalancer))
 			Expect(wanted(disabled)).ToNot(ContainElement(pcapps.RgwLoadBalancer))
 		})
 
+		It("asks for the load balancer with an rgwLoadBalancer block that only overrides values", func() {
+			overrideOnly := &files.RootConfig{Ceph: ceph(), Cluster: files.ClusterConfig{RgwLoadBalancer: &files.RgwLoadBalancerConfig{
+				Override: files.ChartOverride{"replicas": 1},
+			}}}
+
+			Expect(wanted(overrideOnly)).To(ContainElement(pcapps.RgwLoadBalancer))
+		})
+
+		It("does not ask for rgw or its load balancer with a ceph block without hosts", func() {
+			config := &files.RootConfig{Ceph: files.CephConfig{NodesSubnet: "10.0.0.0/24"}, Cluster: files.ClusterConfig{Rgw: &files.RgwConfig{}}}
+
+			Expect(wanted(config)).ToNot(ContainElements(pcapps.Rgw, pcapps.RgwLoadBalancer))
+		})
+
 		It("asks for ms-backend-s3 by default", func() {
-			Expect(wanted(m{})).To(ContainElement(pcapps.MsBackendS3))
+			Expect(wanted(&files.RootConfig{})).To(ContainElement(pcapps.MsBackendS3))
 		})
 
 		It("does not ask for ms-backend-s3 when it is disabled", func() {
-			disabled := m{"managedServiceBackends": m{"s3": m{"enabled": false, "override": m{"replicas": 1}}}}
+			disabled := &files.RootConfig{ManagedServiceBackends: withS3(&files.S3ManagedServiceConfig{
+				Enabled: ptr.To(false), Override: files.ChartOverride{"replicas": 1},
+			})}
 
 			Expect(wanted(disabled)).ToNot(ContainElement(pcapps.MsBackendS3))
 		})
 
 		It("does not ask for ms-backend-s3 with workspace PVC storage in codesphere.experiments and no ceph", func() {
-			Expect(wanted(m{"codesphere": m{"experiments": l{"workspace-pvc-storage"}}})).ToNot(ContainElement(pcapps.MsBackendS3))
+			config := &files.RootConfig{Codesphere: files.CodesphereConfig{Experiments: []string{files.WorkspacePVCStorageFlag}}} //nolint:staticcheck
+
+			Expect(wanted(config)).ToNot(ContainElement(pcapps.MsBackendS3))
 		})
 
 		It("does not ask for ms-backend-s3 with workspace PVC storage in codesphere.internal, no ceph and no s3 block", func() {
-			Expect(wanted(m{"codesphere": m{"internal": l{"workspace-pvc-storage"}}})).ToNot(ContainElement(pcapps.MsBackendS3))
+			config := &files.RootConfig{Codesphere: files.CodesphereConfig{Internal: []string{files.WorkspacePVCStorageFlag}}}
+
+			Expect(wanted(config)).ToNot(ContainElement(pcapps.MsBackendS3))
+		})
+
+		It("does not ask for ms-backend-s3 with workspace PVC storage as a preview flag and no ceph", func() {
+			config := &files.RootConfig{Codesphere: files.CodesphereConfig{Preview: map[string]bool{files.WorkspacePVCStorageFlag: true}}}
+
+			Expect(wanted(config)).ToNot(ContainElement(pcapps.MsBackendS3))
 		})
 
 		It("asks for ms-backend-s3 with workspace PVC storage and ceph", func() {
-			Expect(wanted(m{"codesphere": m{"internal": l{"workspace-pvc-storage"}}, "ceph": ceph()})).To(ContainElement(pcapps.MsBackendS3))
+			config := &files.RootConfig{Ceph: ceph(), Codesphere: files.CodesphereConfig{Internal: []string{files.WorkspacePVCStorageFlag}}}
+
+			Expect(wanted(config)).To(ContainElement(pcapps.MsBackendS3))
 		})
 
 		It("asks for ms-backend-s3 with workspace PVC storage and an explicit s3 block", func() {
-			explicit := m{"codesphere": m{"internal": l{"workspace-pvc-storage"}}, "managedServiceBackends": m{"s3": m{}}}
+			explicit := &files.RootConfig{
+				Codesphere:             files.CodesphereConfig{Internal: []string{files.WorkspacePVCStorageFlag}},
+				ManagedServiceBackends: withS3(&files.S3ManagedServiceConfig{}),
+			}
 
 			Expect(wanted(explicit)).To(ContainElement(pcapps.MsBackendS3))
 		})
 
 		It("takes an explicit enabled: true of the config as asked for", func() {
-			config := m{
-				"ceph":                   ceph(),
-				"cluster":                m{"rgw": m{"enabled": true}, "rgwLoadBalancer": m{"enabled": true}},
-				"managedServiceBackends": m{"s3": m{"enabled": true}},
+			config := &files.RootConfig{
+				Ceph: ceph(),
+				Cluster: files.ClusterConfig{
+					Rgw:             &files.RgwConfig{Enabled: ptr.To(true)},
+					RgwLoadBalancer: &files.RgwLoadBalancerConfig{Enabled: ptr.To(true)},
+				},
+				ManagedServiceBackends: withS3(&files.S3ManagedServiceConfig{Enabled: ptr.To(true)}),
 			}
 
 			Expect(turnedOff(config)).To(BeEmpty())
@@ -129,8 +177,8 @@ var _ = Describe("InstallerChartsPcAppsValues", func() {
 
 	Describe("what the values say about a chart", func() {
 		It("turns off a chart the config does not ask for", func() {
-			Expect(application(m{}, pcapps.Rgw)).To(Equal(files.ChartValues{"enabled": false}))
-			Expect(turnedOff(m{})).To(Equal([]string{pcapps.Rgw, pcapps.RgwLoadBalancer}))
+			Expect(application(&files.RootConfig{}, pcapps.Rgw)).To(Equal(files.ChartValues{"enabled": false}))
+			Expect(turnedOff(&files.RootConfig{})).To(Equal([]string{pcapps.Rgw, pcapps.RgwLoadBalancer}))
 		})
 
 		It("turns off the charts of a step the run skips", func() {
@@ -148,7 +196,7 @@ var _ = Describe("InstallerChartsPcAppsValues", func() {
 		})
 
 		It("never writes enabled: true for a chart the config does not ask for", func() {
-			Expect(writesEnabledTrue(m{})).To(BeFalse())
+			Expect(writesEnabledTrue(&files.RootConfig{})).To(BeFalse())
 		})
 
 		It("writes nothing for a chart the config asks for and that has no values", func() {
@@ -165,7 +213,7 @@ var _ = Describe("InstallerChartsPcAppsValues", func() {
 		})
 
 		It("forwards the load balancer to the ceph hosts otherwise", func() {
-			config := m{"ceph": m{"hosts": l{m{"ipAddress": "10.0.0.11"}, m{"ipAddress": "10.0.0.12"}}}}
+			config := &files.RootConfig{Ceph: ceph("10.0.0.11", "10.0.0.12")}
 
 			Expect(valuesObject(config, pcapps.RgwLoadBalancer)).To(Equal(files.ChartValues{
 				"externalRgwEndpoints": []any{map[string]any{"ip": "10.0.0.11"}, map[string]any{"ip": "10.0.0.12"}},
@@ -173,15 +221,17 @@ var _ = Describe("InstallerChartsPcAppsValues", func() {
 		})
 
 		It("forwards the load balancer to the ceph hosts when cluster.rgw is disabled", func() {
-			config := m{"ceph": ceph(), "cluster": m{"rgw": m{"enabled": false}}}
+			config := &files.RootConfig{Ceph: ceph(), Cluster: files.ClusterConfig{Rgw: &files.RgwConfig{Enabled: ptr.To(false)}}}
 
 			Expect(valuesObject(config, pcapps.RgwLoadBalancer)).To(Equal(files.ChartValues{
 				"externalRgwEndpoints": []any{map[string]any{"ip": "10.0.0.11"}},
 			}))
 		})
 
-		It("merges the override of the block over the derived values", func() {
-			config := m{"ceph": ceph(), "cluster": m{"rgwLoadBalancer": m{"override": m{"replicas": 3, "externalRgwEndpoints": l{m{"ip": "10.9.9.9"}}}}}}
+		It("merges the override of the load balancer over the derived values", func() {
+			config := &files.RootConfig{Ceph: ceph(), Cluster: files.ClusterConfig{RgwLoadBalancer: &files.RgwLoadBalancerConfig{
+				Override: files.ChartOverride{"replicas": 3, "externalRgwEndpoints": []any{map[string]any{"ip": "10.9.9.9"}}},
+			}}}
 
 			Expect(valuesObject(config, pcapps.RgwLoadBalancer)).To(Equal(files.ChartValues{
 				"replicas":             3,
@@ -190,7 +240,9 @@ var _ = Describe("InstallerChartsPcAppsValues", func() {
 		})
 
 		It("passes the override of rgw", func() {
-			withOverride := m{"ceph": ceph(), "cluster": m{"rgw": m{"override": m{"resources": m{"requests": m{"cpu": "0"}}}}}}
+			withOverride := &files.RootConfig{Ceph: ceph(), Cluster: files.ClusterConfig{Rgw: &files.RgwConfig{
+				Override: files.ChartOverride{"resources": map[string]any{"requests": map[string]any{"cpu": "0"}}},
+			}}}
 
 			Expect(application(withOverride, pcapps.Rgw)).To(Equal(files.ChartValues{
 				"valuesObject": files.ChartValues{"resources": map[string]any{"requests": map[string]any{"cpu": "0"}}},
@@ -198,7 +250,7 @@ var _ = Describe("InstallerChartsPcAppsValues", func() {
 		})
 
 		It("reads the ms-backend-s3 admin credentials from the vault entries a private cloud has", func() {
-			Expect(valuesObject(m{}, pcapps.MsBackendS3)).To(Equal(files.ChartValues{
+			Expect(valuesObject(&files.RootConfig{}, pcapps.MsBackendS3)).To(Equal(files.ChartValues{
 				"extraSecrets": []any{map[string]any{
 					"name":  "app-secrets",
 					"store": "kubernetes-in-cluster",
@@ -211,7 +263,7 @@ var _ = Describe("InstallerChartsPcAppsValues", func() {
 		})
 
 		It("lets the override of ms-backend-s3 add to its secrets", func() {
-			config := m{"managedServiceBackends": m{"s3": m{"override": m{"replicas": 1}}}}
+			config := &files.RootConfig{ManagedServiceBackends: withS3(&files.S3ManagedServiceConfig{Override: files.ChartOverride{"replicas": 1}})}
 
 			Expect(valuesObject(config, pcapps.MsBackendS3)).To(HaveKeyWithValue("replicas", 1))
 			Expect(valuesObject(config, pcapps.MsBackendS3)).To(HaveKey("extraSecrets"))
