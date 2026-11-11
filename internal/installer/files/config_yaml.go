@@ -432,6 +432,7 @@ type ClusterConfig struct {
 	// Deprecated: use ManagedServiceBackendsConfig.BarmanCloudPlugin. The PC installer never
 	// read this key; Unmarshal moves it to managedServiceBackends.barmanCloudPlugin.
 	LegacyBarmanCloudPlugin *BarmanCloudPluginConfig `yaml:"BarmanCloudPluginConfig,omitempty"`
+	Rgw                     *RgwConfig               `yaml:"rgw,omitempty"`
 	RgwLoadBalancer         *RgwLoadBalancerConfig   `yaml:"rgwLoadBalancer,omitempty"`
 	Kyverno                 *KyvernoConfig           `yaml:"kyverno,omitempty"`
 }
@@ -514,8 +515,15 @@ type BarmanCloudPluginConfig struct {
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 
+// RgwConfig is the opt-in standalone rgw, deployed only when set. An unset Enabled is enabled.
+type RgwConfig struct {
+	Enabled  *bool         `yaml:"enabled,omitempty"`
+	Override ChartOverride `yaml:"override,omitempty"`
+}
+
+// RgwLoadBalancerConfig is the rgw load balancer, deployed with ceph. An unset Enabled is enabled.
 type RgwLoadBalancerConfig struct {
-	Enabled  bool          `yaml:"enabled"`
+	Enabled  *bool         `yaml:"enabled,omitempty"`
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 

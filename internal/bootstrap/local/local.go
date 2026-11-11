@@ -693,7 +693,7 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	setLocalClusterComponents(b.Env.InstallConfig)
 
 	b.Env.InstallConfig.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{
-		Enabled: b.Env.StorageEngine != StorageEngineLocal,
+		Enabled: ptr.To(b.Env.StorageEngine != StorageEngineLocal),
 	}
 	if b.Env.StorageEngine != StorageEngineLocal {
 		cephMonHosts, err := b.ReadCephMonHosts()

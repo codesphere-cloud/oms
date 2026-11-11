@@ -3,36 +3,39 @@
 
 package pcapps
 
-import "github.com/codesphere-cloud/oms/internal/installer/files"
+import (
+	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/util"
+)
 
 const (
 	rookCephNamespace    = "rook-ceph"
 	inClusterRgwEndpoint = Rgw + "." + rookCephNamespace + ".svc.cluster.local"
 )
 
-var rgwLoadBalancerBlock = []string{"cluster", "rgwLoadBalancer"}
+func rgwLoadBalancerInstalled(config *files.RootConfig) bool {
+	loadBalancer := config.Cluster.RgwLoadBalancer
 
-func rgwLoadBalancerInstalled(config installerConfig) bool {
-	return config.has(cephBlock) && config.componentEnabled(rgwLoadBalancerBlock...)
+	return hasCeph(config) && (loadBalancer == nil || enabled(loadBalancer.Enabled))
 }
 
-// rgwLoadBalancerValues forwards to the in-cluster rgw when the config deploys it, otherwise to the
-// ceph hosts. It asks the config like the installer does, not whether rgw is enabled in
-// pc-applications: the same rgw serves the endpoint whichever of the two deploys it.
-func rgwLoadBalancerValues(config installerConfig) files.ChartValues {
+// rgwLoadBalancerValues points the load balancer at the in-cluster rgw when the config deploys it,
+// otherwise at the ceph hosts.
+func rgwLoadBalancerValues(config *files.RootConfig) files.ChartValues {
 	endpoints := []any{}
 
 	if rgwInstalled(config) {
 		endpoints = append(endpoints, map[string]any{"ip": inClusterRgwEndpoint})
 	} else {
-		hosts, _ := at[[]any](config, cephBlock, "hosts")
-
-		for _, host := range hosts {
-			if entry, ok := host.(map[string]any); ok {
-				endpoints = append(endpoints, map[string]any{"ip": entry["ipAddress"]})
-			}
+		for _, host := range config.Ceph.Hosts {
+			endpoints = append(endpoints, map[string]any{"ip": host.IPAddress})
 		}
 	}
 
-	return files.ChartValues{"externalRgwEndpoints": endpoints}
+	values := files.ChartValues{"externalRgwEndpoints": endpoints}
+	if loadBalancer := config.Cluster.RgwLoadBalancer; loadBalancer != nil {
+		values = util.DeepMergeMaps(values, loadBalancer.Override)
+	}
+
+	return values
 }

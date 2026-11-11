@@ -66,8 +66,6 @@ type InstallCodesphereOpts struct {
 	PCAppsValues         []string
 	// Name of the k8s secret containing the entire vault; source for ESO.
 	VaultSecretName string
-	// InstallerConfig is the merged install config decoded generically, set by prepareInstallConfig.
-	InstallerConfig map[string]any
 }
 
 // Run installs all Codesphere phases selected by the options; cancelling ctx stops the installation.
@@ -224,16 +222,9 @@ func laterPhaseOpts(opts *InstallCodesphereOpts) *InstallCodesphereOpts {
 	return &later
 }
 
-// prepareInstallConfig resolves the install command's repeated --config inputs
-// into a single config file for downstream installer steps.
-//
-// For each input config it optionally renders vault-backed template expressions,
-// parses the YAML into a generic map, and deep-merges the maps in flag order so
-// later --config values override earlier ones. The merged YAML is then written
-// to a dedicated temporary directory at a stable file name,
-// "<tmp>/config.yaml", parsed once through the config manager, and returned via
-// effectiveOpts.ConfigPath. The returned cleanup function removes any rendered
-// per-file temps as well as the merged config directory.
+// prepareInstallConfig deep-merges the --config files in flag order, later ones winning, after
+// rendering their vault templates when a vault is set. It writes the result to <tmp>/config.yaml,
+// parses it and returns its path as effectiveOpts.ConfigPath; cleanup removes all temp files.
 func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManager) (*InstallCodesphereOpts, files.RootConfig, func(), error) {
 	configFiles := append([]string(nil), opts.Configs...)
 	if len(configFiles) == 0 {
@@ -369,7 +360,7 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 
 	effectiveOpts := *opts
 	effectiveOpts.ConfigPath = mergedPath
-	effectiveOpts.InstallerConfig = merged
+
 	effectiveOpts.Configs = append([]string(nil), configFiles...)
 
 	return &effectiveOpts, cfg, cleanup, nil

@@ -121,23 +121,6 @@ var _ = Describe("prepareInstallConfig", func() {
 		Entry("object overlay adds a hash to a legacy version", "1.111.0", "{hash: abc123}", "1.111.0", "abc123"),
 		Entry("legacy override replaces the version and clears the prior hash", "{version: 1.111.0, hash: abc123}", "1.112.0", "1.112.0", ""),
 	)
-	It("exposes the merged config the installer reads, decoded generically", func() {
-		dir := GinkgoT().TempDir()
-		basePath := filepath.Join(dir, "base.yaml")
-		overlayPath := filepath.Join(dir, "overlay.yaml")
-
-		Expect(os.WriteFile(basePath, []byte("cluster:\n  rgwLoadBalancer:\n    override: {replicas: 1}\n"), 0600)).To(Succeed())
-		Expect(os.WriteFile(overlayPath, []byte("cluster:\n  rgwLoadBalancer:\n    enabled: false\n"), 0600)).To(Succeed())
-
-		effectiveOpts, _, cleanup, err := prepareInstallConfig(&InstallCodesphereOpts{Configs: []string{basePath, overlayPath}}, installer.NewConfig())
-		Expect(err).NotTo(HaveOccurred())
-
-		defer cleanup()
-
-		Expect(effectiveOpts.InstallerConfig).To(HaveKeyWithValue("cluster", map[string]any{
-			"rgwLoadBalancer": map[string]any{"enabled": false, "override": map[string]any{"replicas": 1}},
-		}))
-	})
 	It("merges multiple config files in order and returns a single parsed config path", func() {
 		tmpDir, err := os.MkdirTemp("", "install-config-merge-*")
 

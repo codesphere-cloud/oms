@@ -251,11 +251,7 @@ type AppInstallerConfig struct {
 	HelmClient   installer.HelmClient
 	Installer    InstallerAPI
 	PCAppsValues []string
-	// InstallerConfig is the merged install config the PC installer reads, decoded generically for the
-	// questions files.RootConfig cannot answer.
-	InstallerConfig map[string]any
-	// SkipSteps are the installer steps skipped on the command line. The ones in the config's
-	// operations.skip count too.
+	// SkipSteps are the --skip-steps; the config's operations.skip counts too.
 	SkipSteps []string
 }
 
@@ -321,10 +317,8 @@ func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config)
 	return nil
 }
 
-// getPcAppsValues collects the base values for some apps from the config (OpenFGA, Rook, cluster-config, rgw,
-// rgw-load-balancer and ms-backend-s3) and merges these with explicit pcApps block in the config.yaml.
-// The pcApps block in the config.yaml and --pc-apps-values always win over derived values from the config.yaml.
-// Returns a ChartValues map
+// getPcAppsValues derives the pc-applications values from the config and merges its pcApps block
+// over them. The --pc-apps-values files are applied on top at install.
 func (i *AppInstaller) getPcAppsValues() (files.ChartValues, error) {
 	clusterConfigValues, err := pcapps.ClusterConfigPcAppsValues(&i.cfg.Config, i.cfg.Vault)
 	if err != nil {
@@ -334,7 +328,7 @@ func (i *AppInstaller) getPcAppsValues() (files.ChartValues, error) {
 	openFGAppValues := pcapps.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault)
 	rookCephAppValues := pcapps.RookCephPcAppsValues(&i.cfg.Config)
 	skipped := func(step string) bool { return installer.IsStepSkipped(i.cfg.Config, i.cfg.SkipSteps, step) }
-	installerChartValues := pcapps.InstallerChartsPcAppsValues(i.cfg.InstallerConfig, skipped)
+	installerChartValues := pcapps.InstallerChartsPcAppsValues(&i.cfg.Config, skipped)
 
 	values := util.DeepMergeMaps(openFGAppValues, rookCephAppValues)
 	values = util.DeepMergeMaps(values, clusterConfigValues)
