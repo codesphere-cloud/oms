@@ -168,11 +168,16 @@ func (b *StepLogger) StepWithRetry(name string, fn func() error, maxRetries int)
 		}
 
 		lastError = err
-		fmt.Printf("'%s' failed on attempt %v/%v: %s", name, attemptID, maxRetries, err)
+
+		if !b.config.Silent {
+			fmt.Printf("'%s' failed on attempt %v/%v: %s", name, attemptID, maxRetries, err)
+		}
 
 		if attemptID < maxRetries {
 			time.Sleep(b.retryDelay)
-			fmt.Printf("Retrying '%s'...", name)
+			if !b.config.Silent {
+				fmt.Printf("Retrying '%s'...", name)
+			}
 		}
 	}
 
