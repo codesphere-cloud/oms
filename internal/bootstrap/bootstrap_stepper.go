@@ -175,6 +175,7 @@ func (b *StepLogger) StepWithRetry(name string, fn func() error, maxRetries int)
 
 		if attemptID < maxRetries {
 			time.Sleep(b.retryDelay)
+
 			if !b.config.Silent {
 				fmt.Printf("Retrying '%s'...", name)
 			}
