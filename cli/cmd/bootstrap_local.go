@@ -25,6 +25,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/local"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	rookcephv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
 	"github.com/spf13/cobra"
@@ -128,7 +129,7 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 	}
 
 	ctx := c.cmd.Context()
-	if err := c.ConfirmLocalBootstrapWarning(); err != nil {
+	if err := c.ConfirmLocalBootstrapWarning(ctx); err != nil {
 		return err
 	}
 
@@ -221,7 +222,8 @@ func (c *BootstrapLocalCmd) resolveRegistryPassword() error {
 	return nil
 }
 
-func (c *BootstrapLocalCmd) ConfirmLocalBootstrapWarning() error {
+// ConfirmLocalBootstrapWarning asks the operator to confirm the local bootstrap, unless --yes is set.
+func (c *BootstrapLocalCmd) ConfirmLocalBootstrapWarning(ctx context.Context) error {
 	if c.CodesphereEnv.StorageEngine != local.StorageEngineLocal {
 		fmt.Println(csio.Long(`
 		############################################################
@@ -254,7 +256,7 @@ func (c *BootstrapLocalCmd) ConfirmLocalBootstrapWarning() error {
 
 	fmt.Print("\nType 'yes' to continue: ")
 
-	reader := bufio.NewReader(os.Stdin)
+	reader := bufio.NewReader(prompt.NewContextReader(ctx, os.Stdin))
 
 	input, err := reader.ReadString('\n')
 	if err != nil && !errors.Is(err, stdio.EOF) {

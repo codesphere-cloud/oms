@@ -31,6 +31,8 @@ func mockFullTestRun(mockClient *intcs.MockClient, teamId, planId, workspaceId i
 		(*string)(nil),                // empty workspace
 	).Return(workspaceId, nil).Once()
 
+	mockClient.EXPECT().WorkspaceRunning(workspaceId).Return(true, nil).Once()
+
 	mockClient.EXPECT().SetEnvVar(
 		workspaceId,
 		"TEST_VAR",
@@ -210,6 +212,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				(*string)(nil), // empty workspace
 			).Return(workspaceID, nil).Once()
 
+			mockClient.EXPECT().WorkspaceRunning(workspaceID).Return(true, nil).Once()
+
 			mockClient.EXPECT().SetEnvVar(
 				workspaceID,
 				"TEST_VAR",
@@ -231,6 +235,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				mock.AnythingOfType("string"),
 				(*string)(nil), // empty workspace
 			).Return(workspaceId, nil).Once()
+
+			mockClient.EXPECT().WorkspaceRunning(workspaceId).Return(true, nil).Once()
 
 			mockClient.EXPECT().SetEnvVar(
 				workspaceId,
@@ -261,6 +267,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				mock.AnythingOfType("string"),
 				(*string)(nil), // empty workspace
 			).Return(workspaceId, nil).Once()
+
+			mockClient.EXPECT().WorkspaceRunning(workspaceId).Return(true, nil).Once()
 
 			mockClient.EXPECT().SetEnvVar(
 				workspaceId,
@@ -304,6 +312,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				mock.AnythingOfType("string"),
 				(*string)(nil), // empty workspace
 			).Return(workspaceId, nil).Once()
+
+			mockClient.EXPECT().WorkspaceRunning(workspaceId).Return(true, nil).Once()
 
 			mockClient.EXPECT().SetEnvVar(
 				workspaceId,
@@ -353,6 +363,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				mock.AnythingOfType("string"),
 				(*string)(nil), // empty workspace
 			).Return(workspaceId, nil).Once()
+
+			mockClient.EXPECT().WorkspaceRunning(workspaceId).Return(true, nil).Once()
 
 			mockClient.EXPECT().SetEnvVar(
 				workspaceId,
@@ -408,6 +420,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				(*string)(nil), // empty workspace
 			).Return(workspaceId, nil).Once()
 
+			mockClient.EXPECT().WorkspaceRunning(workspaceId).Return(true, nil).Once()
+
 			mockClient.EXPECT().SetEnvVar(
 				workspaceId,
 				"TEST_VAR",
@@ -462,6 +476,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				(*string)(nil), // empty workspace
 			).Return(workspaceId, nil).Once()
 
+			mockClient.EXPECT().WorkspaceRunning(workspaceId).Return(true, nil).Once()
+
 			mockClient.EXPECT().SetEnvVar(
 				workspaceId,
 				"TEST_VAR",
@@ -515,6 +531,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				mock.AnythingOfType("string"),
 				(*string)(nil),
 			).Return(workspaceId, nil).Once()
+
+			mockClient.EXPECT().WorkspaceRunning(workspaceId).Return(true, nil).Once()
 
 			mockClient.EXPECT().SetEnvVar(
 				workspaceId,
@@ -572,6 +590,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				(*string)(nil), // empty workspace
 			).Return(workspaceId, nil).Once()
 
+			mockClient.EXPECT().WorkspaceRunning(workspaceId).Return(true, nil).Once()
+
 			mockClient.EXPECT().SetEnvVar(
 				workspaceId,
 				"TEST_VAR",
@@ -620,6 +640,62 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 			Expect(err).To(MatchError(ContainSubstring("failed to delete workspace")))
 		})
 
+		It("deletes the workspace when cancelled while waiting for it to be running", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			mockClient.EXPECT().CreateWorkspace(
+				teamIdInt,
+				planIdInt,
+				mock.AnythingOfType("string"),
+				(*string)(nil),
+			).Return(workspaceId, nil).Once()
+
+			mockClient.EXPECT().WorkspaceRunning(workspaceId).Run(func(int) { cancel() }).Return(false, nil).Once()
+
+			mockClient.EXPECT().DeleteWorkspace(workspaceId).Return(nil).Once()
+
+			err := c.RunSmoketest(ctx)
+			Expect(err).To(MatchError(ContainSubstring("stopped waiting for workspace 789 to be running")))
+			Expect(err).To(MatchError(context.Canceled))
+		})
+
+		It("reports the last status error when cancelled while waiting for the workspace", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			mockClient.EXPECT().CreateWorkspace(
+				teamIdInt,
+				planIdInt,
+				mock.AnythingOfType("string"),
+				(*string)(nil),
+			).Return(workspaceId, nil).Once()
+
+			mockClient.EXPECT().WorkspaceRunning(workspaceId).Run(func(int) { cancel() }).Return(false, fmt.Errorf("connection refused")).Once()
+
+			mockClient.EXPECT().DeleteWorkspace(workspaceId).Return(nil).Once()
+
+			err := c.RunSmoketest(ctx)
+			Expect(err).To(MatchError(context.Canceled))
+			Expect(err).To(MatchError(ContainSubstring("connection refused")))
+		})
+
+		It("stops retrying the workspace creation once cancelled", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			mockClient.EXPECT().CreateWorkspace(
+				teamIdInt,
+				planIdInt,
+				mock.AnythingOfType("string"),
+				(*string)(nil),
+			).Run(func(int, int, string, *string) { cancel() }).Return(0, fmt.Errorf("error 503: unavailable")).Once()
+
+			err := c.RunSmoketest(ctx)
+			Expect(err).To(MatchError(context.Canceled))
+			Expect(err).To(MatchError(ContainSubstring("error 503")))
+		})
+
 		It("runs only specified steps when steps flag is set", func() {
 			opts.Steps = []string{"createWorkspace", "setEnvVar"}
 
@@ -629,6 +705,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				mock.AnythingOfType("string"),
 				(*string)(nil),
 			).Return(workspaceId, nil).Once()
+
+			mockClient.EXPECT().WorkspaceRunning(workspaceId).Return(true, nil).Once()
 
 			mockClient.EXPECT().SetEnvVar(
 				workspaceId,

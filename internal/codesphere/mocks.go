@@ -589,3 +589,63 @@ func (_c *MockClient_SyncLandscape_Call) RunAndReturn(run func(workspaceID int, 
 	_c.Call.Return(run)
 	return _c
 }
+
+// WorkspaceRunning provides a mock function for the type MockClient
+func (_mock *MockClient) WorkspaceRunning(workspaceID int) (bool, error) {
+	ret := _mock.Called(workspaceID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for WorkspaceRunning")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(int) (bool, error)); ok {
+		return returnFunc(workspaceID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(int) bool); ok {
+		r0 = returnFunc(workspaceID)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(int) error); ok {
+		r1 = returnFunc(workspaceID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_WorkspaceRunning_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'WorkspaceRunning'
+type MockClient_WorkspaceRunning_Call struct {
+	*mock.Call
+}
+
+// WorkspaceRunning is a helper method to define mock.On call
+//   - workspaceID int
+func (_e *MockClient_Expecter) WorkspaceRunning(workspaceID any) *MockClient_WorkspaceRunning_Call {
+	return &MockClient_WorkspaceRunning_Call{Call: _e.mock.On("WorkspaceRunning", workspaceID)}
+}
+
+func (_c *MockClient_WorkspaceRunning_Call) Run(run func(workspaceID int)) *MockClient_WorkspaceRunning_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_WorkspaceRunning_Call) Return(b bool, err error) *MockClient_WorkspaceRunning_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockClient_WorkspaceRunning_Call) RunAndReturn(run func(workspaceID int) (bool, error)) *MockClient_WorkspaceRunning_Call {
+	_c.Call.Return(run)
+	return _c
+}

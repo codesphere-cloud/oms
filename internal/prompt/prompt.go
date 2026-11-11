@@ -34,10 +34,11 @@ type StdinPrompter struct {
 }
 
 // NewPrompter returns a prompter reading from stdin. A non-interactive one never asks
-// and answers every question with its default.
+// and answers every question with its default. An interrupt while it waits for an answer
+// ends the process, as nothing is in progress that could be cancelled cleanly.
 func NewPrompter(interactive bool) *StdinPrompter {
 	return &StdinPrompter{
-		reader:      bufio.NewReader(os.Stdin),
+		reader:      bufio.NewReader(&interruptReader{reader: os.Stdin, notifier: OSSignalNotifier{}, exiter: OSExiter{}}),
 		interactive: interactive,
 	}
 }
