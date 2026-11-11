@@ -8,6 +8,7 @@ package prompt
 
 import (
 	"bufio"
+	"context"
 	"log"
 	"os"
 	"strconv"
@@ -35,10 +36,11 @@ type StdinPrompter struct {
 
 // NewPrompter returns a prompter reading from stdin. A non-interactive one never asks
 // and answers every question with its default. An interrupt while it waits for an answer
-// ends the process, as nothing is in progress that could be cancelled cleanly.
-func NewPrompter(interactive bool) *StdinPrompter {
+// ends the process, as nothing is in progress that could be cancelled cleanly. So does a
+// question asked after ctx was already cancelled, so an earlier interrupt is not lost.
+func NewPrompter(ctx context.Context, interactive bool) *StdinPrompter {
 	return &StdinPrompter{
-		reader:      bufio.NewReader(&interruptReader{reader: os.Stdin, notifier: OSSignalNotifier{}, exiter: OSExiter{}}),
+		reader:      bufio.NewReader(&interruptReader{ctx: ctx, reader: os.Stdin, notifier: OSSignalNotifier{}, exiter: OSExiter{}}),
 		interactive: interactive,
 	}
 }

@@ -393,7 +393,7 @@ func (ci *CodesphereInstaller) runInstaller(ctx context.Context, pm PackageManag
 	log.Printf("Using Node.js executable: %s", nodePath)
 	log.Println("Starting private cloud installer script...")
 
-	cmdArgs, err := ci.installerCommandArgs(pm, config)
+	cmdArgs, err := ci.installerCommandArgs(ctx, pm, config)
 	if err != nil {
 		return err
 	}
@@ -475,7 +475,7 @@ func (ci *CodesphereInstaller) runLocalComponents(ctx context.Context, pm Packag
 	return nil
 }
 
-func (ci *CodesphereInstaller) installerCommandArgs(pm PackageManager, config files.RootConfig) ([]string, error) {
+func (ci *CodesphereInstaller) installerCommandArgs(ctx context.Context, pm PackageManager, config files.RootConfig) ([]string, error) {
 	installerPath := filepath.Join(pm.GetWorkDir(), "private-cloud-installer.js")
 	archivePath := filepath.Join(pm.GetWorkDir(), "deps.tar.gz")
 	cmdArgs := []string{installerPath, "--archive", archivePath, "--config", ci.ConfigPath, "--privKey", ci.PrivKey}
@@ -500,7 +500,7 @@ func (ci *CodesphereInstaller) installerCommandArgs(pm PackageManager, config fi
 
 	sort.Strings(executedSteps)
 
-	prompter := prompt.NewPrompter(!ci.AutoApprove)
+	prompter := prompt.NewPrompter(ctx, !ci.AutoApprove)
 
 	msg := fmt.Sprintf("The following steps will be executed: %s. Type \"yes\" to continue.", strings.Join(executedSteps, ", "))
 	if prompter.String(msg, "yes") != "yes" {

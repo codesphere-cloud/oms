@@ -67,6 +67,7 @@ func (c *InstallK0sCmd) RunE(cmd *cobra.Command, _ []string) error {
 	pm := installer.NewPackage(env.GetOmsWorkdir(), c.Opts.Package)
 	k0s := installer.NewK0s(hw, env, c.FileWriter)
 	k0sctl := installer.NewK0sctl(hw, env, c.FileWriter)
+	c.Prompter = prompt.NewPrompter(cmd.Context(), true)
 
 	return c.InstallK0s(cmd.Context(), pm, k0s, k0sctl)
 }
@@ -104,7 +105,6 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 		Opts:       InstallK0sOpts{GlobalOptions: opts},
 		Env:        env.NewEnv(),
 		FileWriter: intutil.NewFilesystemWriter(),
-		Prompter:   prompt.NewPrompter(true),
 	}
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", installer.DefaultK0sVersion, "Version of k0s to install")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.K0sctlVersion, "k0sctl-version", installer.DefaultK0sctlVersion, "Version of k0sctl to use")

@@ -41,18 +41,23 @@ type SmoketestCodesphereCmd struct {
 	Opts *teststeps.SmoketestCodesphereOpts
 }
 
-// RunE creates the Codesphere API client and runs the smoke test.
+// RunE creates the Codesphere API client and runs the smoke test. The client is bound to the
+// --timeout deadline, so an in-flight API request is stopped once the deadline passes. Workspace
+// cleanup uses the client's cleanup connection, which ignores that deadline.
 func (c *SmoketestCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	c.Opts.Verbose = c.GlobalOptions.Verbose
 
-	client, err := codesphere.NewClient(cmd.Context(), c.Opts.BaseURL, c.Opts.Token)
+	ctx, cancel := context.WithTimeout(cmd.Context(), c.Opts.Timeout)
+	defer cancel()
+
+	client, err := codesphere.NewClient(ctx, c.Opts.BaseURL, c.Opts.Token)
 	if err != nil {
 		return fmt.Errorf("failed to create Codesphere client: %w", err)
 	}
 
 	c.Opts.Client = client
 
-	return c.RunSmoketest(cmd.Context())
+	return c.RunSmoketest(ctx)
 }
 
 func AddSmoketestCmd(parent *cobra.Command, opts *util.GlobalOptions) {

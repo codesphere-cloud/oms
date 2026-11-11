@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -81,7 +82,7 @@ var _ = Describe("Interactive profile usage", func() {
 			// In non-interactive mode, CollectInteractively would use defaults
 			// We simulate this by checking that the prompter returns defaults
 			// when interactive=false
-			prompter := prompt.NewPrompter(false)
+			prompter := prompt.NewPrompter(context.Background(), false)
 
 			// Test that prompter returns defaults when not interactive
 			Expect(prompter.String("Test", "default-value")).To(Equal("default-value"))

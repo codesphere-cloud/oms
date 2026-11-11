@@ -88,15 +88,18 @@ func (c *contextReader) Read(p []byte) (int, error) {
 
 // interruptReader ends the process when it is interrupted while waiting for input. Prompts
 // cannot return errors, and the root signal handler only cancels the command context, so
-// without this an interrupt at a prompt would be swallowed until the next one.
+// without this an interrupt at a prompt would be swallowed until the next one. The wait is
+// derived from the command context, so an interrupt that arrived before the prompt (for
+// example while a package was being extracted) ends the process instead of being lost.
 type interruptReader struct {
+	ctx      context.Context
 	reader   io.Reader
 	notifier SignalNotifier
 	exiter   Exiter
 }
 
 func (i *interruptReader) Read(p []byte) (int, error) {
-	ctx, stop := i.notifier.NotifyContext(context.Background())
+	ctx, stop := i.notifier.NotifyContext(i.ctx)
 	defer stop()
 
 	// The concrete reader passes io.EOF through unwrapped, as io.Reader callers compare it directly.

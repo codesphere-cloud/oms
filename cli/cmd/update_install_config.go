@@ -77,11 +77,16 @@ type UpdateInstallConfigOpts struct {
 	CodesphereDNSServers                   []string
 }
 
-func (c *UpdateInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE updates the install config with the real config manager and a stdin prompter.
+func (c *UpdateInstallConfigCmd) RunE(cmd *cobra.Command, _ []string) error {
 	icg, err := installer.NewInstallConfigManager(c.Opts.VaultType, c.Opts.AgeKey)
 	if err != nil {
 		return fmt.Errorf("failed to initialize config manager: %w", err)
 	}
+
+	// One prompter for the whole command: it buffers stdin, so a fresh one per
+	// question could drop what the operator already typed.
+	c.Prompter = prompt.NewPrompter(cmd.Context(), true)
 
 	return c.UpdateInstallConfig(icg)
 }
@@ -110,9 +115,6 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *util.GlobalOptions) 
 		},
 		Opts:       &UpdateInstallConfigOpts{GlobalOptions: opts},
 		FileWriter: intutil.NewFilesystemWriter(),
-		// One prompter for the whole command: it buffers stdin, so a fresh one per
-		// question could drop what the operator already typed.
-		Prompter: prompt.NewPrompter(true),
 	}
 
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Path to existing config.yaml file")

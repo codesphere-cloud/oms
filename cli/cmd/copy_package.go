@@ -60,6 +60,8 @@ func (c *CopyPackageCmd) RunE(cmd *cobra.Command, _ []string) error {
 		logs.Debug.SetOutput(os.Stderr)
 	}
 
+	c.Prompter = prompt.NewPrompter(cmd.Context(), true)
+
 	return c.CopyPackage(cmd.Context(), packageManager, &installer.CraneArtifactCopier{
 		Insecure: c.Opts.Insecure,
 	})
@@ -90,7 +92,6 @@ func AddCopyPackageCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 		Opts:       CopyPackageOpts{GlobalOptions: opts, Filename: defaultInstallerPackageArtifact},
 		Env:        env.NewEnv(),
 		FileWriter: intutil.NewFilesystemWriter(),
-		Prompter:   prompt.NewPrompter(true),
 	}
 	c.cmd.PreRunE = func(_ *cobra.Command, _ []string) error {
 		if (c.Opts.Package == "") == (c.Opts.Version == "") {

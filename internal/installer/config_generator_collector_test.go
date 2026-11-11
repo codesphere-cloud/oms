@@ -4,6 +4,7 @@
 package installer_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 
@@ -99,7 +100,7 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 
 		Context("Non-interactive mode", func() {
 			BeforeEach(func() {
-				prompter = prompt.NewPrompter(false)
+				prompter = prompt.NewPrompter(context.Background(), false)
 			})
 
 			It("should return default string value", func() {

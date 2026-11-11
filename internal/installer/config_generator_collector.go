@@ -4,6 +4,7 @@
 package installer
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -12,7 +13,7 @@ import (
 )
 
 func (g *InstallConfig) CollectInteractively() error {
-	prompter := prompt.NewPrompter(true)
+	prompter := prompt.NewPrompter(context.Background(), true)
 
 	g.collectCodespherePackageConfig(prompter)
 	g.collectDatacenterConfig(prompter)
