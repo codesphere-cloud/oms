@@ -364,7 +364,7 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to ensure service accounts: %w", err)
 	}
 
-	err = b.stlog.StepWithRetry("Ensure IAM roles", b.EnsureIAMRoles, 3)
+	err = b.stlog.StepWithRetry("Ensure IAM roles", b.EnsureIAMRoles, defaultStepMaxRetries)
 	if err != nil {
 		return fmt.Errorf("failed to ensure IAM roles: %w", err)
 	}
