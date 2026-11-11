@@ -156,7 +156,7 @@ func deployCodesphereViaArgoCD(
 	pm installer.PackageManager,
 	vaultSecretName string,
 ) error {
-	installerBOM, err := bom.Parse(pm.GetDependencyPath("bom.json"))
+	installerBOM, err := bom.Parse(pm.GetDependencyPath(bom.Filename))
 	if err != nil {
 		return fmt.Errorf("failed to read the package BOM: %w", err)
 	}
