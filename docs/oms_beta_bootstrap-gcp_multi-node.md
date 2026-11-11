@@ -32,6 +32,7 @@ oms beta bootstrap-gcp multi-node [flags]
       --central-otel-username string              Central OpenTelemetry username. Needed when sending spans to central collector (optional)
       --cluster-admin-email string                Email address of the initial cluster admin. Written to the install config and applied as the cluster-admin-email secret before the Codesphere platform is installed (optional)
       --codesphere-registry string                Codesphere registry server written to the "codesphere" entry of additionalRegistries in the install config; override only for development. Its password is read from OMS_PORTAL_API_KEY (default "registry.codesphere.com")
+      --codesphere-via-argocd[=true|false]        Deploy Codesphere through the cs-applications ArgoCD app of apps instead of Helm. Passes --codesphere-via-argocd to the Codesphere installation (default: false)
       --config stringArray                        Local config.yaml file; repeat to merge in order before VM settings
       --create-test-user[=true|false]             Create a test user with API token on the bootstrapped instance for smoke testing (default: false)
       --custom-pg-ip string                       Custom PostgreSQL IP (optional)

@@ -346,6 +346,10 @@ func (b *GCPBootstrapper) installSingleVMCodesphere(registryUser, storageEngine 
 		args = append(args, "--timer")
 	}
 
+	if b.Env.CodesphereViaArgoCD {
+		args = append(args, "--codesphere-via-argocd")
+	}
+
 	command := "KUBECONFIG=/root/.kube/config " + strings.Join(args, " ")
 	if err := n.RunSSHCommand("root", command); err != nil {
 		return fmt.Errorf("local Codesphere bootstrap failed: %w", err)
