@@ -465,8 +465,8 @@ type ACMESolver struct {
 }
 
 type ACMEDNS01Solver struct {
-	Provider string                 `yaml:"provider"`
-	Config   map[string]interface{} `yaml:"config,omitempty"`
+	Provider string         `yaml:"provider"`
+	Config   map[string]any `yaml:"config,omitempty"`
 
 	Secrets map[string]string `yaml:"-"`
 }
@@ -801,9 +801,9 @@ type TelemetryExport struct {
 
 type (
 	// ChartOverride holds Helm values a component override in the install config sets.
-	ChartOverride = map[string]interface{}
+	ChartOverride = map[string]any
 	// ChartValues holds Helm values passed to a chart.
-	ChartValues = map[string]interface{}
+	ChartValues = map[string]any
 )
 
 type ImageRef struct {
@@ -838,7 +838,7 @@ func (i *ImageRef) UnmarshalYAML(node *yaml.Node) error {
 }
 
 // MarshalYAML implements custom marshaling
-func (i ImageRef) MarshalYAML() (interface{}, error) {
+func (i ImageRef) MarshalYAML() (any, error) {
 	// If it's a plain string, marshal as string
 	if i.ImageName != "" {
 		return i.ImageName, nil
@@ -922,36 +922,36 @@ type ManagedServiceConfig struct {
 	Name               string                    `yaml:"name"`
 	Scope              string                    `yaml:"scope,omitempty"`
 	Author             string                    `yaml:"author,omitempty"`
-	Backups            map[string]interface{}    `yaml:"backups,omitempty"`
-	Capabilities       map[string]interface{}    `yaml:"capabilities,omitempty"`
+	Backups            map[string]any            `yaml:"backups,omitempty"`
+	Capabilities       map[string]any            `yaml:"capabilities,omitempty"`
 	Category           string                    `yaml:"category,omitempty"`
-	ConfigSchema       map[string]interface{}    `yaml:"configSchema,omitempty"`
-	DetailsSchema      map[string]interface{}    `yaml:"detailsSchema,omitempty"`
-	SecretsSchema      map[string]interface{}    `yaml:"secretsSchema,omitempty"`
+	ConfigSchema       map[string]any            `yaml:"configSchema,omitempty"`
+	DetailsSchema      map[string]any            `yaml:"detailsSchema,omitempty"`
+	SecretsSchema      map[string]any            `yaml:"secretsSchema,omitempty"`
 	Description        string                    `yaml:"description,omitempty"`
 	DisplayName        string                    `yaml:"displayName,omitempty"`
 	IconURL            string                    `yaml:"iconUrl,omitempty"`
-	Labels             interface{}               `yaml:"labels,omitempty"`
+	Labels             any                       `yaml:"labels,omitempty"`
 	ResourceParameters map[string]*ResourceParam `yaml:"resourceParameters,omitempty"`
 	Plans              []ServicePlan             `yaml:"plans,omitempty"`
 	SchemaVersion      string                    `yaml:"schemaVersion"`
 	TeamSingleton      *bool                     `yaml:"teamSingleton,omitempty"`
 	DocumentationURL   string                    `yaml:"documentationUrl,omitempty"`
-	Backend            map[string]interface{}    `yaml:"backend,omitempty"`
-	Versions           map[string]interface{}    `yaml:"versions,omitempty"`
+	Backend            map[string]any            `yaml:"backend,omitempty"`
+	Versions           map[string]any            `yaml:"versions,omitempty"`
 }
 
 type ServicePlan struct {
-	ID          int                    `yaml:"id"`
-	Description string                 `yaml:"description"`
-	Name        string                 `yaml:"name"`
-	Parameters  map[string]interface{} `yaml:"parameters"`
+	ID          int            `yaml:"id"`
+	Description string         `yaml:"description"`
+	Name        string         `yaml:"name"`
+	Parameters  map[string]any `yaml:"parameters"`
 }
 
 // ResourceParam defines the schema for provider plan parameters.
 type ResourceParam struct {
-	PricedAs string                 `yaml:"pricedAs,omitempty"`
-	Schema   map[string]interface{} `yaml:"schema"`
+	PricedAs string         `yaml:"pricedAs,omitempty"`
+	Schema   map[string]any `yaml:"schema"`
 }
 
 type ManagedServiceBackendsConfig struct {
@@ -1137,41 +1137,37 @@ func (c *RootConfig) buildACMEOverride() {
 
 	dns01 := c.Codesphere.CertIssuer.Acme.Solver.DNS01
 
-	acmeOverride := map[string]interface{}{}
+	acmeOverride := map[string]any{}
 
 	// Build dnsSolver section
 	if dns01.Provider != "" {
-		solverConfig := map[string]interface{}{}
+		solverConfig := map[string]any{}
 
 		if dns01.Config != nil {
-			for k, v := range dns01.Config {
-				solverConfig[k] = v
-			}
+			maps.Copy(solverConfig, dns01.Config)
 		}
 
-		acmeOverride["dnsSolver"] = map[string]interface{}{
+		acmeOverride["dnsSolver"] = map[string]any{
 			dns01.Provider: solverConfig,
 		}
 	}
 
 	if c.Cluster.Certificates.Override == nil {
-		c.Cluster.Certificates.Override = map[string]interface{}{}
+		c.Cluster.Certificates.Override = map[string]any{}
 	}
 
-	issuers, ok := c.Cluster.Certificates.Override["issuers"].(map[string]interface{})
+	issuers, ok := c.Cluster.Certificates.Override["issuers"].(map[string]any)
 	if !ok {
-		issuers = map[string]interface{}{}
+		issuers = map[string]any{}
 	}
 
 	// Merge with existing acme override (don't clobber user-provided fields like solverSecret)
-	existingAcme, ok := issuers["acme"].(map[string]interface{})
+	existingAcme, ok := issuers["acme"].(map[string]any)
 	if !ok {
-		existingAcme = map[string]interface{}{}
+		existingAcme = map[string]any{}
 	}
 
-	for k, v := range acmeOverride {
-		existingAcme[k] = v
-	}
+	maps.Copy(existingAcme, acmeOverride)
 
 	issuers["acme"] = existingAcme
 	c.Cluster.Certificates.Override["issuers"] = issuers
@@ -1308,17 +1304,17 @@ func (c *RootConfig) extractACMESolverFromOverride() {
 		return
 	}
 
-	issuers, ok := override["issuers"].(map[string]interface{})
+	issuers, ok := override["issuers"].(map[string]any)
 	if !ok {
 		return
 	}
 
-	acmeIssuer, ok := issuers["acme"].(map[string]interface{})
+	acmeIssuer, ok := issuers["acme"].(map[string]any)
 	if !ok {
 		return
 	}
 
-	dnsSolver, ok := acmeIssuer["dnsSolver"].(map[string]interface{})
+	dnsSolver, ok := acmeIssuer["dnsSolver"].(map[string]any)
 	if !ok {
 		return
 	}
@@ -1328,7 +1324,7 @@ func (c *RootConfig) extractACMESolverFromOverride() {
 		solver := &ACMEDNS01Solver{
 			Provider: provider,
 		}
-		if cfgMap, ok := cfg.(map[string]interface{}); ok && len(cfgMap) > 0 {
+		if cfgMap, ok := cfg.(map[string]any); ok && len(cfgMap) > 0 {
 			solver.Config = cfgMap
 		}
 

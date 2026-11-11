@@ -8,7 +8,6 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/util"
-	"k8s.io/utils/ptr"
 )
 
 type ResourceProfile string
@@ -201,7 +200,7 @@ func applyNoRequestsProfile(config *files.RootConfig, serviceReplicas int) {
 	})
 
 	if config.Cluster.RgwLoadBalancer == nil {
-		config.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{Enabled: ptr.To(false)}
+		config.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{Enabled: new(false)}
 	}
 
 	config.Cluster.RgwLoadBalancer.Override = util.DeepMergeMaps(config.Cluster.RgwLoadBalancer.Override, map[string]any{

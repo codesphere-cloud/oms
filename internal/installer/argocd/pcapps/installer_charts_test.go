@@ -12,7 +12,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/utils/ptr"
 )
 
 var _ = Describe("InstallerChartsPcAppsValues", func() {
@@ -85,7 +84,7 @@ var _ = Describe("InstallerChartsPcAppsValues", func() {
 
 		It("asks for rgw only with ceph and an enabled cluster.rgw", func() {
 			noCeph := &files.RootConfig{Cluster: files.ClusterConfig{Rgw: &files.RgwConfig{}}}
-			disabled := &files.RootConfig{Ceph: ceph(), Cluster: files.ClusterConfig{Rgw: &files.RgwConfig{Enabled: ptr.To(false)}}}
+			disabled := &files.RootConfig{Ceph: ceph(), Cluster: files.ClusterConfig{Rgw: &files.RgwConfig{Enabled: new(false)}}}
 
 			Expect(wanted(noCeph)).ToNot(ContainElement(pcapps.Rgw))
 			Expect(wanted(disabled)).ToNot(ContainElement(pcapps.Rgw))
@@ -94,7 +93,7 @@ var _ = Describe("InstallerChartsPcAppsValues", func() {
 
 		It("asks for the load balancer with ceph unless the user disabled it", func() {
 			disabled := &files.RootConfig{Ceph: ceph(), Cluster: files.ClusterConfig{RgwLoadBalancer: &files.RgwLoadBalancerConfig{
-				Enabled: ptr.To(false), Override: files.ChartOverride{"replicas": 1},
+				Enabled: new(false), Override: files.ChartOverride{"replicas": 1},
 			}}}
 
 			Expect(wanted(&files.RootConfig{Ceph: ceph()})).To(ContainElement(pcapps.RgwLoadBalancer))
@@ -122,7 +121,7 @@ var _ = Describe("InstallerChartsPcAppsValues", func() {
 
 		It("does not ask for ms-backend-s3 when it is disabled", func() {
 			disabled := &files.RootConfig{ManagedServiceBackends: withS3(&files.S3ManagedServiceConfig{
-				Enabled: ptr.To(false), Override: files.ChartOverride{"replicas": 1},
+				Enabled: new(false), Override: files.ChartOverride{"replicas": 1},
 			})}
 
 			Expect(wanted(disabled)).ToNot(ContainElement(pcapps.MsBackendS3))
@@ -165,10 +164,10 @@ var _ = Describe("InstallerChartsPcAppsValues", func() {
 			config := &files.RootConfig{
 				Ceph: ceph(),
 				Cluster: files.ClusterConfig{
-					Rgw:             &files.RgwConfig{Enabled: ptr.To(true)},
-					RgwLoadBalancer: &files.RgwLoadBalancerConfig{Enabled: ptr.To(true)},
+					Rgw:             &files.RgwConfig{Enabled: new(true)},
+					RgwLoadBalancer: &files.RgwLoadBalancerConfig{Enabled: new(true)},
 				},
-				ManagedServiceBackends: withS3(&files.S3ManagedServiceConfig{Enabled: ptr.To(true)}),
+				ManagedServiceBackends: withS3(&files.S3ManagedServiceConfig{Enabled: new(true)}),
 			}
 
 			Expect(turnedOff(config)).To(BeEmpty())
@@ -221,7 +220,7 @@ var _ = Describe("InstallerChartsPcAppsValues", func() {
 		})
 
 		It("forwards the load balancer to the ceph hosts when cluster.rgw is disabled", func() {
-			config := &files.RootConfig{Ceph: ceph(), Cluster: files.ClusterConfig{Rgw: &files.RgwConfig{Enabled: ptr.To(false)}}}
+			config := &files.RootConfig{Ceph: ceph(), Cluster: files.ClusterConfig{Rgw: &files.RgwConfig{Enabled: new(false)}}}
 
 			Expect(valuesObject(config, pcapps.RgwLoadBalancer)).To(Equal(files.ChartValues{
 				"externalRgwEndpoints": []any{map[string]any{"ip": "10.0.0.11"}},

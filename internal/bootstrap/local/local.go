@@ -22,11 +22,9 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -266,7 +264,7 @@ func (b *LocalBootstrapper) storageClassName() string {
 func (b *LocalBootstrapper) EnsureNamespaces() error {
 	for _, ns := range []string{codesphereSystemNamespace, codesphereNamespace, files.WorkspacesNamespace} {
 		namespace := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{Name: ns},
+			Name: ns,
 		}
 
 		// Mark the workspaces namespace as owned by the cluster-config Helm
@@ -292,18 +290,16 @@ func (b *LocalBootstrapper) EnsureNamespaces() error {
 	// The nginx ingress controller references this service as a default backend;
 	// without it the controller pods fail to start.
 	errorPageSvc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "error-page-server",
-			Namespace: codesphereNamespace,
-			Labels: map[string]string{
-				"app.kubernetes.io/managed-by":   "Helm",
-				"meta.helm.sh/release-name":      "codesphere",
-				"meta.helm.sh/release-namespace": codesphereNamespace,
-			},
-			Annotations: map[string]string{
-				"meta.helm.sh/release-name":      "codesphere",
-				"meta.helm.sh/release-namespace": codesphereNamespace,
-			},
+		Name:      "error-page-server",
+		Namespace: codesphereNamespace,
+		Labels: map[string]string{
+			"app.kubernetes.io/managed-by":   "Helm",
+			"meta.helm.sh/release-name":      "codesphere",
+			"meta.helm.sh/release-namespace": codesphereNamespace,
+		},
+		Annotations: map[string]string{
+			"meta.helm.sh/release-name":      "codesphere",
+			"meta.helm.sh/release-namespace": codesphereNamespace,
 		},
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeClusterIP,
@@ -330,10 +326,8 @@ func (b *LocalBootstrapper) CreateCephAdminSecrets() error {
 
 	for _, ns := range []string{codesphereNamespace, files.WorkspacesNamespace} {
 		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "ceph-admin-credentials",
-				Namespace: ns,
-			},
+			Name:      "ceph-admin-credentials",
+			Namespace: ns,
 		}
 
 		_, err := controllerutil.CreateOrUpdate(b.ctx, b.kubeClient, secret, func() error {
@@ -366,10 +360,8 @@ func (b *LocalBootstrapper) SyncCephMonEndpoints() error {
 
 	for _, ns := range []string{codesphereNamespace, files.WorkspacesNamespace} {
 		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "ceph-mon-endpoints",
-				Namespace: ns,
-			},
+			Name:      "ceph-mon-endpoints",
+			Namespace: ns,
 		}
 
 		_, err := controllerutil.CreateOrUpdate(b.ctx, b.kubeClient, cm, func() error {
@@ -455,8 +447,8 @@ func (b *LocalBootstrapper) readServiceCIDRFromK8s() (serviceCIDR string, err er
 
 	for _, container := range apiServerPod.Spec.Containers {
 		for _, arg := range container.Command {
-			if strings.HasPrefix(arg, "--service-cluster-ip-range=") {
-				serviceCIDR = strings.TrimPrefix(arg, "--service-cluster-ip-range=")
+			if after, ok := strings.CutPrefix(arg, "--service-cluster-ip-range="); ok {
+				serviceCIDR = after
 				break
 			}
 		}
@@ -490,8 +482,8 @@ func (b *LocalBootstrapper) readServiceCIDRFromProc() (serviceCIDR string, err e
 
 		if strings.Contains(cmdline, "kube-apiserver") {
 			// Arguments in /proc/PID/cmdline are null-terminated
-			args := strings.Split(cmdline, "\x00")
-			for _, arg := range args {
+			args := strings.SplitSeq(cmdline, "\x00")
+			for arg := range args {
 				if strings.HasPrefix(arg, "--service-cluster-ip-range=") {
 					serviceCIDR = strings.Split(arg, "=")[1]
 					return
@@ -693,7 +685,7 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	setLocalClusterComponents(b.Env.InstallConfig)
 
 	b.Env.InstallConfig.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{
-		Enabled: ptr.To(b.Env.StorageEngine != StorageEngineLocal),
+		Enabled: new(b.Env.StorageEngine != StorageEngineLocal),
 	}
 	if b.Env.StorageEngine != StorageEngineLocal {
 		cephMonHosts, err := b.ReadCephMonHosts()
@@ -832,7 +824,7 @@ func (b *LocalBootstrapper) configureStorageValues() {
 		b.Env.InstallConfig.ManagedServiceBackends.S3 = &files.S3ManagedServiceConfig{}
 	}
 
-	b.Env.InstallConfig.ManagedServiceBackends.S3.Enabled = ptr.To(false)
+	b.Env.InstallConfig.ManagedServiceBackends.S3.Enabled = new(false)
 
 	b.Env.InstallConfig.Codesphere.ManagedServices = slices.DeleteFunc(b.Env.InstallConfig.Codesphere.ManagedServices, func(service files.ManagedServiceConfig) bool {
 		return service.Name == "s3"
