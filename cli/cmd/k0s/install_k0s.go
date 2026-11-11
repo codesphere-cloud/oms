@@ -6,7 +6,9 @@ package k0s
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"os/exec"
@@ -278,11 +280,11 @@ const k0sControllerUnitPath = "/etc/systemd/system/k0scontroller.service"
 // at unitPath. k0s creates the unit empty and fills it shortly after, so an interrupted install can
 // leave a 0-byte unit behind. Such a unit is removed and reported as missing so the install is retried.
 func (c *InstallK0sCmd) K0sControllerUnitInstalled(unitPath string) (bool, error) {
-	if !c.FileWriter.Exists(unitPath) {
+	content, err := c.FileWriter.ReadFile(unitPath)
+	if errors.Is(err, fs.ErrNotExist) {
 		return false, nil
 	}
 
-	content, err := c.FileWriter.ReadFile(unitPath)
 	if err != nil {
 		return false, fmt.Errorf("failed to inspect k0s service: %w", err)
 	}

@@ -161,7 +161,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		return fmt.Errorf("failed to create github client: %w", err)
 	}
 
-	sshClient := node.NewSSHNodeClient(c.SSHQuiet)
+	sshClient := node.NewSSHNodeClient(ctx, c.SSHQuiet)
 	if c.CodesphereEnv.SingleVM {
 		sshClient.RegistryPassword = c.CodesphereEnv.GitHubPAT
 	}

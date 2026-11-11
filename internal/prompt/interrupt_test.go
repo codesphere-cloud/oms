@@ -98,6 +98,20 @@ var _ = Describe("interruptReader", func() {
 		Expect(err).To(MatchError(io.EOF))
 	})
 
+	It("ends the process before consuming a buffered answer once the command was interrupted", func() {
+		commandCtx, interruptCommand := context.WithCancel(context.Background())
+		interruptCommand()
+		exiter.EXPECT().Exit(130).Once()
+		p := &StdinPrompter{
+			reader:      bufio.NewReader(strings.NewReader("yes\n")),
+			interactive: true,
+			ctx:         commandCtx,
+			exiter:      exiter,
+		}
+
+		p.Bool("Continue?", false)
+	})
+
 	It("ends the process when a prompt is interrupted", func() {
 		interrupted, cancel := context.WithCancel(context.Background())
 		cancel()

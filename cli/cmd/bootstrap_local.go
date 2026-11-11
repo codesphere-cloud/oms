@@ -15,8 +15,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"golang.org/x/term"
-
 	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
@@ -133,7 +131,7 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 		return err
 	}
 
-	if err := c.resolveRegistryPassword(); err != nil {
+	if err := c.resolveRegistryPassword(ctx); err != nil {
 		return err
 	}
 
@@ -197,7 +195,7 @@ func validateLocalStorageEngine(engine string) error {
 	}
 }
 
-func (c *BootstrapLocalCmd) resolveRegistryPassword() error {
+func (c *BootstrapLocalCmd) resolveRegistryPassword(ctx context.Context) error {
 	if pw := os.Getenv("OMS_REGISTRY_PASSWORD"); len(pw) != 0 {
 		c.CodesphereEnv.RegistryPassword = pw
 		return nil
@@ -205,7 +203,7 @@ func (c *BootstrapLocalCmd) resolveRegistryPassword() error {
 
 	fmt.Print("Registry password: ")
 
-	pw, err := term.ReadPassword(int(os.Stdin.Fd()))
+	pw, err := prompt.ReadPassword(ctx, prompt.OSTerminal{}, int(os.Stdin.Fd()))
 
 	fmt.Println()
 

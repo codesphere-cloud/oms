@@ -6,6 +6,7 @@ package k0s_test
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -79,20 +80,18 @@ var _ = Describe("InstallK0sCmd", func() {
 		const unitPath = "/etc/systemd/system/k0scontroller.service"
 
 		It("reports a missing unit as not installed", func() {
-			mockFileWriter.EXPECT().Exists(unitPath).Return(false)
+			mockFileWriter.EXPECT().ReadFile(unitPath).Return(nil, &fs.PathError{Op: "open", Path: unitPath, Err: fs.ErrNotExist})
 
 			Expect(c.K0sControllerUnitInstalled(unitPath)).To(BeFalse())
 		})
 
 		It("reports a unit with content as installed", func() {
-			mockFileWriter.EXPECT().Exists(unitPath).Return(true)
 			mockFileWriter.EXPECT().ReadFile(unitPath).Return([]byte("[Unit]\nDescription=k0s\n"), nil)
 
 			Expect(c.K0sControllerUnitInstalled(unitPath)).To(BeTrue())
 		})
 
 		It("removes an empty unit left by an interrupted install and reports it as not installed", func() {
-			mockFileWriter.EXPECT().Exists(unitPath).Return(true)
 			mockFileWriter.EXPECT().ReadFile(unitPath).Return([]byte{}, nil)
 			mockFileWriter.EXPECT().Remove(unitPath).Return(nil)
 
@@ -100,15 +99,13 @@ var _ = Describe("InstallK0sCmd", func() {
 		})
 
 		It("fails when the unit cannot be read", func() {
-			mockFileWriter.EXPECT().Exists(unitPath).Return(true)
-			mockFileWriter.EXPECT().ReadFile(unitPath).Return(nil, errors.New("permission denied"))
+			mockFileWriter.EXPECT().ReadFile(unitPath).Return(nil, &fs.PathError{Op: "open", Path: unitPath, Err: fs.ErrPermission})
 
 			_, err := c.K0sControllerUnitInstalled(unitPath)
 			Expect(err).To(MatchError(ContainSubstring("failed to inspect k0s service")))
 		})
 
 		It("fails when an empty unit cannot be removed", func() {
-			mockFileWriter.EXPECT().Exists(unitPath).Return(true)
 			mockFileWriter.EXPECT().ReadFile(unitPath).Return([]byte{}, nil)
 			mockFileWriter.EXPECT().Remove(unitPath).Return(errors.New("read-only file system"))
 

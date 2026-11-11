@@ -48,7 +48,7 @@ func (c *CleanupK0sCmd) RunE(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("failed to clean up k0s: %w", err)
 	}
 
-	nodeClient := node.NewSSHNodeClient(!c.Opts.Verbose)
+	nodeClient := node.NewSSHNodeClient(cmd.Context(), !c.Opts.Verbose)
 
 	var nodes []*node.Node
 	for _, ip := range installer.K0sCleanupNodeIPs(config) {
