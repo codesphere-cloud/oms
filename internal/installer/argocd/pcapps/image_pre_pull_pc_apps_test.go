@@ -106,6 +106,7 @@ var _ = Describe("ImagePrePullPcAppsValues", func() {
 		valuesObject := appValues(values)
 		Expect(valuesObject["priorityClassName"]).To(Equal("prod-codesphere-deployment"))
 		Expect(valuesObject["allowOnControlPlane"]).To(BeFalse())
+		Expect(valuesObject["pauseImage"]).To(Equal(prefix + "workspace-server:v1.2.3"))
 		Expect(images(valuesObject, "workspace")).To(Equal([]map[string]string{
 			{"name": "workspace-server", "image": prefix + "workspace-server:v1.2.3"},
 			{"name": "vpn", "image": prefix + "vpn:v1.2.3"},
@@ -142,6 +143,7 @@ var _ = Describe("ImagePrePullPcAppsValues", func() {
 
 		valuesObject := appValues(values)
 		Expect(valuesObject["allowOnControlPlane"]).To(BeTrue())
+		Expect(valuesObject["pauseImage"]).To(Equal(prefix + "workspace-server:v1.2.3"))
 		Expect(images(valuesObject, "workspace")).To(ContainElement(
 			map[string]string{"name": "workspace-router", "image": "registry.example.com/router:v1.2.3"},
 		))

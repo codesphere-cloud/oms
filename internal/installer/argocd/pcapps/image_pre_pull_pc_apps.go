@@ -46,6 +46,8 @@ func ImagePrePullPcAppsValues(config *files.RootConfig, bomConfig *bom.Config) (
 	priorityClass, _ := lookup(global, "services", "priorityClass").(string)
 	allowOnControlPlane, _ := global["allowWorkspacesOnControlPlane"].(bool)
 
+	workspaceImages := workspacePrePullImages(global, bomImages, imageTag)
+
 	return files.ChartValues{
 		"applications": files.ChartValues{
 			"image-pre-pull": files.ChartValues{
@@ -53,8 +55,9 @@ func ImagePrePullPcAppsValues(config *files.RootConfig, bomConfig *bom.Config) (
 				"valuesObject": files.ChartValues{
 					"priorityClassName":   priorityClass,
 					"allowOnControlPlane": allowOnControlPlane,
+					"pauseImage":          pausePrePullImage(workspaceImages),
 					"images": files.ChartValues{
-						"workspace": workspacePrePullImages(global, bomImages, imageTag),
+						"workspace": workspaceImages,
 						"agents":    agentPrePullImages(global, imageTag),
 					},
 				},
@@ -92,6 +95,18 @@ func workspacePrePullImages(global map[string]any, bomImages map[string]string, 
 	}
 
 	return images
+}
+
+// pausePrePullImage returns the image of the long-running pause container. It is the workspace
+// server image, as it has sh and sleep. Returns "" if the list has no workspace server.
+func pausePrePullImage(workspaceImages []prePullImage) string {
+	for _, image := range workspaceImages {
+		if image["name"] == "workspace-server" {
+			return image["image"]
+		}
+	}
+
+	return ""
 }
 
 // agentPrePullImages lists the default flavor image of every OS in the deploy config, sorted by OS.
