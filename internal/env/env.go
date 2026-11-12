@@ -9,6 +9,10 @@ import (
 	"path/filepath"
 )
 
+// DefaultOmsWorkdir is the working directory, relative to the current one, that oms uses when
+// OMS_WORKDIR is unset.
+const DefaultOmsWorkdir = "oms-workdir"
+
 //mockery:generate: true
 type Env interface {
 	GetOmsPortalApiKey() (string, error)
@@ -51,7 +55,7 @@ func (e *Environment) GetOmsPortalApiKey() (string, error) {
 func (e *Environment) GetOmsWorkdir() string {
 	workdir := os.Getenv("OMS_WORKDIR")
 	if workdir == "" {
-		return "./oms-workdir"
+		return DefaultOmsWorkdir
 	}
 
 	return workdir

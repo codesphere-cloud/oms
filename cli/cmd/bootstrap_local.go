@@ -24,6 +24,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/local"
+	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	rookcephv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
@@ -74,7 +75,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 				  OMS_GIT_PASSWORD       Optional Git password/token for ArgoCD repository access.
 				  OMS_PORTAL_API_KEY     OMS portal API key for installer downloads with --install-version.
 				  OMS_PORTAL_API         Portal API URL (default: https://oms-portal.codesphere.com/api).
-				  OMS_WORKDIR            Installer working directory (default: ./oms-workdir).
+				  OMS_WORKDIR            Installer working directory (default: ` + env.DefaultOmsWorkdir + `).
 				  KUBECONFIG             Kubeconfig file(s); uses the current context (default: ~/.kube/config).
 				  HELM_DRIVER            Helm release storage driver (default: secret).
 				  XDG_CONFIG_HOME       Overrides the config directory searched for sops/age/keys.txt.`),
