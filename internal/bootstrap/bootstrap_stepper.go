@@ -31,7 +31,7 @@ type StepLogger struct {
 	retryDelay  time.Duration
 }
 
-const defaultRetryDelay = 500 * time.Millisecond
+const defaultRetryDelay = 1000 * time.Millisecond
 
 type stepTiming struct {
 	name     string
@@ -149,7 +149,7 @@ func (b *StepLogger) Step(name string, fn func() error) error {
 	return err
 }
 
-// StepWithRetry is calling Step up to maxRetries with a backoff of 500ms.
+// StepWithRetry is calling Step up to maxRetries with a backoff of 1000ms.
 // Returns an error if all attempts failed.
 func (b *StepLogger) StepWithRetry(name string, fn func() error, maxRetries int) error {
 	var lastError error
@@ -174,7 +174,7 @@ func (b *StepLogger) StepWithRetry(name string, fn func() error, maxRetries int)
 		}
 
 		if attemptID < maxRetries {
-			time.Sleep(b.retryDelay)
+			time.Sleep(b.retryDelay * time.Duration(attemptID*attemptID))
 
 			if !b.config.Silent {
 				fmt.Printf("Retrying '%s'...", name)
