@@ -37,7 +37,7 @@ var _ = Describe("InstallerChartsPcAppsValues", func() {
 	}
 
 	valuesOf := func(config *files.RootConfig, skipped ...string) files.ChartValues {
-		return pcapps.InstallerChartsPcAppsValues(config, func(step string) bool { return slices.Contains(skipped, step) })
+		return pcapps.InstallerChartsPcAppsValues(config, skipped)
 	}
 	application := func(config *files.RootConfig, chart string) files.ChartValues {
 		applications, _ := valuesOf(config)["applications"].(files.ChartValues)

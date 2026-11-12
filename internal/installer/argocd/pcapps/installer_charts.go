@@ -26,8 +26,8 @@ type installerChart struct {
 	values func(*files.RootConfig) files.ChartValues
 }
 
-func (c installerChart) application(config *files.RootConfig, skipped func(step string) bool) files.ChartValues {
-	if skipped(c.step) || !c.installed(config) {
+func (c installerChart) application(config *files.RootConfig, skipSteps []string) files.ChartValues {
+	if installer.IsStepSkipped(*config, skipSteps, c.step) || !c.installed(config) {
 		return files.ChartValues{"enabled": false}
 	}
 
@@ -46,13 +46,13 @@ var installerCharts = []installerChart{
 }
 
 // InstallerChartsPcAppsValues returns the pc-applications values of the charts the PC installer
-// installs: `enabled: false` for a chart the config does not ask for or whose step the run skips,
-// otherwise the chart's values with `enabled` left to the pc-applications default.
-func InstallerChartsPcAppsValues(config *files.RootConfig, skipped func(step string) bool) files.ChartValues {
+// installs: `enabled: false` for a chart the config does not ask for or whose step skipSteps or
+// operations.skip skips, otherwise the chart's values with `enabled` left to the pc-applications default.
+func InstallerChartsPcAppsValues(config *files.RootConfig, skipSteps []string) files.ChartValues {
 	applications := files.ChartValues{}
 
 	for _, chart := range installerCharts {
-		if application := chart.application(config, skipped); len(application) > 0 {
+		if application := chart.application(config, skipSteps); len(application) > 0 {
 			applications[chart.name] = application
 		}
 	}

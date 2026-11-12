@@ -327,8 +327,7 @@ func (i *AppInstaller) getPcAppsValues() (files.ChartValues, error) {
 
 	openFGAppValues := pcapps.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault)
 	rookCephAppValues := pcapps.RookCephPcAppsValues(&i.cfg.Config)
-	skipped := func(step string) bool { return installer.IsStepSkipped(i.cfg.Config, i.cfg.SkipSteps, step) }
-	installerChartValues := pcapps.InstallerChartsPcAppsValues(&i.cfg.Config, skipped)
+	installerChartValues := pcapps.InstallerChartsPcAppsValues(&i.cfg.Config, i.cfg.SkipSteps)
 
 	values := util.DeepMergeMaps(openFGAppValues, rookCephAppValues)
 	values = util.DeepMergeMaps(values, clusterConfigValues)
