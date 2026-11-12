@@ -49,6 +49,7 @@ var _ = Describe("CopyPackageCmd", func() {
 
 		copier := installer.NewMockArtifactCopier(GinkgoT())
 		copier.EXPECT().Copy(context.Background(), "ghcr.io/codesphere/api:v1", "registry.example.com/mirror/ghcr_io/codesphere/api:v1").Return(nil).Once()
+
 		command := &CopyPackageCmd{
 			Opts:     CopyPackageOpts{Dest: "registry.example.com/mirror"},
 			Prompter: prompter,
@@ -79,6 +80,7 @@ var _ = Describe("CopyPackageCmd", func() {
 
 		copier := installer.NewMockArtifactCopier(GinkgoT())
 		copier.EXPECT().Copy(context.Background(), "ghcr.io/codesphere/api:v1", "registry.example.com/mirror/ghcr_io/codesphere/api:v1").Return(nil).Once()
+
 		command := &CopyPackageCmd{
 			Opts:     CopyPackageOpts{Dest: "registry.example.com/mirror", Yes: true},
 			Prompter: prompt.NewMockPrompter(GinkgoT()),
@@ -154,10 +156,10 @@ var _ = Describe("CopyPackageCmd", func() {
 			fakeFile := os.NewFile(uintptr(0), destination)
 			mockFileWriter.EXPECT().Create(destination).Return(fakeFile, nil)
 			mockFileWriter.EXPECT().Open(destination).Return(fakeFile, nil)
-			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, mock.Anything, mock.Anything, 0, false).Return(nil)
+			mockPortal.EXPECT().DownloadBuildArtifact(mock.Anything, portal.CodesphereProduct, mock.Anything, mock.Anything, 0, false).Return(nil)
 			mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, mock.Anything).Return(nil)
 
-			path, err := command.resolvePackage(mockPortal)
+			path, err := command.resolvePackage(context.Background(), mockPortal)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(path).To(Equal(destination))
 		})
@@ -165,7 +167,7 @@ var _ = Describe("CopyPackageCmd", func() {
 		It("returns an error when the upstream package cannot be found", func() {
 			mockPortal.EXPECT().GetBuild(portal.CodesphereProduct, build.Version, "").Return(portal.Build{}, fmt.Errorf("build not found"))
 
-			_, err := command.resolvePackage(mockPortal)
+			_, err := command.resolvePackage(context.Background(), mockPortal)
 			Expect(err).To(MatchError(ContainSubstring("failed to get upstream package")))
 		})
 	})

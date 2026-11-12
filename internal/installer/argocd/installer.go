@@ -150,7 +150,7 @@ func NewInstaller(cfg InstallerConfig, bomConfig *bom.Config) (*Installer, error
 
 // Install is the top-level orchestrator. It delegates every Helm interaction
 // to the HelmClient interface, keeping this function short and testable.
-func (a *Installer) Install() error {
+func (a *Installer) Install(ctx context.Context) error {
 	if err := installer.ValidateChartRepositoryURL(a.RepoURL); err != nil {
 		return fmt.Errorf("validating ArgoCD chart repository: %w", err)
 	}
@@ -160,8 +160,6 @@ func (a *Installer) Install() error {
 	} else {
 		log.Println("Installing/Upgrading ArgoCD helm chart (latest version)")
 	}
-
-	ctx := context.Background()
 
 	vals, err := a.chartLoader().LoadValues(a.ValueFiles)
 	if err != nil {
@@ -210,6 +208,7 @@ func (a *Installer) Install() error {
 	if err := installer.LoginChartRegistry(ctx, a.Helm, chartName, ociUsernameOrDefault(a.OciUsername), a.OciPassword); err != nil {
 		return fmt.Errorf("logging in to ArgoCD chart registry: %w", err)
 	}
+
 	cfg := installer.ChartConfig{
 		ReleaseName:     "argocd",
 		ChartName:       chartName,
@@ -303,6 +302,7 @@ func (a *Installer) refreshRetainedPullSecret(ctx context.Context, existing *ins
 	if err := a.provisionImagePullSecret(ctx, pullSecret); err != nil {
 		return fmt.Errorf("refreshing retained ArgoCD image pull secret: %w", err)
 	}
+
 	return nil
 }
 
@@ -432,6 +432,7 @@ func (a *Installer) install(ctx context.Context, cfg installer.ChartConfig) erro
 // upgrade performs a Helm upgrade after the requested version has been validated.
 func (a *Installer) upgrade(ctx context.Context, cfg installer.ChartConfig, existing *installer.ReleaseInfo) error {
 	log.Printf("Found existing ArgoCD release with chart version %s\n", existing.InstalledVersion)
+
 	if a.Version != "" {
 		log.Printf("Upgrading ArgoCD from %s to %s\n", existing.InstalledVersion, a.Version)
 	} else {

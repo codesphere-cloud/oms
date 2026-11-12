@@ -22,20 +22,27 @@ func TestBootstrap(t *testing.T) {
 
 func captureStepOutput(run func()) string {
 	GinkgoHelper()
+
 	reader, writer, err := os.Pipe()
 	Expect(err).NotTo(HaveOccurred())
 	DeferCleanup(reader.Close)
 	DeferCleanup(func() { _ = writer.Close() })
+
 	oldStdout := os.Stdout
 
 	DeferCleanup(func() { os.Stdout = oldStdout })
+
 	os.Stdout = writer
+
 	run()
+
 	os.Stdout = oldStdout
 
 	Expect(writer.Close()).To(Succeed())
+
 	output, err := io.ReadAll(reader)
 	Expect(err).NotTo(HaveOccurred())
+
 	return string(output)
 }
 
@@ -135,5 +142,68 @@ var _ = Describe("Step logger", func() {
 
 	It("omits the summary when no steps ran", func() {
 		Expect(captureStepOutput(NewStepLogger(false, WithTimer(true)).PrintSummary)).To(BeEmpty())
+	})
+
+	Describe("StepWithRetry", func() {
+		var logger *StepLogger
+
+		BeforeEach(func() {
+			logger = NewStepLogger(true)
+			logger.retryDelay = 0
+		})
+
+		It("runs the step once when it succeeds on the first attempt", func() {
+			calls := 0
+			err := logger.StepWithRetry("Example", func() error {
+				calls++
+				return nil
+			}, 3)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(calls).To(Equal(1))
+		})
+
+		It("retries until the step succeeds", func() {
+			calls := 0
+			err := logger.StepWithRetry("Example", func() error {
+				calls++
+				if calls < 3 {
+					return errors.New("transient")
+				}
+
+				return nil
+			}, 3)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(calls).To(Equal(3))
+		})
+
+		It("returns the last error after all attempts fail", func() {
+			calls := 0
+			lastFailure := errors.New("final problem")
+			err := logger.StepWithRetry("Example", func() error {
+				calls++
+				if calls < 3 {
+					return errors.New("earlier problem")
+				}
+
+				return lastFailure
+			}, 3)
+			Expect(err).To(MatchError(lastFailure))
+			Expect(err).To(MatchError(ContainSubstring("'Example' failed after 3 retries")))
+			Expect(calls).To(Equal(3))
+		})
+
+		It("records a timing entry for each attempt", func() {
+			logger = NewStepLogger(false, WithTimer(true))
+			logger.retryDelay = 0
+			failure := errors.New("problem")
+			output := captureStepOutput(func() {
+				Expect(logger.StepWithRetry("Example", func() error { return failure }, 2)).To(MatchError(failure))
+			})
+			Expect(output).To(ContainSubstring("Example failed: problem"))
+			Expect(output).To(ContainSubstring("Example (Retry 2/2) failed: problem"))
+			Expect(logger.timings).To(HaveLen(2))
+			Expect(logger.timings[0].name).To(Equal("Example"))
+			Expect(logger.timings[1].name).To(Equal("Example (Retry 2/2)"))
+		})
 	})
 })

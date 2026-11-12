@@ -28,6 +28,7 @@ var _ = Describe("ApplyProfile", func() {
 				Expect(err).To(HaveOccurred())
 			} else {
 				Expect(err).NotTo(HaveOccurred())
+
 				config := icg.GetInstallConfig()
 				Expect(config.Datacenter.Name).To(Equal(checkDatacenterName))
 			}
@@ -46,6 +47,7 @@ var _ = Describe("ApplyProfile", func() {
 
 			err := icg.ApplyProfile("dev")
 			Expect(err).NotTo(HaveOccurred())
+
 			config := icg.GetInstallConfig()
 			Expect(config.Datacenter.ID).To(Equal(1))
 			Expect(config.Datacenter.Name).To(Equal("dev"))
@@ -130,6 +132,7 @@ var _ = Describe("UpdateConfigFromOpts", func() {
 		accessKey := vault.GetSecret(files.SecretOpenfgaDbBackupAccessKeyId)
 		Expect(accessKey).NotTo(BeNil())
 		Expect(accessKey.Fields.Password).To(Equal("access-id"))
+
 		secretKey := vault.GetSecret(files.SecretOpenfgaDbBackupSecretAccessKey)
 		Expect(secretKey).NotTo(BeNil())
 		Expect(secretKey.Fields.Password).To(Equal("secret-key"))
@@ -166,6 +169,7 @@ var _ = Describe("ValidateConfig", func() {
 
 	BeforeEach(func() {
 		var err error
+
 		configFile, err = os.CreateTemp("", "config-*.yaml")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -289,6 +293,7 @@ codesphere:
 
 			err = vaultFile.Close()
 			Expect(err).NotTo(HaveOccurred())
+
 			tempDir := GinkgoT().TempDir()
 			ageKeyPath := filepath.Join(tempDir, "age_key.txt")
 			plaintextVaultPath := filepath.Join(tempDir, "prod.vault.plain.yaml")
@@ -297,13 +302,16 @@ codesphere:
 			recipient, err := exec.Command("age-keygen", "-y", ageKeyPath).Output()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(sops.EncryptFile(plaintextVaultPath, vaultFile.Name(), strings.TrimSpace(string(recipient)))).To(Succeed())
+
 			previousAgeKeyFile, hadPreviousAgeKeyFile := os.LookupEnv("SOPS_AGE_KEY_FILE")
+
 			Expect(os.Setenv("SOPS_AGE_KEY_FILE", ageKeyPath)).To(Succeed())
 			DeferCleanup(func() {
 				if hadPreviousAgeKeyFile {
 					Expect(os.Setenv("SOPS_AGE_KEY_FILE", previousAgeKeyFile)).To(Succeed())
 					return
 				}
+
 				Expect(os.Unsetenv("SOPS_AGE_KEY_FILE")).To(Succeed())
 			})
 

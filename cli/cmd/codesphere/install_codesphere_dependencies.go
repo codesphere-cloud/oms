@@ -32,8 +32,8 @@ type InstallCodesphereDepenciesCmd struct {
 	Env  env.Env
 }
 
-// RunE installs the cluster dependencies selected by the command options.
-func (c *InstallCodesphereDepenciesCmd) RunE(cmd *cobra.Command, _ []string) error {
+// Run installs the cluster dependencies selected by the command options.
+func (c *InstallCodesphereDepenciesCmd) Run(ctx context.Context) error {
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
@@ -45,27 +45,31 @@ func (c *InstallCodesphereDepenciesCmd) RunE(cmd *cobra.Command, _ []string) err
 	if c.Opts.LocalComponents && c.Opts.LocalConfigDir == "" {
 		return fmt.Errorf("--local-config-dir is required with --local-components")
 	}
+
 	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	if err := ensureCodespherePackageForVersion(effectiveOpts, cfg, c.Env); err != nil {
+	if err := ensureCodespherePackageForVersion(ctx, effectiveOpts, cfg, c.Env); err != nil {
 		return err
 	}
 
-	return installCodesphereDepencies(cmd.Context(), effectiveOpts, cfg, c.Env)
+	return installCodesphereDepencies(ctx, effectiveOpts, cfg, c.Env)
 }
 
 func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, env env.Env) error {
 	workdir := env.GetOmsWorkdir()
+
 	pm := installer.NewPackage(workdir, opts.Package)
 	if opts.LocalComponents {
 		pm = installer.NewPackage(filepath.Dir(opts.Package), opts.Package)
 	}
+
 	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(opts.StepTimer))
 	defer stlog.PrintSummary()
+
 	cm := installer.NewConfig()
 	im := system.NewImage(ctx)
 
@@ -82,7 +86,6 @@ func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts
 		LocalComponents:   opts.LocalComponents,
 		LocalConfigDir:    opts.LocalConfigDir,
 		SkipImageBuilding: opts.LocalComponents,
-		Context:           ctx,
 	}
 
 	_, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
@@ -129,6 +132,7 @@ func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts
 			// The temporary NodePort is only for local component migrations.
 			appsConfig.Codesphere.Migration = nil
 		}
+
 		err = stlog.Step("Install ArgoCD pre-step", func() error {
 			return installArgoCDAndApps(ctx, opts, appsConfig, pm, kubeClient, stlog)
 		})
@@ -137,9 +141,10 @@ func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts
 		}
 	}
 
-	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
+	if err := ci.Install(ctx, pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install dependencies: %w", err)
 	}
+
 	return nil
 }
 
@@ -182,10 +187,12 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 		if err != nil {
 			return fmt.Errorf("failed to load vault data and REST config: %w", err)
 		}
+
 		registryPassword := ""
 		if secret := installVault.GetSecret(files.SecretRegistryPassword); secret != nil && secret.Fields != nil {
 			registryPassword = secret.Fields.Password
 		}
+
 		if registryPassword == "" {
 			return fmt.Errorf("registry password not found in vault (secret %q)", files.SecretRegistryPassword)
 		}
@@ -216,6 +223,7 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 		if err != nil {
 			return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
 		}
+
 		install = argocdinstaller.NewAppInstaller(argocdinstaller.AppInstallerConfig{
 			Config:       cfg,
 			Vault:        installVault,
@@ -225,18 +233,24 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 			Installer:    argoCDInstall,
 			PCAppsValues: opts.PCAppsValues,
 		})
+
 		return nil
 	}); err != nil {
 		return err
 	}
-	if err := stlog.Substep("Install ArgoCD", install.InstallArgoCD); err != nil {
+
+	if err := stlog.Substep("Install ArgoCD", func() error {
+		return install.InstallArgoCD(ctx)
+	}); err != nil {
 		return err
 	}
+
 	if err := stlog.Substep("Sync vault secret", func() error {
 		return install.SyncVaultSecret(ctx)
 	}); err != nil {
 		return err
 	}
+
 	if err := stlog.Substep("Install pc-apps", func() error {
 		return install.InstallPCApps(ctx, bomConfig)
 	}); err != nil {
@@ -281,5 +295,7 @@ func AddInstallCodesphereDepenciesCmd(codesphere *cobra.Command, opts *InstallCo
 	}
 
 	util.AddCmd(codesphere, deps.cmd)
-	deps.cmd.RunE = deps.RunE
+	deps.cmd.RunE = func(cmd *cobra.Command, _ []string) error {
+		return deps.Run(cmd.Context())
+	}
 }

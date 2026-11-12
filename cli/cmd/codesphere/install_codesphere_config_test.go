@@ -4,6 +4,7 @@
 package codesphere
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -122,6 +123,7 @@ var _ = Describe("prepareInstallConfig", func() {
 	)
 	It("merges multiple config files in order and returns a single parsed config path", func() {
 		tmpDir, err := os.MkdirTemp("", "install-config-merge-*")
+
 		Expect(err).ToNot(HaveOccurred())
 		defer func() {
 			Expect(os.RemoveAll(tmpDir)).To(Succeed())
@@ -179,6 +181,7 @@ pcApps:
 
 		effectiveOpts, cfg, cleanup, err := prepareInstallConfig(opts, installer.NewConfig())
 		Expect(err).ToNot(HaveOccurred())
+
 		defer cleanup()
 
 		Expect(effectiveOpts.ConfigPath).ToNot(BeEmpty())
@@ -206,6 +209,7 @@ pcApps:
 		Expect(statErr).ToNot(HaveOccurred())
 
 		cleanup()
+
 		_, statErr = os.Stat(effectiveOpts.ConfigPath)
 		Expect(os.IsNotExist(statErr)).To(BeTrue())
 	})
@@ -277,6 +281,7 @@ pcApps:
 
 		effectiveOpts, cfg, cleanup, err := prepareInstallConfig(opts, installer.NewConfig())
 		Expect(err).ToNot(HaveOccurred())
+
 		defer cleanup()
 
 		Expect(effectiveOpts.Vault).To(Equal(vaultPath))
@@ -397,6 +402,7 @@ codesphere:
 
 		effectiveOpts, cfg, cleanup, err := prepareInstallConfig(opts, installer.NewConfig())
 		Expect(err).ToNot(HaveOccurred())
+
 		defer cleanup()
 
 		Expect(effectiveOpts.Configs).To(Equal([]string{configPath}))
@@ -409,9 +415,11 @@ func installCodesphereSopsAndAgeAvailable() bool {
 	if _, err := exec.LookPath("sops"); err != nil {
 		return false
 	}
+
 	if _, err := exec.LookPath("age-keygen"); err != nil {
 		return false
 	}
+
 	return true
 }
 
@@ -473,11 +481,11 @@ var _ = Describe("ensureCodespherePackageForVersion", func() {
 	})
 	It("preserves an explicit package without requiring operations or portal access", func() {
 		opts := &InstallCodesphereOpts{Package: "offline-package.tar.gz"}
-		Expect(ensureCodespherePackageForVersion(opts, files.RootConfig{}, env.NewMockEnv(GinkgoT()))).To(Succeed())
+		Expect(ensureCodespherePackageForVersion(context.Background(), opts, files.RootConfig{}, env.NewMockEnv(GinkgoT()))).To(Succeed())
 		Expect(opts.Package).To(Equal("offline-package.tar.gz"))
 	})
 	It("rejects a missing version before accessing the workdir", func() {
-		Expect(ensureCodespherePackageForVersion(&InstallCodesphereOpts{}, files.RootConfig{}, env.NewMockEnv(GinkgoT()))).To(MatchError(ContainSubstring("operations.codesphere is required")))
+		Expect(ensureCodespherePackageForVersion(context.Background(), &InstallCodesphereOpts{}, files.RootConfig{}, env.NewMockEnv(GinkgoT()))).To(MatchError(ContainSubstring("operations.codesphere is required")))
 	})
 	It("uses the version from the merged config and preserves configured skip steps", func() {
 		dir := GinkgoT().TempDir()
@@ -521,7 +529,7 @@ var _ = Describe("ensureCodespherePackageForVersion", func() {
 
 		environment := env.NewMockEnv(GinkgoT())
 		environment.EXPECT().GetOmsWorkdir().Return(dir)
-		Expect(ensureCodespherePackageForVersion(effective, cfg, environment)).To(Succeed())
+		Expect(ensureCodespherePackageForVersion(context.Background(), effective, cfg, environment)).To(Succeed())
 		Expect(effective.Package).To(Equal(cached))
 		Expect(original.Package).To(BeEmpty())
 		Expect(cfg.Operations.Skip).To(Equal([]string{"ceph"}))

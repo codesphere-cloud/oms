@@ -268,7 +268,7 @@ func (b *GCPBootstrapper) getSSHKeys() (string, error) {
 	if b.Env.GitHubPAT != "" && b.Env.GitHubTeamOrg != "" && b.Env.GitHubTeamSlug != "" {
 		var err error
 
-		sshKeys, err = github.GetSSHKeysFromGitHubTeam(b.GitHubClient, b.Env.GitHubTeamOrg, b.Env.GitHubTeamSlug)
+		sshKeys, err = github.GetSSHKeysFromGitHubTeam(b.ctx, b.GitHubClient, b.Env.GitHubTeamOrg, b.Env.GitHubTeamSlug)
 		if err != nil {
 			return "", fmt.Errorf("failed to get SSH keys from GitHub team: %w", err)
 		}

@@ -4,6 +4,7 @@
 package installer_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 
@@ -38,7 +39,7 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 			os.Stdin = stdin
 
 			DeferCleanup(func() { os.Stdin = oldStdin; Expect(stdin.Close()).To(Succeed()) })
-			Expect(manager.CollectInteractively()).To(Succeed())
+			Expect(manager.CollectInteractively(context.Background())).To(Succeed())
 			Expect(cfg.Operations.Codesphere).To(Equal(expected))
 			Expect(cfg.Operations.Skip).To(Equal([]string{"ceph"}))
 		},
@@ -52,7 +53,7 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 			err := manager.ApplyProfile("dev")
 			Expect(err).ToNot(HaveOccurred())
 
-			err = manager.CollectInteractively()
+			err = manager.CollectInteractively(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 
 			config := manager.GetInstallConfig()
@@ -82,7 +83,7 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 
 			DeferCleanup(func() { os.Stdin = oldStdin; _ = os.Remove(stdin.Name()) })
 
-			err = manager.CollectInteractively()
+			err = manager.CollectInteractively(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 
 			config = manager.GetInstallConfig()
@@ -106,7 +107,7 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 
 			DeferCleanup(func() { os.Stdin = oldStdin; Expect(stdin.Close()).To(Succeed()) })
 
-			Expect(manager.CollectInteractively()).To(Succeed())
+			Expect(manager.CollectInteractively(context.Background())).To(Succeed())
 			Expect(manager.GetInstallConfig().Codesphere.PublicIP).To(Equal("203.0.113.10"))
 		})
 	})
@@ -116,7 +117,7 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 
 		Context("Non-interactive mode", func() {
 			BeforeEach(func() {
-				prompter = prompt.NewPrompter(false)
+				prompter = prompt.NewPrompter(context.Background(), false)
 			})
 
 			It("should return default string value", func() {
@@ -169,7 +170,7 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 		It("should have common configuration properties", func() {
 			err := manager.ApplyProfile("prod")
 			Expect(err).ToNot(HaveOccurred())
-			err = manager.CollectInteractively()
+			err = manager.CollectInteractively(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 
 			config := manager.GetInstallConfig()

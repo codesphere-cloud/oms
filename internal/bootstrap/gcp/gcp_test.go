@@ -2605,6 +2605,21 @@ var _ = Describe("GCP Bootstrapper", func() {
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
 				})
+
+				Context("after the command was interrupted", func() {
+					BeforeEach(func() {
+						cancelled, cancel := context.WithCancel(context.Background())
+						cancel()
+
+						ctx = cancelled
+					})
+
+					It("does not start installing in a data center", func() {
+						err := bs.InstallCodesphere()
+						Expect(err).To(MatchError(context.Canceled))
+						Expect(err).To(MatchError(ContainSubstring("stopped before installing Codesphere in data center")))
+					})
+				})
 			})
 
 			Context("without explicit hash", func() {
@@ -2766,6 +2781,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 		BeforeEach(func() {
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(c string) bool { return strings.Contains(c, "# Fetch on the connected jumpbox") })).Return(nil).Maybe()
 		})
+
 		var vault *files.InstallVault
 
 		const installCommand = "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -s kubernetes,load-container-images"
@@ -2999,6 +3015,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureK0s", func() {
 		BeforeEach(func() {
 			nodeClient.EXPECT().RunCommand(mock.Anything, "root", "/root/configure-k0s.sh").Return(nil).Maybe()
+
 			csEnv.K0sVersion = "v1.31.14+k0s.0"
 			csEnv.Airgapped = true
 
@@ -3047,6 +3064,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 						if strings.HasPrefix(command, "oms ") {
 							jumpboxCommands = append(jumpboxCommands, command)
 						}
+
 						if strings.HasPrefix(command, prefix) {
 							return fmt.Errorf("step error")
 						}

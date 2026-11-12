@@ -263,6 +263,7 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	}
 
 	dc.InstallConfig.Registry.LoadContainerImages = false
+
 	dc.InstallConfig.Registry.ReplaceImagesInBom = b.Env.RegistryType != RegistryTypeGitHub
 	if err := b.applyCodesphereRegistry(dc); err != nil {
 		return fmt.Errorf("failed to apply codesphere registry: %w", err)
@@ -282,6 +283,7 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 		if err != nil {
 			return fmt.Errorf("resolving pc-apps chart registry: %w", err)
 		}
+
 		if existing, _ := dc.InstallConfig.PcApps["chartsRegistry"].(string); existing != "" && existing != chartsRegistry {
 			b.stlog.Logf("Replacing pcApps.chartsRegistry %s from the install config with the local registry at %s", existing, chartsRegistry)
 		}

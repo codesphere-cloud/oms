@@ -4,7 +4,10 @@
 package cmd_test
 
 import (
+	"context"
 	"testing"
+
+	"github.com/spf13/cobra"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
 
@@ -27,3 +30,11 @@ var _ = Describe("RootCmd", func() {
 		})
 	})
 })
+
+// newCommandWithContext returns a bare command whose context is set, as Cobra does when executing.
+func newCommandWithContext() *cobra.Command {
+	command := &cobra.Command{}
+	command.SetContext(context.Background())
+
+	return command
+}

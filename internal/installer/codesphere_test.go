@@ -4,6 +4,7 @@
 package installer_test
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -51,10 +52,11 @@ var _ = Describe("Codesphere installer", func() {
 		}
 		configManager := installer.NewMockConfigManager(GinkgoT())
 		configManager.EXPECT().ParseConfigYaml("config.yaml").Return(config, nil)
+
 		packageManager := installer.NewMockPackageManager(GinkgoT())
 		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml"}
 
-		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+		err := ci.Install(context.Background(), packageManager, configManager, nil, "linux", "amd64")
 
 		Expect(err).To(MatchError(ContainSubstring("postgres.serverAddress must not be set when postgres.mode is 'install'")))
 	})
@@ -66,7 +68,7 @@ var _ = Describe("Codesphere installer", func() {
 		packageManager := installer.NewMockPackageManager(GinkgoT())
 		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml"}
 
-		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+		err := ci.Install(context.Background(), packageManager, configManager, nil, "linux", "amd64")
 
 		Expect(err).To(MatchError(ContainSubstring("invalid codesphere configuration: codesphere.publicIp is required")))
 	})
@@ -79,7 +81,7 @@ var _ = Describe("Codesphere installer", func() {
 		packageManager := installer.NewMockPackageManager(GinkgoT())
 		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml"}
 
-		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+		err := ci.Install(context.Background(), packageManager, configManager, nil, "linux", "amd64")
 
 		Expect(err).To(MatchError(ContainSubstring("invalid codesphere.publicIp: not-an-ip")))
 	})
@@ -93,7 +95,7 @@ var _ = Describe("Codesphere installer", func() {
 
 		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml", SkipSteps: []string{installer.CodesphereStep}}
 
-		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+		err := ci.Install(context.Background(), packageManager, configManager, nil, "linux", "amd64")
 
 		Expect(err).To(MatchError(ContainSubstring("extract failed")))
 	})
@@ -107,7 +109,7 @@ var _ = Describe("Codesphere installer", func() {
 
 		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml", LocalComponents: true}
 
-		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+		err := ci.Install(context.Background(), packageManager, configManager, nil, "linux", "amd64")
 
 		Expect(err).To(MatchError(ContainSubstring("extract failed")))
 	})
@@ -122,7 +124,7 @@ var _ = Describe("Codesphere installer", func() {
 
 		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml"}
 
-		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+		err := ci.Install(context.Background(), packageManager, configManager, nil, "linux", "amd64")
 
 		Expect(err).To(MatchError(ContainSubstring("extract failed")))
 	})
@@ -136,7 +138,7 @@ var _ = Describe("Codesphere installer", func() {
 		packageManager := installer.NewMockPackageManager(GinkgoT())
 		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml"}
 
-		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+		err := ci.Install(context.Background(), packageManager, configManager, nil, "linux", "amd64")
 
 		Expect(err).To(MatchError(ContainSubstring("codesphere.publicIp 127.0.0.1 is not reachable from other machines")))
 	})
@@ -149,7 +151,7 @@ var _ = Describe("Codesphere installer", func() {
 		packageManager := installer.NewMockPackageManager(GinkgoT())
 		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml"}
 
-		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+		err := ci.Install(context.Background(), packageManager, configManager, nil, "linux", "amd64")
 
 		Expect(err).To(MatchError(ContainSubstring("codesphere.publicIp 0.0.0.0 is not reachable from other machines")))
 	})
@@ -164,7 +166,7 @@ var _ = Describe("Codesphere installer", func() {
 
 		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml"}
 
-		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+		err := ci.Install(context.Background(), packageManager, configManager, nil, "linux", "amd64")
 
 		Expect(err).To(MatchError(ContainSubstring("extract failed")))
 	})
@@ -179,7 +181,7 @@ var _ = Describe("Codesphere installer", func() {
 
 		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml", LocalComponents: true}
 
-		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+		err := ci.Install(context.Background(), packageManager, configManager, nil, "linux", "amd64")
 
 		Expect(err).To(MatchError(ContainSubstring("extract failed")))
 	})

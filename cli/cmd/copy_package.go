@@ -49,7 +49,7 @@ type CopyPackageOpts struct {
 
 // RunE resolves the installer package and executes its artifact transfers.
 func (c *CopyPackageCmd) RunE(cmd *cobra.Command, _ []string) error {
-	packagePath, err := c.resolvePackage(portal.NewPortalClient())
+	packagePath, err := c.resolvePackage(cmd.Context(), portal.NewPortalClient(cmd.Context()))
 	if err != nil {
 		return err
 	}
@@ -59,6 +59,8 @@ func (c *CopyPackageCmd) RunE(cmd *cobra.Command, _ []string) error {
 	if c.Opts.Verbose {
 		logs.Debug.SetOutput(os.Stderr)
 	}
+
+	c.Prompter = prompt.NewPrompter(cmd.Context(), true)
 
 	return c.CopyPackage(cmd.Context(), packageManager, &installer.CraneArtifactCopier{
 		Insecure: c.Opts.Insecure,
@@ -90,7 +92,6 @@ func AddCopyPackageCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 		Opts:       CopyPackageOpts{GlobalOptions: opts, Filename: defaultInstallerPackageArtifact},
 		Env:        env.NewEnv(),
 		FileWriter: intutil.NewFilesystemWriter(),
-		Prompter:   prompt.NewPrompter(true),
 	}
 	c.cmd.PreRunE = func(_ *cobra.Command, _ []string) error {
 		if (c.Opts.Package == "") == (c.Opts.Version == "") {
@@ -135,6 +136,7 @@ func (c *CopyPackageCmd) CopyPackage(ctx context.Context, packageManager install
 
 	if c.Opts.ShowArtifacts {
 		log.Printf("Artifacts to copy (%d):", len(artifacts))
+
 		for _, artifact := range artifacts {
 			log.Printf("  %s -> %s", artifact.Source, artifact.Destination)
 		}
@@ -147,6 +149,7 @@ func (c *CopyPackageCmd) CopyPackage(ctx context.Context, packageManager install
 	}
 
 	log.Printf("Copying %d package artifacts...", len(artifacts))
+
 	if err := installer.CopyPackageArtifacts(ctx, copier, artifacts); err != nil {
 		return fmt.Errorf("failed to copy package artifacts: %w", err)
 	}
@@ -156,7 +159,7 @@ func (c *CopyPackageCmd) CopyPackage(ctx context.Context, packageManager install
 	return nil
 }
 
-func (c *CopyPackageCmd) resolvePackage(portalClient portal.Portal) (string, error) {
+func (c *CopyPackageCmd) resolvePackage(ctx context.Context, portalClient portal.Portal) (string, error) {
 	if c.Opts.Package != "" {
 		return c.Opts.Package, nil
 	}
@@ -173,7 +176,7 @@ func (c *CopyPackageCmd) resolvePackage(portalClient portal.Portal) (string, err
 
 	destination := filepath.Join(workdir, build.BuildPackageFilename(c.Opts.Filename))
 
-	if err := portal.DownloadAndVerifyBuild(portalClient, c.FileWriter, portal.CodesphereProduct, build, c.Opts.Filename, destination, portal.DownloadOptions{}); err != nil {
+	if err := portal.DownloadAndVerifyBuild(ctx, portalClient, c.FileWriter, portal.CodesphereProduct, build, c.Opts.Filename, destination, portal.DownloadOptions{}); err != nil {
 		return "", fmt.Errorf("failed to download upstream package: %w", err)
 	}
 

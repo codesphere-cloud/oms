@@ -4,6 +4,7 @@
 package argocd_test
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,24 +24,18 @@ func sopsAndAgeAvailable() bool {
 		exec.Command("age-keygen", "--version").Run() == nil
 }
 
-type argoCDInstallerStub struct {
-	called bool
-}
-
-func (s *argoCDInstallerStub) Install() error {
-	s.called = true
-	return nil
-}
-
 var _ = Describe("AppInstaller", func() {
-	It("uses the configured ArgoCD installer instance", func() {
-		argoCDInstall := &argoCDInstallerStub{}
+	It("passes the context to the configured ArgoCD installer instance", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		argoCDInstall := argocd.NewMockInstallerAPI(GinkgoT())
+		argoCDInstall.EXPECT().Install(ctx).Return(nil).Once()
 		install := argocd.NewAppInstaller(argocd.AppInstallerConfig{
 			Installer: argoCDInstall,
 		})
 
-		Expect(install.InstallArgoCD()).To(Succeed())
-		Expect(argoCDInstall.called).To(BeTrue())
+		Expect(install.InstallArgoCD(ctx)).To(Succeed())
 	})
 })
 

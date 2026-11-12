@@ -78,6 +78,7 @@ func NewAppOfAppsFromBom(c client.Client, bomConfig *bom.Config, cfg AppOfAppsCo
 	if cfg.Namespace == "" {
 		return nil, errors.New("namespace is required")
 	}
+
 	if err := checkArgoCDScheme(c); err != nil {
 		return nil, err
 	}
@@ -116,12 +117,14 @@ func checkArgoCDScheme(c client.Client) error {
 	if c == nil || c.Scheme() == nil {
 		return errors.New("kubernetes client is required")
 	}
+
 	if !c.Scheme().Recognizes(argov1alpha1.ApplicationSchemaGroupVersionKind) {
 		return fmt.Errorf(
 			"kubernetes client scheme does not recognize %s; register it with argov1alpha1.AddToScheme",
 			argov1alpha1.ApplicationSchemaGroupVersionKind,
 		)
 	}
+
 	return nil
 }
 
@@ -131,6 +134,7 @@ func checkArgoCDScheme(c client.Client) error {
 // credentials to the repository.
 func (p *AppOfApps) resolveRepoURL(ctx context.Context) (string, error) {
 	secret := &corev1.Secret{}
+
 	key := client.ObjectKey{Name: ociCredentialSecretName, Namespace: ociCredentialNamespace}
 	if err := p.client.Get(ctx, key, secret); err != nil {
 		return "", fmt.Errorf(
@@ -149,6 +153,7 @@ func (p *AppOfApps) resolveRepoURL(ctx context.Context) (string, error) {
 	}
 
 	log.Printf("Using OCI registry %q from K8s secret %q\n", baseURL, ociCredentialSecretName)
+
 	return baseURL, nil
 }
 
@@ -158,11 +163,13 @@ func (p *AppOfApps) createApplication(repoURL string, vals map[string]interface{
 	helm := &argov1alpha1.ApplicationSourceHelm{
 		ReleaseName: p.releaseName,
 	}
+
 	if len(vals) > 0 {
 		raw, err := json.Marshal(vals)
 		if err != nil {
 			return nil, fmt.Errorf("marshaling helm values: %w", err)
 		}
+
 		helm.ValuesObject = &runtime.RawExtension{Raw: raw}
 	}
 
@@ -209,6 +216,7 @@ func (p *AppOfApps) Install(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("loading values files: %w", err)
 	}
+
 	vals := util.DeepMergeMaps(map[string]any{}, p.valuesOverride)
 	vals = util.DeepMergeMaps(vals, fileVals)
 
@@ -228,6 +236,7 @@ func (p *AppOfApps) Install(ctx context.Context) error {
 
 	log.Printf("Applying ArgoCD Application %q (chart %s, version %s) in namespace %s\n",
 		p.name, p.chart, p.version, ociCredentialNamespace)
+
 	current := &argov1alpha1.Application{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      app.Name,
@@ -236,6 +245,7 @@ func (p *AppOfApps) Install(ctx context.Context) error {
 	}
 	if _, err := controllerutil.CreateOrUpdate(ctx, p.client, current, func() error {
 		current.TypeMeta = app.TypeMeta
+
 		current.Spec = app.Spec
 		for _, finalizer := range app.Finalizers {
 			controllerutil.AddFinalizer(current, finalizer)
@@ -247,5 +257,6 @@ func (p *AppOfApps) Install(ctx context.Context) error {
 	}
 
 	log.Printf("Successfully applied ArgoCD Application %q; ArgoCD will sync the chart\n", p.name)
+
 	return nil
 }

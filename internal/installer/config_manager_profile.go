@@ -25,9 +25,11 @@ func (g *InstallConfig) applyCommonProperties() {
 	if g.Config.Datacenter.ID == 0 {
 		g.Config.Datacenter.ID = 1
 	}
+
 	if g.Config.Datacenter.City == "" {
 		g.Config.Datacenter.City = "Karlsruhe"
 	}
+
 	if g.Config.Datacenter.CountryCode == "" {
 		g.Config.Datacenter.CountryCode = "DE"
 	}
@@ -35,9 +37,11 @@ func (g *InstallConfig) applyCommonProperties() {
 	if g.Config.Ceph.NodesSubnet == "" {
 		g.Config.Ceph.NodesSubnet = "127.0.0.1/32"
 	}
+
 	if g.Config.Ceph.Hosts == nil {
 		g.Config.Ceph.Hosts = []files.CephHost{{Hostname: "localhost", IPAddress: "127.0.0.1", IsMaster: true}}
 	}
+
 	if g.Config.Ceph.OSDs == nil {
 		g.Config.Ceph.OSDs = []files.CephOSD{
 			{
@@ -60,6 +64,7 @@ func (g *InstallConfig) applyCommonProperties() {
 	if g.Config.Postgres.Mode == "" {
 		g.Config.Postgres.Mode = "install"
 	}
+
 	if g.Config.Postgres.Primary == nil {
 		g.Config.Postgres.Primary = &files.PostgresPrimaryConfig{
 			IP:       "127.0.0.1",
@@ -68,13 +73,16 @@ func (g *InstallConfig) applyCommonProperties() {
 	}
 
 	g.Config.Kubernetes.ManagedByCodesphere = true
+
 	g.Config.Kubernetes.NeedsKubeConfig = false
 	if g.Config.Kubernetes.APIServerHost == "" {
 		g.Config.Kubernetes.APIServerHost = "127.0.0.1"
 	}
+
 	if g.Config.Kubernetes.ControlPlanes == nil {
 		g.Config.Kubernetes.ControlPlanes = []files.K8sNode{{IPAddress: "127.0.0.1"}}
 	}
+
 	if g.Config.Kubernetes.Workers == nil {
 		g.Config.Kubernetes.Workers = []files.K8sNode{{IPAddress: "127.0.0.1"}}
 	}
@@ -85,9 +93,11 @@ func (g *InstallConfig) applyCommonProperties() {
 			KeySizeBits: 2048,
 		}
 	}
+
 	if g.Config.Cluster.Gateway.ServiceType == "" {
 		g.Config.Cluster.Gateway.ServiceType = "LoadBalancer"
 	}
+
 	if g.Config.Cluster.PublicGateway.ServiceType == "" {
 		g.Config.Cluster.PublicGateway.ServiceType = "LoadBalancer"
 	}
@@ -98,6 +108,7 @@ func (g *InstallConfig) applyCommonProperties() {
 			Pools:   []files.MetalLBPoolDef{},
 		}
 	}
+
 	if g.Config.Registry == nil {
 		g.Config.Registry = &files.RegistryConfig{}
 	}
@@ -106,9 +117,11 @@ func (g *InstallConfig) applyCommonProperties() {
 	if certIssuer.Type == "" {
 		certIssuer.Type = files.CertIssuerTypeSelfSigned
 	}
+
 	if g.Config.Codesphere.Domain == "" {
 		g.Config.Codesphere.Domain = "codesphere.local"
 	}
+
 	if g.Config.Codesphere.WorkspaceHostingBaseDomain == "" {
 		g.Config.Codesphere.WorkspaceHostingBaseDomain = "ws.local"
 	}
@@ -119,18 +132,23 @@ func (g *InstallConfig) applyCommonProperties() {
 	if g.Config.Codesphere.CustomDomains.CNameBaseDomain == "" {
 		g.Config.Codesphere.CustomDomains.CNameBaseDomain = "custom.local"
 	}
+
 	if g.Config.Codesphere.DNSServers == nil {
 		g.Config.Codesphere.DNSServers = []string{"8.8.8.8", "1.1.1.1"}
 	}
+
 	if g.Config.Codesphere.Internal == nil {
 		g.Config.Codesphere.Internal = []string{}
 	}
+
 	if g.Config.Codesphere.Preview == nil {
 		g.Config.Codesphere.Preview = map[string]bool{}
 	}
+
 	if g.Config.Codesphere.Features == nil {
 		g.Config.Codesphere.Features = map[string]bool{}
 	}
+
 	if g.Config.Codesphere.WorkspaceImages == nil {
 		g.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{
 			Agent: &files.ImageRef{
@@ -142,6 +160,7 @@ func (g *InstallConfig) applyCommonProperties() {
 			BomRef: "workspace-agent-24.04",
 		}
 	}
+
 	if g.Config.Codesphere.DeployConfig.Images == nil {
 		g.Config.Codesphere.DeployConfig = files.DeployConfig{
 			Images: map[string]files.ImageConfig{
@@ -160,6 +179,7 @@ func (g *InstallConfig) applyCommonProperties() {
 			},
 		}
 	}
+
 	if g.Config.Codesphere.Plans.HostingPlans == nil {
 		g.Config.Codesphere.Plans.HostingPlans = map[int]files.HostingPlan{
 			1: {
@@ -171,6 +191,7 @@ func (g *InstallConfig) applyCommonProperties() {
 			},
 		}
 	}
+
 	if g.Config.Codesphere.Plans.WorkspacePlans == nil {
 		g.Config.Codesphere.Plans.WorkspacePlans = map[int]files.WorkspacePlan{
 			1: {
@@ -181,6 +202,7 @@ func (g *InstallConfig) applyCommonProperties() {
 			},
 		}
 	}
+
 	if g.Config.ManagedServiceBackends == nil {
 		g.Config.ManagedServiceBackends = &files.ManagedServiceBackendsConfig{}
 	}
@@ -192,6 +214,7 @@ func (g *InstallConfig) applyCommonProperties() {
 	if g.Config.ManagedServiceBackends.BarmanCloudPlugin == nil {
 		g.Config.ManagedServiceBackends.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{Enabled: true}
 	}
+
 	if g.Config.Secrets.BaseDir == "" {
 		g.Config.Secrets.BaseDir = "/root/secrets"
 	}
@@ -208,21 +231,26 @@ func (g *InstallConfig) ensureMonitoringDefaults(clusterName string, loki, grafa
 	if g.Config.Cluster.Monitoring == nil {
 		g.Config.Cluster.Monitoring = &files.MonitoringConfig{}
 	}
+
 	if g.Config.Cluster.Monitoring.Prometheus == nil {
 		g.Config.Cluster.Monitoring.Prometheus = &files.PrometheusConfig{}
 	}
+
 	if g.Config.Cluster.Monitoring.Prometheus.RemoteWrite == nil {
 		g.Config.Cluster.Monitoring.Prometheus.RemoteWrite = &files.RemoteWriteConfig{
 			Enabled:     false,
 			ClusterName: clusterName,
 		}
 	}
+
 	if g.Config.Cluster.Monitoring.Loki == nil {
 		g.Config.Cluster.Monitoring.Loki = &files.LokiConfig{Enabled: loki}
 	}
+
 	if g.Config.Cluster.Monitoring.Grafana == nil {
 		g.Config.Cluster.Monitoring.Grafana = &files.GrafanaConfig{Enabled: grafana}
 	}
+
 	if g.Config.Cluster.Monitoring.GrafanaAlloy == nil {
 		g.Config.Cluster.Monitoring.GrafanaAlloy = &files.GrafanaAlloyConfig{Enabled: alloy}
 	}
@@ -250,6 +278,7 @@ func (g *InstallConfig) applyProfileDev() error {
 	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequestsSingleReplica); err != nil {
 		return fmt.Errorf("applying resource profile: %w", err)
 	}
+
 	return nil
 }
 
@@ -260,6 +289,7 @@ func (g *InstallConfig) applyProfileMinimal() error {
 
 	g.ensureMonitoringDefaults("dev", true, true, true)
 	g.ensureWorkspacePlans("Standard Developer", 1)
+
 	if g.Config.Cluster.RgwLoadBalancer == nil {
 		g.Config.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{
 			Enabled: true,
@@ -269,6 +299,7 @@ func (g *InstallConfig) applyProfileMinimal() error {
 	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequestsSingleReplica); err != nil {
 		return fmt.Errorf("applying resource profile: %w", err)
 	}
+
 	return nil
 }
 
@@ -289,5 +320,6 @@ func (g *InstallConfig) applyProfileProd() error {
 		Grafana:      &files.GrafanaConfig{Enabled: true},
 		GrafanaAlloy: &files.GrafanaAlloyConfig{Enabled: true},
 	}
+
 	return nil
 }
