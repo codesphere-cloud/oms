@@ -64,15 +64,15 @@ func AddOmsUpdateCmd(parentCmd *cobra.Command) {
 		Use:   "oms",
 		Short: "Update the OMS CLI",
 		Long:  `Updates the OMS CLI to the latest release from GitHub.`,
-		RunE: func(_ *cobra.Command, args []string) error {
-			return cmdState.SelfUpdate()
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return cmdState.SelfUpdate(cmd.Context())
 		},
 	}
 	util.AddCmd(parentCmd, omsCmd)
 }
 
-func (c *UpdateOmsCmd) SelfUpdate() error {
-	ctx := context.Background()
+// SelfUpdate replaces the running OMS CLI with the latest GitHub release.
+func (c *UpdateOmsCmd) SelfUpdate(ctx context.Context) error {
 	currentVersion := c.Version.Version()
 	repo := selfupdate.ParseSlug(GitHubRepo)
 

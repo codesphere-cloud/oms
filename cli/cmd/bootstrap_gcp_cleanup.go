@@ -12,6 +12,7 @@ import (
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
@@ -45,7 +46,7 @@ func (c *BootstrapGcpCleanupCmd) RunE(_ *cobra.Command, args []string) error {
 		GCPClient:     gcpClient,
 		FileIO:        fw,
 		StepLogger:    stlog,
-		ConfirmReader: os.Stdin,
+		ConfirmReader: prompt.NewContextReader(ctx, os.Stdin),
 		InfraFilePath: gcp.GetInfraFilePath(),
 	}
 

@@ -23,7 +23,7 @@ type RevokeAPIKeyOpts struct {
 }
 
 func (c *RevokeAPIKeyCmd) RunE(_ *cobra.Command, args []string) error {
-	p := portal.NewPortalClient()
+	p := portal.NewPortalClient(c.cmd.Context())
 	return c.Revoke(p)
 }
 

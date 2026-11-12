@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -34,14 +33,15 @@ type ExtendBaseimageOpts struct {
 	Force      bool
 }
 
-func (c *ExtendBaseimageCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE extends the base image from the package.
+func (c *ExtendBaseimageCmd) RunE(cmd *cobra.Command, _ []string) error {
 	if c.Opts.Package == "" {
 		return errors.New("required option package not set")
 	}
 
 	workdir := c.Env.GetOmsWorkdir()
 	pm := installer.NewPackage(workdir, c.Opts.Package)
-	im := system.NewImage(context.Background())
+	im := system.NewImage(cmd.Context())
 
 	err := c.ExtendBaseimage(pm, im)
 	if err != nil {

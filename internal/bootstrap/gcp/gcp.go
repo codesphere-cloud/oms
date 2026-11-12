@@ -1309,6 +1309,10 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 	}
 
 	for _, dc := range b.Env.DataCenters {
+		if err := b.ctx.Err(); err != nil {
+			return fmt.Errorf("stopped before installing Codesphere in data center %d: %w", dc.ID, err)
+		}
+
 		err := b.stlog.Step(dc.StepName("Install Codesphere"), func() error {
 			return b.runInstallCommand(dc, packageFilename)
 		})

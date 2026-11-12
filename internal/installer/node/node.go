@@ -55,15 +55,33 @@ type NodeClient interface {
 type SSHNodeClient struct {
 	Quiet            bool
 	RegistryPassword string
+	// ctx is the command context. Once it is cancelled no further remote commands are started
+	// and a running one is interrupted, so Ctrl-C stops remote work instead of waiting for it.
+	ctx context.Context
 }
 
-func NewSSHNodeClient(quiet bool) *SSHNodeClient {
+// RemoteSession is the part of an SSH session needed to wait for a remote command.
+//
+//mockery:generate: true
+type RemoteSession interface {
+	Wait() error
+	Signal(sig ssh.Signal) error
+	Close() error
+}
+
+// NewSSHNodeClient returns an SSH node client whose remote commands stop once ctx is cancelled.
+func NewSSHNodeClient(ctx context.Context, quiet bool) *SSHNodeClient {
 	return &SSHNodeClient{
+		ctx:   ctx,
 		Quiet: quiet,
 	}
 }
 
 func (r *SSHNodeClient) RunCommand(n *Node, username string, command string) error {
+	if err := r.context().Err(); err != nil {
+		return fmt.Errorf("not running remote command: %w", err)
+	}
+
 	var (
 		jumpboxIP string
 		ip        string
@@ -121,7 +139,11 @@ func (r *SSHNodeClient) RunCommand(n *Node, username string, command string) err
 		return fmt.Errorf("failed to start command: %v", err)
 	}
 
-	if err := session.Wait(); err != nil {
+	if err := WaitForSession(r.context(), session); err != nil {
+		if r.context().Err() != nil {
+			return err
+		}
+
 		// Include stderr for callers that classify transient remote command failures,
 		// including when output is streamed to the user.
 		if stderrBuf.Len() > 0 {
@@ -132,6 +154,35 @@ func (r *SSHNodeClient) RunCommand(n *Node, username string, command string) err
 	}
 
 	return nil
+}
+
+// context returns the command context, or a background context for a client built without one.
+func (r *SSHNodeClient) context() context.Context {
+	if r.ctx == nil {
+		return context.Background()
+	}
+
+	return r.ctx
+}
+
+// WaitForSession waits for the remote command of session to finish. Once ctx is cancelled it sends
+// SIGINT to the remote command, closes the session and returns ctx.Err() without waiting further.
+func WaitForSession(ctx context.Context, session RemoteSession) error {
+	done := make(chan error, 1)
+
+	go func() {
+		done <- session.Wait()
+	}()
+
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		_ = session.Signal(ssh.SIGINT)
+		_ = session.Close()
+
+		return fmt.Errorf("stopped waiting for remote command: %w", ctx.Err())
+	}
 }
 
 const jumpboxUser = "ubuntu"

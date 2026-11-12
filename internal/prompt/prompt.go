@@ -8,6 +8,7 @@ package prompt
 
 import (
 	"bufio"
+	"context"
 	"log"
 	"os"
 	"strconv"
@@ -31,15 +32,34 @@ type Prompter interface {
 type StdinPrompter struct {
 	reader      *bufio.Reader
 	interactive bool
+	// ctx is the command context. It is checked before every question, because an answer
+	// that is already buffered never reaches the interrupt-aware reader below the buffer.
+	ctx    context.Context
+	exiter Exiter
 }
 
 // NewPrompter returns a prompter reading from stdin. A non-interactive one never asks
-// and answers every question with its default.
-func NewPrompter(interactive bool) *StdinPrompter {
+// and answers every question with its default. An interrupt while it waits for an answer
+// ends the process, as nothing is in progress that could be cancelled cleanly. So does a
+// question asked after ctx was already cancelled, so an earlier interrupt is not lost.
+func NewPrompter(ctx context.Context, interactive bool) *StdinPrompter {
 	return &StdinPrompter{
-		reader:      bufio.NewReader(os.Stdin),
+		reader:      bufio.NewReader(&interruptReader{ctx: ctx, reader: os.Stdin, exiter: OSExiter{}}),
 		interactive: interactive,
+		ctx:         ctx,
+		exiter:      OSExiter{},
 	}
+}
+
+// exitIfInterrupted ends the process when the command was cancelled before a question is
+// asked, so buffered answers (for example pasted ones) are not consumed after an interrupt.
+func (p *StdinPrompter) exitIfInterrupted() {
+	if p.ctx == nil || p.ctx.Err() == nil {
+		return
+	}
+
+	log.Println("Interrupted")
+	p.exiter.Exit(InterruptExitCode)
 }
 
 // String asks for a line of text.
@@ -47,6 +67,8 @@ func (p *StdinPrompter) String(prompt, defaultValue string) string {
 	if !p.interactive {
 		return defaultValue
 	}
+
+	p.exitIfInterrupted()
 
 	if defaultValue != "" {
 		log.Printf("%s (default: %s): ", prompt, defaultValue)
@@ -69,6 +91,8 @@ func (p *StdinPrompter) Int(prompt string, defaultValue int) int {
 	if !p.interactive {
 		return defaultValue
 	}
+
+	p.exitIfInterrupted()
 
 	log.Printf("%s (default: %d): ", prompt, defaultValue)
 
@@ -93,6 +117,8 @@ func (p *StdinPrompter) StringSlice(prompt string, defaultValue []string) []stri
 	if !p.interactive {
 		return defaultValue
 	}
+
+	p.exitIfInterrupted()
 
 	defaultStr := strings.Join(defaultValue, ", ")
 	if defaultStr != "" {
@@ -132,6 +158,8 @@ func (p *StdinPrompter) Bool(prompt string, defaultValue bool) bool {
 		return defaultValue
 	}
 
+	p.exitIfInterrupted()
+
 	defaultStr := "n"
 	if defaultValue {
 		defaultStr = "y"
@@ -155,6 +183,8 @@ func (p *StdinPrompter) Choice(prompt string, choices []string, defaultValue str
 	if !p.interactive {
 		return defaultValue
 	}
+
+	p.exitIfInterrupted()
 
 	log.Printf("%s [%s] (default: %s): ", prompt, strings.Join(choices, "/"), defaultValue)
 

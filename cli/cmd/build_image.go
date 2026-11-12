@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"log"
 
@@ -31,9 +30,10 @@ type BuildImageOpts struct {
 	Force      bool
 }
 
-func (c *BuildImageCmd) RunE(cmd *cobra.Command, args []string) error {
+// RunE builds the workspace image described by the options.
+func (c *BuildImageCmd) RunE(cmd *cobra.Command, _ []string) error {
 	pm := installer.NewPackage(c.Env.GetOmsWorkdir(), c.Opts.Package)
-	im := system.NewImage(context.Background())
+	im := system.NewImage(cmd.Context())
 
 	return c.BuildImage(pm, im)
 }

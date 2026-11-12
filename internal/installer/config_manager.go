@@ -4,6 +4,7 @@
 package installer
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/url"
@@ -38,7 +39,7 @@ type InstallConfigManager interface {
 	SetInstallConfig(config *files.RootConfig)
 	SetVault(vault *files.InstallVault)
 	GetSecretFilePath() string
-	CollectInteractively() error
+	CollectInteractively(ctx context.Context) error
 
 	// Output
 	GenerateSecrets() error

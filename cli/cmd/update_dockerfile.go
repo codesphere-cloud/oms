@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -32,14 +31,15 @@ type UpdateDockerfileOpts struct {
 	Force      bool
 }
 
-func (c *UpdateDockerfileCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE updates the FROM statement of a Dockerfile to the base image of the package.
+func (c *UpdateDockerfileCmd) RunE(cmd *cobra.Command, args []string) error {
 	if c.Opts.Package == "" {
 		return errors.New("required option package not set")
 	}
 
 	workdir := c.Env.GetOmsWorkdir()
 	pm := installer.NewPackage(workdir, c.Opts.Package)
-	im := system.NewImage(context.Background())
+	im := system.NewImage(cmd.Context())
 
 	err := c.UpdateDockerfile(pm, im, args)
 	if err != nil {

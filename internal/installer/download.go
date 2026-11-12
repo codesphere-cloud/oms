@@ -4,6 +4,7 @@
 package installer
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -69,12 +70,12 @@ func ensureCacheDir(fw util.FileIO, environment env.Env) (string, error) {
 
 // reuseCachedBinary reports whether the cached binary at cachePath exists, matches
 // requestedVersion and opts do not force a fresh download.
-func reuseCachedBinary(fw util.FileIO, cachePath, requestedVersion, name string, opts DownloadOptions) bool {
+func reuseCachedBinary(ctx context.Context, fw util.FileIO, cachePath, requestedVersion, name string, opts DownloadOptions) bool {
 	if !fw.Exists(cachePath) || opts.Force {
 		return false
 	}
 
-	cachedVersion, versionErr := localBinaryVersion(cachePath)
+	cachedVersion, versionErr := localBinaryVersion(ctx, cachePath)
 	if versionErr == nil && cachedVersion == requestedVersion {
 		io.Verbosef(!opts.Quiet, "Using cached %s %s at %s", name, requestedVersion, cachePath)
 
@@ -131,8 +132,8 @@ func downloadToPath(fw util.FileIO, http portal.Http, path, downloadURL string, 
 	return nil
 }
 
-func localBinaryVersion(binaryPath string) (string, error) {
-	output, err := util.RunCommandWithOutput(binaryPath, []string{"version"}, "")
+func localBinaryVersion(ctx context.Context, binaryPath string) (string, error) {
+	output, err := util.RunCommandWithOutput(ctx, binaryPath, []string{"version"}, "")
 	if err != nil {
 		return "", fmt.Errorf("failed to get version of application %s: %w", binaryPath, err)
 	}

@@ -48,7 +48,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 	Context("RunE method", func() {
 		It("fails when package is empty", func() {
 			c.Opts.Package = ""
-			err := c.RunE(nil, []string{})
+			err := c.RunE(newCommandWithContext(), []string{})
 			Expect(err).To(MatchError("required option package not set"))
 		})
 
@@ -57,7 +57,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 
 			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir")
 
-			err := c.RunE(nil, []string{})
+			err := c.RunE(newCommandWithContext(), []string{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to extend baseimage"))
 		})

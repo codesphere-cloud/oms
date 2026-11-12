@@ -4,6 +4,7 @@
 package installer
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -11,8 +12,10 @@ import (
 	"github.com/codesphere-cloud/oms/internal/prompt"
 )
 
-func (g *InstallConfig) CollectInteractively() error {
-	prompter := prompt.NewPrompter(true)
+// CollectInteractively asks the operator for the install config. An interrupt (ctx cancelled)
+// ends the process at the next question instead of collecting further answers.
+func (g *InstallConfig) CollectInteractively(ctx context.Context) error {
+	prompter := prompt.NewPrompter(ctx, true)
 
 	g.collectCodespherePackageConfig(prompter)
 	g.collectDatacenterConfig(prompter)

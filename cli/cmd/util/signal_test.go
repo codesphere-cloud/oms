@@ -4,59 +4,101 @@
 package util_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"os"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 )
 
-var _ = Describe("CancelOnSignal", func() {
-	It("derives the run context from the command context", func() {
+var _ = Describe("NotifySignalContext", func() {
+	It("stays active until a signal arrives or stop is called", func() {
+		ctx, stop := util.NotifySignalContext(context.Background())
+		defer stop()
+
+		Expect(ctx.Err()).NotTo(HaveOccurred())
+	})
+
+	It("is cancelled when its parent is cancelled", func() {
 		parent, cancel := context.WithCancel(context.Background())
-		cmd := &cobra.Command{}
-		cmd.SetContext(parent)
 
-		var runCtx context.Context
+		ctx, stop := util.NotifySignalContext(parent)
+		defer stop()
 
-		runE := util.CancelOnSignal(func(ctx context.Context) error {
-			runCtx = ctx
+		cancel()
 
-			cancel()
-
-			return ctx.Err()
-		})
-
-		Expect(runE(cmd, nil)).To(MatchError(context.Canceled))
-		Expect(runCtx).NotTo(BeIdenticalTo(parent))
+		Expect(ctx.Err()).To(MatchError(context.Canceled))
 	})
 
-	It("leaves the command context untouched so the command can run again", func() {
-		parent := context.Background()
-		cmd := &cobra.Command{}
-		cmd.SetContext(parent)
+	It("is cancelled by stop", func() {
+		ctx, stop := util.NotifySignalContext(context.Background())
 
-		runE := util.CancelOnSignal(func(ctx context.Context) error {
-			return ctx.Err()
-		})
+		stop()
 
-		Expect(runE(cmd, nil)).To(Succeed())
-		Expect(cmd.Context()).To(BeIdenticalTo(parent))
-		Expect(runE(cmd, nil)).To(Succeed())
+		Expect(ctx.Err()).To(MatchError(context.Canceled))
+	})
+})
+
+var _ = Describe("NewSignalContext", func() {
+	var (
+		source  *util.MockSignalSource
+		out     *bytes.Buffer
+		signals chan<- os.Signal
+	)
+
+	BeforeEach(func() {
+		source = util.NewMockSignalSource(GinkgoT())
+		out = &bytes.Buffer{}
+
+		source.EXPECT().Notify(mock.Anything).Run(func(c chan<- os.Signal) {
+			signals = c
+		}).Once()
 	})
 
-	It("returns the error of the wrapped run", func() {
-		runErr := errors.New("install failed")
-		cmd := &cobra.Command{}
-		cmd.SetContext(context.Background())
+	It("is cancelled on the first signal, restores default handling and says how to force", func() {
+		source.EXPECT().Stop(mock.Anything).Return()
 
-		runE := util.CancelOnSignal(func(_ context.Context) error {
-			return runErr
-		})
+		ctx, stop := util.NewSignalContext(context.Background(), source, out)
+		defer stop()
 
-		Expect(runE(cmd, nil)).To(MatchError(runErr))
+		signals <- os.Interrupt
+
+		<-ctx.Done()
+
+		Expect(ctx.Err()).To(MatchError(context.Canceled))
+		Expect(out.String()).To(Equal("Interrupt received, stopping. Press Ctrl-C again to force.\n"))
+	})
+
+	It("prints nothing when stopped without a signal", func() {
+		source.EXPECT().Stop(mock.Anything).Return().Once()
+
+		ctx, stop := util.NewSignalContext(context.Background(), source, out)
+		stop()
+
+		Expect(ctx.Err()).To(MatchError(context.Canceled))
+		Expect(out.String()).To(BeEmpty())
+	})
+})
+
+var _ = Describe("ExitCode", func() {
+	It("is 0 when the command succeeded", func() {
+		Expect(util.ExitCode(context.Background(), nil)).To(Equal(0))
+	})
+
+	It("is 1 when the command failed on its own", func() {
+		Expect(util.ExitCode(context.Background(), errors.New("boom"))).To(Equal(1))
+	})
+
+	It("is 130 when the command failed after an interrupt", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		Expect(util.ExitCode(ctx, errors.New("stopped waiting for input: context canceled"))).To(Equal(prompt.InterruptExitCode))
 	})
 })

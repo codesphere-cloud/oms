@@ -48,7 +48,7 @@ var _ = Describe("BuildImageCmd", func() {
 		It("calls BuildImage and fails when package manager fails", func() {
 			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir")
 
-			err := c.RunE(nil, []string{})
+			err := c.RunE(newCommandWithContext(), []string{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to extract package"))
 		})
@@ -58,7 +58,7 @@ var _ = Describe("BuildImageCmd", func() {
 
 			// This will fail in real scenario because it tries to extract from real package
 			// But it should at least call the correct methods
-			err := c.RunE(nil, []string{})
+			err := c.RunE(newCommandWithContext(), []string{})
 			Expect(err).To(HaveOccurred())
 		})
 	})

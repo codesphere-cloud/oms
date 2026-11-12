@@ -237,14 +237,14 @@ func getBillingAccountResourceName(billingAccount string) string {
 
 // GetBillingInfo retrieves the billing information for the given project.
 func (c *GCPClient) GetBillingInfo(projectID string) (*cloudbilling.ProjectBillingInfo, error) {
-	billingService, err := cloudbilling.NewService(context.Background())
+	billingService, err := cloudbilling.NewService(c.ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	projectName := getProjectResourceName(projectID)
 
-	billingInfo, err := billingService.Projects.GetBillingInfo(projectName).Do()
+	billingInfo, err := billingService.Projects.GetBillingInfo(projectName).Context(c.ctx).Do()
 	if err != nil {
 		return nil, err
 	}
