@@ -4,8 +4,6 @@
 package pcapps
 
 import (
-	"slices"
-
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -23,19 +21,15 @@ func msBackendS3Config(config *files.RootConfig) *files.S3ManagedServiceConfig {
 }
 
 // msBackendS3Installed: unless the config mentions it, the installer turns the backend off on
-// installations that keep workspaces on PVCs and have no ceph.
+// installations that keep workspaces on PVCs and have no ceph. Mirrors the managedServiceBackends.s3
+// default passed to installMsBackends in codesphere-monorepo
+// packages/script-lib/src/ts/private-cloud/private-cloud-installer.ts.
 func msBackendS3Installed(config *files.RootConfig) bool {
 	if s3 := msBackendS3Config(config); s3 != nil {
 		return enabled(s3.Enabled)
 	}
 
-	return !workspacesOnPvcs(config.Codesphere) || hasCeph(config)
-}
-
-// workspacesOnPvcs mirrors the installer's isEnabled, which reads the deprecated
-// codesphere.experiments too.
-func workspacesOnPvcs(codesphere files.CodesphereConfig) bool {
-	return codesphere.IsEnabled(files.WorkspacePVCStorageFlag) || slices.Contains(codesphere.Experiments, files.WorkspacePVCStorageFlag) //nolint:staticcheck
+	return !config.Codesphere.IsEnabled(files.WorkspacePVCStorageFlag) || hasCeph(config)
 }
 
 // msBackendS3Values reads the admin credentials from the vault entries a private cloud has; the

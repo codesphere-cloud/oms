@@ -14,6 +14,7 @@ var _ = Describe("CodesphereConfig.IsEnabled", func() {
 		Expect(config.IsEnabled("target")).To(Equal(enabled))
 	},
 		Entry("internal", files.CodesphereConfig{Internal: []string{"other", "target"}}, true),
+		Entry("deprecated experiment", files.CodesphereConfig{Experiments: []string{"other", "target"}}, true), //nolint:staticcheck
 		Entry("preview", files.CodesphereConfig{Preview: map[string]bool{"target": true}}, true),
 		Entry("feature", files.CodesphereConfig{Features: map[string]bool{"target": true}}, true),
 		Entry("disabled", files.CodesphereConfig{Preview: map[string]bool{"target": false}, Features: map[string]bool{"target": false}}, false),
