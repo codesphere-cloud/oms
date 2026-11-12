@@ -126,4 +126,61 @@ var _ = Describe("Codesphere installer", func() {
 
 		Expect(err).To(MatchError(ContainSubstring("extract failed")))
 	})
+
+	// The config profiles default to 127.0.0.1, so a generated config that was never edited hits this.
+	It("rejects the loopback placeholder public IP when the codesphere step runs", func() {
+		config := files.RootConfig{Codesphere: files.CodesphereConfig{PublicIP: "127.0.0.1"}}
+		configManager := installer.NewMockConfigManager(GinkgoT())
+		configManager.EXPECT().ParseConfigYaml("config.yaml").Return(config, nil)
+
+		packageManager := installer.NewMockPackageManager(GinkgoT())
+		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml"}
+
+		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+
+		Expect(err).To(MatchError(ContainSubstring("codesphere.publicIp 127.0.0.1 is not reachable from other machines")))
+	})
+
+	It("rejects an unspecified public IP when the codesphere step runs", func() {
+		config := files.RootConfig{Codesphere: files.CodesphereConfig{PublicIP: "0.0.0.0"}}
+		configManager := installer.NewMockConfigManager(GinkgoT())
+		configManager.EXPECT().ParseConfigYaml("config.yaml").Return(config, nil)
+
+		packageManager := installer.NewMockPackageManager(GinkgoT())
+		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml"}
+
+		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+
+		Expect(err).To(MatchError(ContainSubstring("codesphere.publicIp 0.0.0.0 is not reachable from other machines")))
+	})
+
+	It("accepts a private public IP for on-premises and VM-based installs", func() {
+		config := files.RootConfig{Codesphere: files.CodesphereConfig{PublicIP: "192.168.5.15"}}
+		configManager := installer.NewMockConfigManager(GinkgoT())
+		configManager.EXPECT().ParseConfigYaml("config.yaml").Return(config, nil)
+
+		packageManager := installer.NewMockPackageManager(GinkgoT())
+		packageManager.EXPECT().Extract(false, false).Return(errors.New("extract failed"))
+
+		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml"}
+
+		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+
+		Expect(err).To(MatchError(ContainSubstring("extract failed")))
+	})
+
+	It("allows the loopback placeholder public IP for local component installs", func() {
+		config := files.RootConfig{Codesphere: files.CodesphereConfig{PublicIP: "127.0.0.1"}}
+		configManager := installer.NewMockConfigManager(GinkgoT())
+		configManager.EXPECT().ParseConfigYaml("config.yaml").Return(config, nil)
+
+		packageManager := installer.NewMockPackageManager(GinkgoT())
+		packageManager.EXPECT().Extract(false, false).Return(errors.New("extract failed"))
+
+		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml", LocalComponents: true}
+
+		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+
+		Expect(err).To(MatchError(ContainSubstring("extract failed")))
+	})
 })

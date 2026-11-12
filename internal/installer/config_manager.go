@@ -33,6 +33,22 @@ func validateCodespherePublicIP(config files.CodesphereConfig) error {
 	return nil
 }
 
+// validateReachableCodespherePublicIP additionally rejects addresses that no other machine can
+// reach, such as the 127.0.0.1 placeholder the config profiles default to. Private addresses stay
+// allowed because on-premises and VM-based installs legitimately serve custom domains on them.
+func validateReachableCodespherePublicIP(config files.CodesphereConfig) error {
+	if err := validateCodespherePublicIP(config); err != nil {
+		return err
+	}
+
+	ip := net.ParseIP(config.PublicIP)
+	if ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsMulticast() {
+		return fmt.Errorf("codesphere.publicIp %s is not reachable from other machines; set it to the IP custom domains' A records must point to (e.g. the public gateway IP)", config.PublicIP)
+	}
+
+	return nil
+}
+
 //mockery:generate: true
 type InstallConfigManager interface {
 	// Profile management

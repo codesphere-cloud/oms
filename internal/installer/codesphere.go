@@ -144,14 +144,14 @@ func (ci *CodesphereInstaller) loadConfig(cm ConfigManager) (files.RootConfig, e
 	return config, nil
 }
 
-// validatePublicIP rejects deploying Codesphere without a public IP for custom domains. Local
-// component installs are exempt because local dev clusters cannot serve custom domains.
+// validatePublicIP rejects deploying Codesphere without a reachable public IP for custom domains.
+// Local component installs are exempt because local dev clusters cannot serve custom domains.
 func (ci *CodesphereInstaller) validatePublicIP(config files.RootConfig) error {
 	if ci.LocalComponents || !ci.executableInstallerSteps(config)[CodesphereStep] {
 		return nil
 	}
 
-	if err := validateCodespherePublicIP(config.Codesphere); err != nil {
+	if err := validateReachableCodespherePublicIP(config.Codesphere); err != nil {
 		return fmt.Errorf("invalid codesphere configuration: %w", err)
 	}
 
