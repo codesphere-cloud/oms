@@ -20,36 +20,6 @@ func IsValidIP(ip string) bool {
 	return net.ParseIP(ip) != nil
 }
 
-// validateCodespherePublicIP checks the IP users point their custom domains' A records to.
-// Without it, Codesphere shows an empty A record value and custom domains cannot be set up.
-func validateCodespherePublicIP(config files.CodesphereConfig) error {
-	if config.PublicIP == "" {
-		return fmt.Errorf("codesphere.publicIp is required (the IP custom domains' A records must point to)")
-	}
-
-	if !IsValidIP(config.PublicIP) {
-		return fmt.Errorf("invalid codesphere.publicIp: %s", config.PublicIP)
-	}
-
-	return nil
-}
-
-// validateReachableCodespherePublicIP additionally rejects addresses that no other machine can
-// reach, such as the 127.0.0.1 placeholder the config profiles default to. Private addresses stay
-// allowed because on-premises and VM-based installs legitimately serve custom domains on them.
-func validateReachableCodespherePublicIP(config files.CodesphereConfig) error {
-	if err := validateCodespherePublicIP(config); err != nil {
-		return err
-	}
-
-	ip := net.ParseIP(config.PublicIP)
-	if ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsMulticast() {
-		return fmt.Errorf("codesphere.publicIp %s is not reachable from other machines; set it to the IP custom domains' A records must point to (e.g. the public gateway IP)", config.PublicIP)
-	}
-
-	return nil
-}
-
 //mockery:generate: true
 type InstallConfigManager interface {
 	// Profile management
@@ -259,7 +229,7 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 		errors = append(errors, "Codesphere domain is required")
 	}
 
-	if err := validateCodespherePublicIP(g.Config.Codesphere); err != nil {
+	if err := g.Config.Codesphere.ValidatePublicIP(); err != nil {
 		errors = append(errors, err.Error())
 	}
 

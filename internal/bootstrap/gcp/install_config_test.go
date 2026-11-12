@@ -395,11 +395,11 @@ var _ = Describe("Installconfig & Secrets", func() {
 			icg.EXPECT().GetVault().Return(vault).Maybe()
 
 			csEnv.GitHubAppName = "fake-app-name"
+			csEnv.PublicGatewayIP = "2.2.2.2"
 		})
 		Describe("Valid UpdateInstallConfig", func() {
 			It("updates config and writes files", func() {
 				csEnv.SSHProxyIP = "3.3.3.3"
-				csEnv.PublicGatewayIP = "2.2.2.2"
 				csEnv.InstallVersion = "1.111.0"
 				csEnv.InstallHash = "abc123"
 				csEnv.InstallConfig.Operations = &files.OperationsConfig{Skip: []string{"ceph"}}
@@ -1262,6 +1262,14 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				err := bs.UpdateInstallConfig()
 				Expect(err).To(MatchError(ContainSubstring("codesphere registry password is not set")))
+			})
+
+			// A resumed bootstrap restores the gateway IP from its infra file, which may predate it.
+			It("fails when the data center has no public gateway IP", func() {
+				csEnv.PublicGatewayIP = ""
+
+				err := bs.UpdateInstallConfig()
+				Expect(err).To(MatchError(ContainSubstring("data center 1 has no public gateway IP")))
 			})
 
 			It("fails when GenerateSecrets fails", func() {

@@ -162,7 +162,7 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *util.GlobalOptions) 
 
 	// Codesphere update flags
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereDomain, "domain", "", "Main Codesphere domain")
-	c.cmd.Flags().StringVar(&c.Opts.CodespherePublicIP, "public-ip", "", "Codesphere public IP address")
+	c.cmd.Flags().StringVar(&c.Opts.CodespherePublicIP, "public-ip", "", "Public IP that custom domains' A records point to (public gateway IP)")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereWorkspaceHostingBaseDomain, "workspace-hosting-base-domain", "", "Workspace hosting base domain")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereCustomDomainsCNameBaseDomain, "custom-domains-cname-base-domain", "", "Custom domains CNAME base domain")
 	c.cmd.Flags().StringSliceVar(&c.Opts.CodesphereDNSServers, "dns-servers", []string{}, "DNS servers (comma-separated)")
@@ -199,6 +199,8 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 	if len(errors) > 0 {
 		return fmt.Errorf("configuration validation failed: %s", strings.Join(errors, ", "))
 	}
+
+	warnIfPublicIPUnreachable(config)
 
 	if tracker.HasChanges() {
 		if !c.approve("Regenerate them?", "The changes above require these secrets to be regenerated:", tracker.Regenerates()) {

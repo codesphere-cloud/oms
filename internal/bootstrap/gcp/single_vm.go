@@ -170,7 +170,7 @@ func (b *GCPBootstrapper) ensureSingleVMPackage() error {
 func (b *GCPBootstrapper) singleVMConfig(config files.RootConfig) files.RootConfig {
 	config.Codesphere.Domain = "cs." + b.Env.BaseDomain
 	config.Codesphere.WorkspaceHostingBaseDomain = "ws." + b.Env.BaseDomain
-	config.Codesphere.PublicIP = b.Env.Jumpbox.GetExternalIP()
+	config.Codesphere.PublicIP = b.primaryDC().PublicGatewayIP
 	config.Codesphere.CustomDomains.CNameBaseDomain = config.Codesphere.WorkspaceHostingBaseDomain
 	config.Cluster.Gateway.ServiceType = "ClusterIP"
 	config.Cluster.PublicGateway.ServiceType = "ClusterIP"

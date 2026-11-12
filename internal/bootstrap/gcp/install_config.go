@@ -387,6 +387,10 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	}
 	// Custom domains' A records point to the public gateway, like the workspace domain does. The
 	// k0s nodes have no external IP, so they cannot serve as the public IP.
+	if dc.PublicGatewayIP == "" {
+		return fmt.Errorf("data center %d has no public gateway IP for codesphere.publicIp", dc.ID)
+	}
+
 	dc.InstallConfig.Codesphere.PublicIP = dc.PublicGatewayIP
 
 	dc.InstallConfig.Codesphere.DNSServers = []string{"8.8.8.8"}

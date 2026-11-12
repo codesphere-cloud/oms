@@ -411,7 +411,7 @@ func (g *InstallConfig) collectCodesphereConfig(prompter prompt.Prompter) {
 
 	g.Config.Codesphere.Domain = g.collectString(prompter, "Main Codesphere domain", defaultDomain)
 	g.Config.Codesphere.WorkspaceHostingBaseDomain = g.collectString(prompter, "Workspace base domain (*.domain should point to public gateway)", defaultWorkspaceDomain)
-	g.Config.Codesphere.PublicIP = g.collectString(prompter, "Primary public IP for workspaces", g.Config.Codesphere.PublicIP)
+	g.Config.Codesphere.PublicIP = g.collectString(prompter, "Public IP custom domains' A records point to (public gateway IP)", g.Config.Codesphere.PublicIP)
 	g.Config.Codesphere.CustomDomains.CNameBaseDomain = g.collectString(prompter, "Custom domain CNAME base", defaultCustomDomain)
 	g.Config.Codesphere.DNSServers = g.collectStringSlice(prompter, "DNS servers (comma-separated)", defaultDNSServers)
 

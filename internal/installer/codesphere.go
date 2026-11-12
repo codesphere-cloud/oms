@@ -151,7 +151,7 @@ func (ci *CodesphereInstaller) validatePublicIP(config files.RootConfig) error {
 		return nil
 	}
 
-	if err := validateReachableCodespherePublicIP(config.Codesphere); err != nil {
+	if err := config.Codesphere.ValidateReachablePublicIP(); err != nil {
 		return fmt.Errorf("invalid codesphere configuration: %w", err)
 	}
 
