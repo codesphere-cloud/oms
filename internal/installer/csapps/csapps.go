@@ -11,6 +11,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
+	"github.com/codesphere-cloud/oms/internal/installer/argocd/pcapps"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -90,6 +91,14 @@ func parentAppValues(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName s
 
 	global := codesphereValues["global"]
 	delete(codesphereValues, "global")
+
+	// The image-pre-pull app in pc-applications pulls the images, so the release must not wait on
+	// its own pre-pull DaemonSets. The same function decides whether the app is on.
+	if pcapps.ImagePrePullPcAppsValues(cfg, csBom) != nil {
+		if globalMap, ok := global.(map[string]any); ok {
+			globalMap["prePullImages"] = false
+		}
+	}
 
 	built := map[string]any{
 		"namespace": codesphereNamespace,

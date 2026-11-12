@@ -16,6 +16,12 @@ import (
 var _ = Describe("ImagePrePullPcAppsValues", func() {
 	const prefix = "ghcr.io/codesphere-cloud/codesphere-monorepo/"
 
+	pcAppsChart := func(version string) bom.ComponentConfig {
+		return bom.ComponentConfig{Files: map[string]bom.FileRef{
+			"chart": {OciRef: "ghcr.io/codesphere-cloud/charts/pc-applications:" + version},
+		}}
+	}
+
 	testBOM := func(extra map[string]string) *bom.Config {
 		images := map[string]string{
 			"auth-service":          prefix + "auth-service:v1.2.3",
@@ -45,7 +51,8 @@ var _ = Describe("ImagePrePullPcAppsValues", func() {
 		}
 
 		return &bom.Config{Components: map[string]bom.ComponentConfig{
-			"codesphere": {ContainerImages: images},
+			"codesphere":      {ContainerImages: images},
+			"pc-applications": pcAppsChart("0.442.0"),
 		}}
 	}
 
@@ -99,9 +106,7 @@ var _ = Describe("ImagePrePullPcAppsValues", func() {
 			"workspace-router":            prefix + "workspace-router:v1.2.3",
 		})
 
-		values, err := pcapps.ImagePrePullPcAppsValues(testConfig(), bomConfig)
-
-		Expect(err).NotTo(HaveOccurred())
+		values := pcapps.ImagePrePullPcAppsValues(testConfig(), bomConfig)
 
 		valuesObject := appValues(values)
 		Expect(valuesObject["priorityClassName"]).To(Equal("prod-codesphere-deployment"))
@@ -119,9 +124,8 @@ var _ = Describe("ImagePrePullPcAppsValues", func() {
 	})
 
 	It("leaves out the router and init image when the BOM has none", func() {
-		values, err := pcapps.ImagePrePullPcAppsValues(testConfig(), testBOM(nil))
+		values := pcapps.ImagePrePullPcAppsValues(testConfig(), testBOM(nil))
 
-		Expect(err).NotTo(HaveOccurred())
 		Expect(images(appValues(values), "workspace")).To(Equal([]map[string]string{
 			{"name": "workspace-server", "image": prefix + "workspace-server:v1.2.3"},
 			{"name": "vpn", "image": prefix + "vpn:v1.2.3"},
@@ -137,9 +141,7 @@ var _ = Describe("ImagePrePullPcAppsValues", func() {
 			},
 		}
 
-		values, err := pcapps.ImagePrePullPcAppsValues(config, testBOM(nil))
-
-		Expect(err).NotTo(HaveOccurred())
+		values := pcapps.ImagePrePullPcAppsValues(config, testBOM(nil))
 
 		valuesObject := appValues(values)
 		Expect(valuesObject["allowOnControlPlane"]).To(BeTrue())
@@ -153,15 +155,68 @@ var _ = Describe("ImagePrePullPcAppsValues", func() {
 		config := testConfig()
 		config.Codesphere.PrePullImages = ptr.To(false)
 
-		values, err := pcapps.ImagePrePullPcAppsValues(config, testBOM(nil))
+		values := pcapps.ImagePrePullPcAppsValues(config, testBOM(nil))
 
-		Expect(err).NotTo(HaveOccurred())
 		Expect(values).To(BeNil())
 	})
 
-	It("fails when the Codesphere values cannot be built", func() {
-		_, err := pcapps.ImagePrePullPcAppsValues(testConfig(), &bom.Config{})
+	It("returns nil when the pcApps block disables the app", func() {
+		config := testConfig()
+		config.PcApps = files.ChartValues{
+			"applications": files.ChartValues{"image-pre-pull": files.ChartValues{"enabled": false}},
+		}
 
-		Expect(err).To(HaveOccurred())
+		Expect(pcapps.ImagePrePullPcAppsValues(config, testBOM(nil))).To(BeNil())
+	})
+
+	It("returns nil when the pc-applications chart in the BOM is too old", func() {
+		bomConfig := testBOM(nil)
+		bomConfig.Components["pc-applications"] = pcAppsChart("0.441.0")
+
+		Expect(pcapps.ImagePrePullPcAppsValues(testConfig(), bomConfig)).To(BeNil())
+	})
+
+	It("returns nil when the BOM has no pc-applications chart", func() {
+		bomConfig := testBOM(nil)
+		delete(bomConfig.Components, "pc-applications")
+
+		Expect(pcapps.ImagePrePullPcAppsValues(testConfig(), bomConfig)).To(BeNil())
+	})
+
+	It("keeps the tag of an agent image that has one", func() {
+		config := testConfig()
+		config.Codesphere.DeployConfig.Images = map[string]files.ImageConfig{
+			"ubuntu-24.04": {SupportedUntil: "2028-05-31", Flavors: map[string]files.FlavorConfig{
+				"default": {Image: files.ImageRef{ImageName: "registry.example.com/agent:1.0.0"}},
+			}},
+		}
+
+		values := pcapps.ImagePrePullPcAppsValues(config, testBOM(nil))
+
+		Expect(images(appValues(values), "agents")).To(Equal([]map[string]string{
+			{"name": "agent-ubuntu-24-04-default", "image": "registry.example.com/agent:1.0.0"},
+		}))
+	})
+
+	It("gives agents of clashing OS keys unique names", func() {
+		config := testConfig()
+		flavors := map[string]files.FlavorConfig{
+			"default": {Image: files.ImageRef{ImageName: "registry.example.com/agent"}},
+		}
+		config.Codesphere.DeployConfig.Images = map[string]files.ImageConfig{
+			"Ubuntu_24.04": {SupportedUntil: "2028-05-31", Flavors: flavors},
+			"ubuntu-24.04": {SupportedUntil: "2028-05-31", Flavors: flavors},
+		}
+
+		values := pcapps.ImagePrePullPcAppsValues(config, testBOM(nil))
+
+		Expect(images(appValues(values), "agents")).To(Equal([]map[string]string{
+			{"name": "agent-ubuntu-24-04-default", "image": "registry.example.com/agent:v1.2.3"},
+			{"name": "agent-ubuntu-24-04-default-1", "image": "registry.example.com/agent:v1.2.3"},
+		}))
+	})
+
+	It("returns nil without error when the Codesphere values cannot be built", func() {
+		Expect(pcapps.ImagePrePullPcAppsValues(testConfig(), &bom.Config{})).To(BeNil())
 	})
 })
