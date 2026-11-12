@@ -8,7 +8,8 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-// rgwInstalled reports whether the config deploys the opt-in standalone rgw.
+// rgwInstalled reports whether the config deploys the opt-in standalone rgw. Mirrors setUpCluster in
+// codesphere-monorepo packages/script-lib/src/ts/private-cloud/cluster.ts.
 func rgwInstalled(config *files.RootConfig) bool {
 	rgw := config.Cluster.Rgw
 
