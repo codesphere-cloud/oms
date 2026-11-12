@@ -31,9 +31,6 @@ import (
 // InstallerArchiveName is the package artifact bootstrapping downloads and installs.
 const InstallerArchiveName = "installer-lite.tar.gz"
 
-// jumpboxOmsWorkdir is shared by package mirroring and config-based installation.
-const jumpboxOmsWorkdir = "oms-workdir"
-
 // remoteK0sConfigScriptPath is where each data center's k0s configuration script is placed on
 // that data center's first control plane node. Data centers have separate nodes, so the path can
 // be the same for all of them.
@@ -1332,7 +1329,8 @@ func (b *GCPBootstrapper) codespherePackageFilename() string {
 		return "local-" + InstallerArchiveName
 	}
 
-	return filepath.Join(jumpboxOmsWorkdir, portal.BuildPackageFilenameFromParts(b.codesphereVersionForPortal(), b.Env.InstallHash, InstallerArchiveName))
+	// oms on the jumpbox runs in /root without OMS_WORKDIR, so it finds the package in its default workdir.
+	return filepath.Join(env.DefaultOmsWorkdir, portal.BuildPackageFilenameFromParts(b.codesphereVersionForPortal(), b.Env.InstallHash, InstallerArchiveName))
 }
 
 func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
@@ -1363,7 +1361,7 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
 
 	b.stlog.Logf("Downloading Codesphere package...")
 	downloadCmd := fmt.Sprintf("mkdir -p %[1]s && cd %[1]s && oms download package -f %[2]s -H %[3]s %[4]s",
-		jumpboxOmsWorkdir, InstallerArchiveName, b.Env.InstallHash, b.codesphereVersionForPortal())
+		env.DefaultOmsWorkdir, InstallerArchiveName, b.Env.InstallHash, b.codesphereVersionForPortal())
 
 	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {
