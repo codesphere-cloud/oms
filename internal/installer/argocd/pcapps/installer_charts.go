@@ -19,11 +19,11 @@ const (
 type installerChart struct {
 	// installed reports whether the installer installs the chart for this config.
 	installed func(*files.RootConfig) bool
-	// values are the chart values for this config, the chart's override included.
-	values func(*files.RootConfig) files.ChartValues
-	name   string
+	name      string
 	// step is the installer step that installs the chart. A run that skips it leaves the chart off.
 	step string
+	// values are the chart values for this config, the chart's override included.
+	values func(*files.RootConfig) files.ChartValues
 }
 
 func (c installerChart) application(config *files.RootConfig, skipped func(step string) bool) files.ChartValues {

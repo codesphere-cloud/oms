@@ -245,14 +245,14 @@ type InstallerAPI interface {
 // pc-applications app-of-apps workflow.
 type AppInstallerConfig struct {
 	Config       files.RootConfig
-	Vault        *files.InstallVault
-	RESTConfig   *rest.Config
-	KubeClient   client.Client
 	HelmClient   installer.HelmClient
 	Installer    InstallerAPI
+	KubeClient   client.Client
 	PCAppsValues []string
+	RESTConfig   *rest.Config
 	// SkipSteps are the --skip-steps; the config's operations.skip counts too.
 	SkipSteps []string
+	Vault     *files.InstallVault
 }
 
 // AppInstaller installs ArgoCD, syncs the vault secret, and registers the
