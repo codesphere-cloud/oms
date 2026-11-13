@@ -64,6 +64,18 @@ var _ = Describe("local CSI storage", func() {
 		}
 	})
 
+	It("registers the NFS CSI node plugin under the k0s kubelet directory", func() {
+		b := &LocalBootstrapper{Env: &CodesphereEnvironment{K0s: true}}
+		Expect(b.localCSIChartValues()).To(HaveKeyWithValue("nfsCSI", map[string]interface{}{
+			"kubeletDir": "/var/lib/k0s/kubelet",
+		}))
+	})
+
+	It("uses the upstream kubelet directory on other Kubernetes distributions", func() {
+		b := &LocalBootstrapper{Env: &CodesphereEnvironment{}}
+		Expect(b.localCSIChartValues()).NotTo(HaveKey("nfsCSI"))
+	})
+
 	It("configures local storage values idempotently", func() {
 		b := &LocalBootstrapper{Env: &CodesphereEnvironment{
 			StorageEngine: StorageEngineLocal,
