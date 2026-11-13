@@ -839,9 +839,9 @@ License URL: https://github.com/jbenet/go-context/blob/d14ea06fba99/LICENSE
  
 ----------
 Module: github.com/jedib0t/go-pretty/v6
-Version: v6.8.3
+Version: v6.9.0
 License: MIT
-License URL: https://github.com/jedib0t/go-pretty/blob/v6.8.3/LICENSE
+License URL: https://github.com/jedib0t/go-pretty/blob/v6.9.0/LICENSE
  
 ----------
 Module: github.com/jmoiron/sqlx
@@ -1166,6 +1166,12 @@ Module: github.com/redis/go-redis/v9
 Version: v9.20.1
 License: BSD-2-Clause
 License URL: https://github.com/redis/go-redis/blob/v9.20.1/LICENSE
+ 
+----------
+Module: github.com/rivo/uniseg
+Version: v0.4.7
+License: MIT
+License URL: https://github.com/rivo/uniseg/blob/v0.4.7/LICENSE.txt
  
 ----------
 Module: github.com/robfig/cron/v3
