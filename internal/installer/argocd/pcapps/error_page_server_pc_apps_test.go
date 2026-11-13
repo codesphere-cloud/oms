@@ -16,8 +16,7 @@ var _ = Describe("ErrorPageServerPcAppsValues", func() {
 	const prefix = "ghcr.io/codesphere-cloud/codesphere-monorepo/"
 
 	// installerBom has every image the Codesphere values need.
-	// withErrorPageServer adds the one the umbrella chart deploys error-page-server with.
-	installerBom := func(withErrorPageServer bool) *bom.Config {
+	installerBom := func() *bom.Config {
 		images := map[string]string{
 			"auth-service":          prefix + "auth-service:v1.2.3",
 			"deployment-service":    prefix + "deployment-service:v1.2.3",
@@ -40,9 +39,7 @@ var _ = Describe("ErrorPageServerPcAppsValues", func() {
 			"kubectl":               "ghcr.io/codesphere-cloud/docker/kubectl:1.34.0",
 			"observabilityOtel":     "ghcr.io/codesphere-cloud/docker/otel:0.160.0",
 			"observabilityOtelInit": "ghcr.io/codesphere-cloud/docker/curl:8.20.0",
-		}
-		if withErrorPageServer {
-			images["error-page-server"] = prefix + "error-page-server:v1.2.3"
+			"error-page-server":     prefix + "error-page-server:v1.2.3",
 		}
 
 		return &bom.Config{Components: map[string]bom.ComponentConfig{
@@ -71,31 +68,25 @@ var _ = Describe("ErrorPageServerPcAppsValues", func() {
 		return &config
 	}
 
-	It("umbrella chart still deploys error-page-server -> nil, the application stays disabled", func() {
-		values, err := pcapps.ErrorPageServerPcAppsValues(config(), installerBom(true))
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(values).To(BeNil())
-	})
-
-	It("BOM without a codesphere component -> nil", func() {
-		values, err := pcapps.ErrorPageServerPcAppsValues(config(), &bom.Config{})
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(values).To(BeNil())
-	})
-
-	It("umbrella chart without error-page-server -> enabled, with the Codesphere globals", func() {
-		values, err := pcapps.ErrorPageServerPcAppsValues(config(), installerBom(false))
+	It("passes the Codesphere globals and leaves enabled to the pc-applications chart", func() {
+		values, err := pcapps.ErrorPageServerPcAppsValues(config(), installerBom())
 		Expect(err).NotTo(HaveOccurred())
 
 		app := values["applications"].(files.ChartValues)["error-page-server"].(files.ChartValues)
-		Expect(app["enabled"]).To(BeTrue())
+		Expect(app).NotTo(HaveKey("enabled"))
 
 		global := app["valuesObject"].(map[string]any)["global"].(map[string]any)
 		Expect(global["hostName"]).To(Equal("codesphere.example.com"))
 		Expect(global["env"]).To(Equal("prod"))
 		Expect(global["externalSecretsVaultSecret"]).To(Equal("cs-vault"))
 		Expect(global["externalSecretsSyncTrigger"]).NotTo(BeEmpty())
+		Expect(global["services"]).To(HaveKeyWithValue("error_page_server",
+			map[string]any{"image": prefix + "error-page-server"}))
+	})
+
+	It("BOM without a codesphere component -> error", func() {
+		_, err := pcapps.ErrorPageServerPcAppsValues(config(), &bom.Config{})
+
+		Expect(err).To(MatchError(ContainSubstring("failed to build the Codesphere values")))
 	})
 })
