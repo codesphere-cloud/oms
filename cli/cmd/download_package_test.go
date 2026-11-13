@@ -104,7 +104,7 @@ var _ = Describe("DownloadPackages", func() {
 
 			cmd.AddDownloadPackageCmd(&downloadCmd, opts)
 
-			downloadCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+			downloadCmd.Commands()[0].RunE = func(_ *cobra.Command, _ []string) error {
 				return nil
 			}
 
@@ -121,7 +121,7 @@ var _ = Describe("DownloadPackages", func() {
 
 			cmd.AddDownloadPackageCmd(&downloadCmd, opts)
 
-			downloadCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+			downloadCmd.Commands()[0].RunE = func(_ *cobra.Command, _ []string) error {
 				return nil
 			}
 
@@ -137,7 +137,7 @@ var _ = Describe("DownloadPackages", func() {
 
 			cmd.AddDownloadPackageCmd(&downloadCmd, opts)
 
-			downloadCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+			downloadCmd.Commands()[0].RunE = func(_ *cobra.Command, _ []string) error {
 				return nil
 			}
 
@@ -154,7 +154,7 @@ var _ = Describe("DownloadPackages", func() {
 
 			cmd.AddDownloadPackageCmd(&downloadCmd, opts)
 
-			downloadCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+			downloadCmd.Commands()[0].RunE = func(_ *cobra.Command, _ []string) error {
 				return nil
 			}
 
@@ -169,7 +169,7 @@ var _ = Describe("DownloadPackages", func() {
 
 			cmd.AddDownloadPackageCmd(&downloadCmd, opts)
 
-			downloadCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+			downloadCmd.Commands()[0].RunE = func(_ *cobra.Command, _ []string) error {
 				return nil
 			}
 
@@ -187,7 +187,7 @@ var _ = Describe("DownloadPackages", func() {
 
 			cmd.AddDownloadPackageCmd(&downloadCmd, opts)
 
-			downloadCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+			downloadCmd.Commands()[0].RunE = func(_ *cobra.Command, _ []string) error {
 				return nil
 			}
 

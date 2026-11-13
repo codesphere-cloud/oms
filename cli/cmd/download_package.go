@@ -23,6 +23,7 @@ type DownloadPackageCmd struct {
 	FileWriter intutil.FileIO
 }
 
+// DownloadPackageOpts holds the flags of the download package command.
 type DownloadPackageOpts struct {
 	*util.GlobalOptions
 	Version    string
@@ -59,6 +60,7 @@ func (c *DownloadPackageCmd) RunE(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// AddDownloadPackageCmd registers the package command on the download command.
 func AddDownloadPackageCmd(download *cobra.Command, opts *util.GlobalOptions) {
 	pkg := DownloadPackageCmd{
 		cmd: &cobra.Command{
@@ -82,9 +84,8 @@ func AddDownloadPackageCmd(download *cobra.Command, opts *util.GlobalOptions) {
 					cmd.Args = cobra.ExactArgs(1)
 				}
 
-				err := cmd.Args(cmd, args)
-				if err != nil {
-					return err
+				if err := cmd.Args(cmd, args); err != nil {
+					return fmt.Errorf("invalid arguments: %w", err)
 				}
 
 				return nil

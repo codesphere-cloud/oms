@@ -13,25 +13,33 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// AddClusterAdminCmd implements the add-cluster-admin command.
 type AddClusterAdminCmd struct {
 	cmd  *cobra.Command
 	Opts AddClusterAdminOpts
 }
 
+// AddClusterAdminOpts holds the flags of the add-cluster-admin command.
 type AddClusterAdminOpts struct {
 	*util.GlobalOptions
 	clusteradmin.Opts
 }
 
+// RunE writes the cluster admin email to the Kubernetes secret of the target cluster.
 func (c *AddClusterAdminCmd) RunE(_ *cobra.Command, _ []string) error {
 	clientset, _, err := intutil.NewClients()
 	if err != nil {
 		return fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
 
-	return clusteradmin.AddClusterAdmin(c.cmd.Context(), clientset, c.Opts.Opts)
+	if err := clusteradmin.AddClusterAdmin(c.cmd.Context(), clientset, c.Opts.Opts); err != nil {
+		return fmt.Errorf("failed to add cluster admin: %w", err)
+	}
+
+	return nil
 }
 
+// AddAddClusterAdminCmd registers the add-cluster-admin command on the parent command.
 func AddAddClusterAdminCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	c := AddClusterAdminCmd{
 		cmd: &cobra.Command{

@@ -14,6 +14,7 @@ type InstallCephCmd struct {
 	cmd *cobra.Command
 }
 
+// AddInstallCephCmd registers the ceph command on the install command.
 func AddInstallCephCmd(install *cobra.Command) {
 	ceph := InstallCephCmd{
 		cmd: &cobra.Command{

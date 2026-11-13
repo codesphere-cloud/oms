@@ -16,6 +16,7 @@ type InstallCmd struct {
 	cmd *cobra.Command
 }
 
+// AddInstallCmd registers the install command and its subcommands on the root command.
 func AddInstallCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	install := InstallCmd{
 		cmd: &cobra.Command{

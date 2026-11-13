@@ -14,11 +14,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// TemplateConfigCmd implements the template config command.
 type TemplateConfigCmd struct {
 	cmd  *cobra.Command
 	Opts TemplateConfigOpts
 }
 
+// TemplateConfigOpts holds the flags of the template config command.
 type TemplateConfigOpts struct {
 	*util.GlobalOptions
 	Config    string
@@ -27,6 +29,7 @@ type TemplateConfigOpts struct {
 	VaultType string
 }
 
+// RunE renders the config template and prints the result to stdout.
 func (c *TemplateConfigCmd) RunE(cmd *cobra.Command, _ []string) error {
 	rendered, err := c.Render()
 	if err != nil {
@@ -44,6 +47,7 @@ func (c *TemplateConfigCmd) RunE(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
+// AddTemplateConfigCmd registers the config command on the template command.
 func AddTemplateConfigCmd(parentCmd *cobra.Command, opts *util.GlobalOptions) {
 	configCmd := &TemplateConfigCmd{
 		cmd: &cobra.Command{
@@ -90,6 +94,7 @@ Secret names and selectors must match entries in the prod.vault.yaml file.`),
 	configCmd.cmd.RunE = configCmd.RunE
 }
 
+// Render reads the config file and resolves its template expressions using secrets from the vault.
 func (c *TemplateConfigCmd) Render() ([]byte, error) {
 	data, err := os.ReadFile(c.Opts.Config)
 	if err != nil {

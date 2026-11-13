@@ -22,6 +22,7 @@ type BuildImageCmd struct {
 	Env  env.Env
 }
 
+// BuildImageOpts holds the flags of the build image command.
 type BuildImageOpts struct {
 	*util.GlobalOptions
 	Dockerfile string
@@ -38,6 +39,7 @@ func (c *BuildImageCmd) RunE(cmd *cobra.Command, _ []string) error {
 	return c.BuildImage(pm, im)
 }
 
+// AddBuildImageCmd registers the image command on the build command.
 func AddBuildImageCmd(parentCmd *cobra.Command, opts *util.GlobalOptions) {
 	imageCmd := &BuildImageCmd{
 		cmd: &cobra.Command{
@@ -67,7 +69,7 @@ func AddBuildImageCmd(parentCmd *cobra.Command, opts *util.GlobalOptions) {
 	imageCmd.cmd.RunE = imageCmd.RunE
 }
 
-// AddBuildImageCmd adds the build image command to the parent command
+// BuildImage extracts the package, then builds and pushes the image from the configured Dockerfile.
 func (c *BuildImageCmd) BuildImage(pm installer.PackageManager, im system.ImageManager) error {
 	err := pm.Extract(c.Opts.Force, c.Opts.Verbose)
 	if err != nil {
