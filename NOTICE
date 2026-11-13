@@ -839,9 +839,9 @@ License URL: https://github.com/jbenet/go-context/blob/d14ea06fba99/LICENSE
  
 ----------
 Module: github.com/jedib0t/go-pretty/v6
-Version: v6.9.0
+Version: v6.9.1
 License: MIT
-License URL: https://github.com/jedib0t/go-pretty/blob/v6.9.0/LICENSE
+License URL: https://github.com/jedib0t/go-pretty/blob/v6.9.1/LICENSE
  
 ----------
 Module: github.com/jmoiron/sqlx

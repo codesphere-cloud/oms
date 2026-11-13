@@ -4144,8 +4144,8 @@ github.com/jarcoal/httpmock v1.4.2 h1:dKwiP/9zITCPfBLsDn3kchbSOu16JrnxtVEmL0fPRc
 github.com/jarcoal/httpmock v1.4.2/go.mod h1:ftW1xULwo+j0R0JJkJIIi7UKigZUXCLLanykgjwBXL0=
 github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 h1:BQSFePA1RWJOlocH6Fxy8MmwDt+yVQYULKfN0RoTN8A=
 github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99/go.mod h1:1lJo3i6rXxKeerYnT8Nvf0QmHCRC1n8sfWVwXF2Frvo=
-github.com/jedib0t/go-pretty/v6 v6.9.0 h1:k2R4cwPnlgh6uDQb5PhGlyVBKfoDEuHd9HvFyMCmzGA=
-github.com/jedib0t/go-pretty/v6 v6.9.0/go.mod h1:rDsMESQ3QyK0VMr1aeq/BErQLPk0tJ+ORkcjMMpnjeg=
+github.com/jedib0t/go-pretty/v6 v6.9.1 h1:BCm4yFkewwPNfQebPACU6O6v8YCZKEGe9RVjuqQwPCI=
+github.com/jedib0t/go-pretty/v6 v6.9.1/go.mod h1:rDsMESQ3QyK0VMr1aeq/BErQLPk0tJ+ORkcjMMpnjeg=
 github.com/jedisct1/go-minisign v0.0.0-20260527172527-a09352b57a22 h1:C68TAi+k12EKJCAmsdaERzQ22ZxVE6n+CuB3kOkhQ7c=
 github.com/jedisct1/go-minisign v0.0.0-20260527172527-a09352b57a22/go.mod h1:vYVVh81Lqe/TP0sPLjiNYcX9Hxy/YSfkUx96lYJeyKo=
 github.com/jellydator/ttlcache/v3 v3.4.0 h1:YS4P125qQS0tNhtL6aeYkheEaB/m8HCqdMMP4mnWdTY=
