@@ -13,20 +13,12 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 )
 
-// errorPageServerImage is the image the Codesphere umbrella chart deploys error-page-server with.
-const errorPageServerImage = "error-page-server"
-
-// ErrorPageServerPcAppsValues enables the error-page-server application,
-// once the package's Codesphere umbrella chart no longer deploys error-page-server.
-// The package shows that by leaving the image out of the codesphere component of its BOM.
-// Until then it returns nil and the application stays disabled,
+// ErrorPageServerPcAppsValues passes the error-page-server application the Codesphere globals,
+// as the chart read them as a subchart of the Codesphere umbrella chart.
+// It leaves enabled to the pc-applications chart:
+// the pc-applications version enables the application in step with the umbrella chart dropping it,
 // since both would render the same error-page-server Service.
-// The chart reads the Codesphere globals, as it did as a subchart of the umbrella chart.
 func ErrorPageServerPcAppsValues(config *files.RootConfig, installerBom *bom.Config) (files.ChartValues, error) {
-	if umbrellaDeploysErrorPageServer(installerBom) {
-		return nil, nil
-	}
-
 	codesphereValues, err := csappsvalues.Build(config, installerBom)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build the Codesphere values: %w", err)
@@ -44,22 +36,8 @@ func ErrorPageServerPcAppsValues(config *files.RootConfig, installerBom *bom.Con
 	return files.ChartValues{
 		"applications": files.ChartValues{
 			"error-page-server": files.ChartValues{
-				"enabled":      true,
 				"valuesObject": global,
 			},
 		},
 	}, nil
-}
-
-// umbrellaDeploysErrorPageServer reports whether the package's Codesphere umbrella chart
-// still deploys error-page-server.
-// A BOM without a codesphere component counts as yes,
-// so a broken package never enables a second error-page-server.
-func umbrellaDeploysErrorPageServer(installerBom *bom.Config) bool {
-	images, err := installerBom.GetCodesphereContainerImages()
-	if err != nil {
-		return true
-	}
-
-	return images[errorPageServerImage] != ""
 }
