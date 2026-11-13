@@ -275,6 +275,28 @@ var _ = Describe("Single VM configuration", func() {
 		Expect(b.ensureSingleVMPackage()).To(Succeed())
 	})
 
+	It("installs the Ubuntu NFS client for local storage", func() {
+		nodeClient.EXPECT().RunCommand(n, "root", "apt-get update").Return(nil).Once()
+		nodeClient.EXPECT().RunCommand(n, "root", "apt-get install -y nfs-common").Return(nil).Once()
+		Expect(b.installSingleVMNFSClient("local")).To(Succeed())
+	})
+
+	It("installs the RHEL NFS client for local storage", func() {
+		b.Env.HostOS = HostOSRHEL9
+
+		nodeClient.EXPECT().RunCommand(n, "root", "dnf install -y nfs-utils").Return(nil).Once()
+		Expect(b.installSingleVMNFSClient("local")).To(Succeed())
+	})
+
+	It("does not install an NFS client for Ceph storage", func() {
+		Expect(b.installSingleVMNFSClient("rook-ceph")).To(Succeed())
+	})
+
+	It("reports NFS client installation failures", func() {
+		nodeClient.EXPECT().RunCommand(n, "root", "apt-get update").Return(errors.New("package repository unavailable")).Once()
+		Expect(b.installSingleVMNFSClient("local")).To(MatchError(ContainSubstring("package repository unavailable")))
+	})
+
 	It("installs single-node k0s", func() {
 		nodeClient.EXPECT().RunCommand(n, "root", "oms install k0s --single").Return(nil).Once()
 		Expect(b.installSingleVMK0s()).To(Succeed())

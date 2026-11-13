@@ -23,6 +23,8 @@ const (
 // hostOSSettings holds what differs between the host operating systems of the VMs.
 type hostOSSettings struct {
 	sourceImage string
+	// nfsClientPackage provides mount.nfs for local NFS-backed storage.
+	nfsClientPackage string
 	// updatePackageIndexCommand refreshes the package index before packages are installed. It is
 	// empty where the installation command refreshes the index itself.
 	updatePackageIndexCommand string
@@ -75,6 +77,7 @@ var dockerRHELRepo = []string{
 
 var hostOSes = map[HostOS]hostOSSettings{
 	HostOSUbuntu: {
+		nfsClientPackage:          "nfs-common",
 		sourceImage:               "projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts",
 		updatePackageIndexCommand: "apt-get update",
 		installPackagesCommand:    "apt-get install -y",
@@ -86,6 +89,7 @@ var hostOSes = map[HostOS]hostOSSettings{
 		packageRepoFiles: []string{"/etc/apt/sources.list", "/etc/apt/sources.list.d/*.list", "/etc/apt/sources.list.d/*.sources"},
 	},
 	HostOSRHEL9: {
+		nfsClientPackage:       "nfs-utils",
 		sourceImage:            "projects/rhel-cloud/global/images/family/rhel-9-6-eus",
 		installPackagesCommand: "dnf install -y",
 		registryPackages:       []string{"podman", "httpd-tools"},
