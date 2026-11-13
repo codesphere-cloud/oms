@@ -30,5 +30,4 @@ var _ = Describe("Local Codesphere installer options", func() {
 		opts := b.localInstallCodesphereOptions("/bundle", "/config.yaml", "/vault.yaml", "/age-key", "/config")
 		Expect(opts.VaultSecretName).To(Equal(vault.VaultSecretName))
 	})
-
 })

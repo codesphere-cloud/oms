@@ -10,13 +10,13 @@ e.g. package container images and OCI Helm charts between registries.
 ### Options
 
 ```
-  -h, --help   help for copy
+  -h, --help[=true|false]   help for copy
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

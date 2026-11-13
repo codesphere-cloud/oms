@@ -77,7 +77,7 @@ $ oms init k0s-config --install-config <path> --airgapped --path <bundle>
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

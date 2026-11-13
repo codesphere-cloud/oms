@@ -10,13 +10,13 @@ Be aware that that usage and behavior may change as the features are developed.
 ### Options
 
 ```
-  -h, --help   help for beta
+  -h, --help[=true|false]   help for beta
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

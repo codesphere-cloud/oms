@@ -4,6 +4,7 @@
 package portal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -23,7 +24,7 @@ type DownloadOptions struct {
 // DownloadAndVerifyBuild downloads the named artifact from build to destination
 // and verifies its checksum. It is shared by the download and copy package
 // commands so their download and verify behavior stays in sync.
-func DownloadAndVerifyBuild(p Portal, fileWriter intutil.FileIO, product Product, build Build, filename, destination string, opts DownloadOptions) error {
+func DownloadAndVerifyBuild(ctx context.Context, p Portal, fileWriter intutil.FileIO, product Product, build Build, filename, destination string, opts DownloadOptions) error {
 	download, err := build.GetBuildForDownload(filename)
 	if err != nil {
 		return fmt.Errorf("failed to find artifact in package: %w", err)
@@ -36,13 +37,14 @@ func DownloadAndVerifyBuild(p Portal, fileWriter intutil.FileIO, product Product
 	defer intutil.CloseFileIgnoreError(out)
 
 	fileSize := 0
+
 	if opts.Resume {
 		if fileInfo, statErr := out.Stat(); statErr == nil {
 			fileSize = int(fileInfo.Size())
 		}
 	}
 
-	if err := p.DownloadBuildArtifact(product, download, out, fileSize, opts.Quiet); err != nil {
+	if err := p.DownloadBuildArtifact(ctx, product, download, out, fileSize, opts.Quiet); err != nil {
 		// A resume at EOF may return 416. Only accept the existing archive if
 		// the portal supplied a checksum and the verification below succeeds.
 		verifyExisting := opts.Resume && fileSize > 0 && download.Artifacts[0].Md5Sum != "" && errors.Is(err, errDownloadRangeNotSatisfiable)
@@ -75,5 +77,6 @@ func openDestination(fileWriter intutil.FileIO, destination string, resume bool)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file at %q: %w", destination, err)
 	}
+
 	return file, nil
 }

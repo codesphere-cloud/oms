@@ -85,7 +85,7 @@ var _ = Describe("Infrafile", func() {
 		It("returns the default path for the infra file when env var is not set", func() {
 			actualPath := gcp.GetInfraFilePath()
 
-			Expect(actualPath).To(Equal("./oms-workdir/gcp-infra.json"))
+			Expect(actualPath).To(Equal("oms-workdir/gcp-infra.json"))
 		})
 
 		It("returns the correct path for the infra file based on the OMS_WORKDIR env var", func() {

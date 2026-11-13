@@ -74,28 +74,30 @@ var _ = Describe("Installconfig & Secrets", func() {
 		stlog = bootstrap.NewStepLogger(false)
 
 		csEnv = &gcp.CodesphereEnvironment{
-			GitHubAppName:         "fake-app",
-			GitHubAppClientID:     "fake-client-id",
-			GitHubAppClientSecret: "fake-secret",
-			InstallConfigPath:     "fake-config-file",
-			SecretsFilePath:       "fake-secret",
-			RecoverConfig:         false,
-			ProjectName:           "test-project",
-			ProjectTTL:            "1h",
-			SecretsDir:            "/etc/codesphere/secrets",
-			BillingAccount:        "test-billing-account",
-			Region:                "us-central1",
-			Zone:                  "us-central1-a",
-			DatacenterID:          1,
-			DatacenterName:        "dev",
-			BaseDomain:            "example.com",
-			DNSProjectID:          "dns-project",
-			DNSZoneName:           "test-zone",
-			SSHPublicKeyPath:      "key.pub",
-			ProjectID:             "pid",
-			InternalFlags:         gcp.DefaultInternalFlags,
-			PreviewFlags:          gcp.DefaultPreviewFlags,
-			FeatureFlags:          gcp.DefaultFeatureFlags,
+			GitHubAppName:              "fake-app",
+			GitHubAppClientID:          "fake-client-id",
+			GitHubAppClientSecret:      "fake-secret",
+			InstallConfigPath:          "fake-config-file",
+			SecretsFilePath:            "fake-secret",
+			RecoverConfig:              false,
+			ProjectName:                "test-project",
+			ProjectTTL:                 "1h",
+			SecretsDir:                 "/etc/codesphere/secrets",
+			BillingAccount:             "test-billing-account",
+			Region:                     "us-central1",
+			Zone:                       "us-central1-a",
+			DatacenterID:               1,
+			DatacenterName:             "dev",
+			BaseDomain:                 "example.com",
+			DNSProjectID:               "dns-project",
+			DNSZoneName:                "test-zone",
+			SSHPublicKeyPath:           "key.pub",
+			ProjectID:                  "pid",
+			InternalFlags:              gcp.DefaultInternalFlags,
+			PreviewFlags:               gcp.DefaultPreviewFlags,
+			FeatureFlags:               gcp.DefaultFeatureFlags,
+			CodesphereRegistry:         gcp.DefaultCodesphereRegistry,
+			CodesphereRegistryPassword: "portal-api-key",
 			InstallConfig: &files.RootConfig{
 				Registry: &files.RegistryConfig{},
 				Postgres: files.PostgresConfig{
@@ -474,6 +476,45 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				Expect(bs.Env.InstallConfig.Datacenter.Name).To(Equal("staging"))
 			})
+			It("sets the codesphere registry independently of the registry server", func() {
+				csEnv.ContainerRegistryURL = "ghcr.io"
+
+				icg.EXPECT().GenerateSecrets().Return(nil)
+				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+				err := bs.UpdateInstallConfig()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(bs.Env.InstallConfig.Registry.Server).To(Equal("ghcr.io"))
+				Expect(bs.Env.InstallConfig.AdditionalRegistries).To(Equal([]files.AdditionalRegistryConfig{
+					{Name: "codesphere", Registry: "registry.codesphere.com"},
+				}))
+				Expect(vault.GetSecret("codesphereRegistryUsername").Fields.Password).To(Equal(gcp.CodesphereRegistryUsername))
+				Expect(vault.GetSecret("codesphereRegistryPassword").Fields.Password).To(Equal("portal-api-key"))
+			})
+			It("replaces the codesphere registry kept from an earlier run and keeps other additional registries", func() {
+				csEnv.InstallConfig.AdditionalRegistries = []files.AdditionalRegistryConfig{
+					{Name: "other", Registry: "other.example.com"},
+					{Name: "codesphere", Registry: "registry.dev.codesphere.com"},
+				}
+
+				icg.EXPECT().GenerateSecrets().Return(nil)
+				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+				err := bs.UpdateInstallConfig()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(bs.Env.InstallConfig.AdditionalRegistries).To(Equal([]files.AdditionalRegistryConfig{
+					{Name: "other", Registry: "other.example.com"},
+					{Name: "codesphere", Registry: "registry.codesphere.com"},
+				}))
+			})
 			It("wires the openfga backup config and secrets when a bucket was provisioned", func() {
 				csEnv.OpenfgaBackupBucket = "pid-openfga-backup"
 				csEnv.OpenfgaBackupAccessKeyID = "access-id"
@@ -775,7 +816,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(bs.Env.InstallConfig.Codesphere.OAuth.Oidc.Name).To(Equal("OIDC"))
+					Expect(bs.Env.InstallConfig.Codesphere.OAuth.Oidc.Name).To(Equal(files.DefaultOidcProviderName))
 				})
 			})
 
@@ -878,6 +919,54 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(bs.Env.InstallConfig.Cluster.Monitoring).To(BeNil())
+				})
+			})
+
+			Context("When the installation is airgapped", func() {
+				BeforeEach(func() {
+					csEnv.Airgapped = true
+
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+				})
+
+				It("uses the self-signed issuer and disables ACME without requesting EAB credentials", func() {
+					csEnv.GoogleACMEIssuer = true
+
+					Expect(bs.UpdateInstallConfig()).To(Succeed())
+
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Type).To(Equal(files.CertIssuerTypeSelfSigned))
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme).To(BeNil())
+					issuers := bs.Env.InstallConfig.Cluster.Certificates.Override["issuers"].(map[string]interface{})
+					Expect(issuers["acme"].(map[string]interface{})["enabled"]).To(BeFalse())
+					Expect(issuers["letsEncryptHttp"].(map[string]interface{})["enabled"]).To(BeFalse())
+				})
+
+				It("replaces recovered ACME settings while preserving the ingress CA and unrelated overrides", func() {
+					csEnv.InstallConfig.Codesphere.CertIssuer = &files.CertIssuerConfig{
+						Type: files.CertIssuerTypeACME,
+						Acme: &files.ACMEConfig{Enabled: true},
+					}
+					csEnv.InstallConfig.Cluster.Certificates.CA.CertPem = "existing-ca"
+					csEnv.InstallConfig.Cluster.Certificates.Override = files.ChartOverride{
+						"issuers": files.ChartOverride{
+							"acme":            files.ChartOverride{"enabled": true},
+							"letsEncryptHttp": files.ChartOverride{"enabled": true},
+						},
+						"customValue": "preserved",
+					}
+
+					Expect(bs.UpdateInstallConfig()).To(Succeed())
+
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Type).To(Equal(files.CertIssuerTypeSelfSigned))
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme).To(BeNil())
+					Expect(bs.Env.InstallConfig.Cluster.Certificates.CA.CertPem).To(Equal("existing-ca"))
+					Expect(bs.Env.InstallConfig.Cluster.Certificates.Override["customValue"]).To(Equal("preserved"))
+					issuers := bs.Env.InstallConfig.Cluster.Certificates.Override["issuers"].(map[string]interface{})
+					Expect(issuers["acme"].(map[string]interface{})["enabled"]).To(BeFalse())
+					Expect(issuers["letsEncryptHttp"].(map[string]interface{})["enabled"]).To(BeFalse())
 				})
 			})
 
@@ -1158,6 +1247,20 @@ var _ = Describe("Installconfig & Secrets", func() {
 		})
 
 		Describe("Invalid cases", func() {
+			It("fails when no codesphere registry is given", func() {
+				csEnv.CodesphereRegistry = ""
+
+				err := bs.UpdateInstallConfig()
+				Expect(err).To(MatchError(ContainSubstring("codesphere registry is not set")))
+			})
+
+			It("fails when no codesphere registry password is given", func() {
+				csEnv.CodesphereRegistryPassword = ""
+
+				err := bs.UpdateInstallConfig()
+				Expect(err).To(MatchError(ContainSubstring("codesphere registry password is not set")))
+			})
+
 			It("fails when GenerateSecrets fails", func() {
 				icg.EXPECT().GenerateSecrets().Return(fmt.Errorf("generate error"))
 

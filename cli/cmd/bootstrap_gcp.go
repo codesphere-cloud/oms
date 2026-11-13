@@ -89,6 +89,7 @@ func (c *BootstrapGcpCmd) addSharedBootstrapFlags() {
 
 	flags.StringVar(&c.CodesphereEnv.GitHubPAT, "github-pat", "", patHelp)
 	flags.StringVar(&c.CodesphereEnv.RegistryUser, "registry-user", "", userHelp)
+	flags.StringVar(&c.CodesphereEnv.CodesphereRegistry, "codesphere-registry", gcp.DefaultCodesphereRegistry, "Codesphere registry server written to the \"codesphere\" entry of additionalRegistries in the install config; override only for development. Its password is read from OMS_PORTAL_API_KEY")
 
 	flags.BoolVar(&c.StepTimer, util.TimerFlag, false, util.ShowStepDurationHelp)
 	flags.StringVar(&c.CodesphereEnv.ProjectName, "project-name", "", "Unique GCP Project Name (required)")
@@ -125,12 +126,24 @@ func (c *BootstrapGcpCmd) prepareBootstrapOptions() error {
 		return fmt.Errorf("--priv-key requires --vault")
 	}
 
+	if c.CodesphereEnv.CodesphereRegistry == "" {
+		return fmt.Errorf("--codesphere-registry must not be empty")
+	}
+
+	apiKey, err := c.Env.GetOmsPortalApiKey()
+	if err != nil {
+		return fmt.Errorf("OMS Portal Key not set: %w", err)
+	}
+
+	c.CodesphereEnv.CodesphereRegistryPassword = apiKey
+
 	return nil
 }
 
 // BootstrapGcp initializes external clients and starts the selected bootstrap workflow.
 func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	ctx := c.cmd.Context()
+
 	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.StepTimer))
 	defer stlog.PrintSummary()
 
@@ -141,14 +154,14 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 
 	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 	fw := intutil.NewFilesystemWriter()
-	portalClient := portal.NewPortalClient()
+	portalClient := portal.NewPortalClient(ctx)
 
 	githubClient, err := github.NewGitHubClient(ctx, c.CodesphereEnv.GitHubPAT)
 	if err != nil {
 		return fmt.Errorf("failed to create github client: %w", err)
 	}
 
-	sshClient := node.NewSSHNodeClient(c.SSHQuiet)
+	sshClient := node.NewSSHNodeClient(ctx, c.SSHQuiet)
 	if c.CodesphereEnv.SingleVM {
 		sshClient.RegistryPassword = c.CodesphereEnv.GitHubPAT
 	}
@@ -217,6 +230,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	}
 
 	packageFile := "<package-name>-" + gcp.InstallerArchiveName
+
 	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeGitHub {
 		log.Printf("Images are pulled directly from GHCR, so container images are not loaded from the package.")
 	}

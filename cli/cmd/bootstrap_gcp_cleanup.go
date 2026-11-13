@@ -12,6 +12,7 @@ import (
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
@@ -34,8 +35,10 @@ type BootstrapGcpCleanupOpts struct {
 
 func (c *BootstrapGcpCleanupCmd) RunE(_ *cobra.Command, args []string) error {
 	ctx := c.cmd.Context()
+
 	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.Opts.StepTimer))
 	defer stlog.PrintSummary()
+
 	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 	fw := intutil.NewFilesystemWriter()
 
@@ -43,7 +46,7 @@ func (c *BootstrapGcpCleanupCmd) RunE(_ *cobra.Command, args []string) error {
 		GCPClient:     gcpClient,
 		FileIO:        fw,
 		StepLogger:    stlog,
-		ConfirmReader: os.Stdin,
+		ConfirmReader: prompt.NewContextReader(ctx, os.Stdin),
 		InfraFilePath: gcp.GetInfraFilePath(),
 	}
 

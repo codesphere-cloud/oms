@@ -21,13 +21,15 @@ type ListAPIKeysCmd struct {
 }
 
 func (c *ListAPIKeysCmd) RunE(_ *cobra.Command, args []string) error {
-	p := portal.NewPortalClient()
+	p := portal.NewPortalClient(c.cmd.Context())
+
 	keys, err := p.ListAPIKeys()
 	if err != nil {
 		return fmt.Errorf("failed to list api keys: %w", err)
 	}
 
 	c.PrintKeysTable(keys)
+
 	return nil
 }
 

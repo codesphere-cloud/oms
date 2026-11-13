@@ -31,6 +31,7 @@ func (v *InstallVault) GetSecret(name string) *SecretEntry {
 			return &v.Secrets[i]
 		}
 	}
+
 	return nil
 }
 
@@ -42,6 +43,7 @@ func (v *InstallVault) SetSecret(entry SecretEntry) {
 			return
 		}
 	}
+
 	v.Secrets = append(v.Secrets, entry)
 }
 
@@ -51,6 +53,7 @@ func (v *InstallVault) RemoveSecret(name string) bool {
 	v.Secrets = slices.DeleteFunc(v.Secrets, func(s SecretEntry) bool {
 		return s.Name == name
 	})
+
 	return len(v.Secrets) != before
 }
 
@@ -69,10 +72,12 @@ func (v *InstallVault) Clone() *InstallVault {
 			file := *entry.File
 			copied.File = &file
 		}
+
 		if entry.Fields != nil {
 			fields := *entry.Fields
 			copied.Fields = &fields
 		}
+
 		clone.Secrets = append(clone.Secrets, copied)
 	}
 
@@ -106,12 +111,14 @@ type RootConfig struct {
 	DefaultDataCenterID    int                           `yaml:"defaultDataCenterId,omitempty"`
 	Secrets                SecretsConfig                 `yaml:"secrets"`
 	Registry               *RegistryConfig               `yaml:"registry,omitempty"`
+	AdditionalRegistries   []AdditionalRegistryConfig    `yaml:"additionalRegistries,omitempty"`
 	Postgres               PostgresConfig                `yaml:"postgres"`
 	Ceph                   CephConfig                    `yaml:"ceph"`
 	Kubernetes             KubernetesConfig              `yaml:"kubernetes"`
 	Cluster                ClusterConfig                 `yaml:"cluster"`
 	Codesphere             CodesphereConfig              `yaml:"codesphere"`
 	PcApps                 ChartValues                   `yaml:"pcApps,omitempty"`
+	CsApps                 ChartValues                   `yaml:"csApps,omitempty"`
 	ManagedServiceBackends *ManagedServiceBackendsConfig `yaml:"managedServiceBackends,omitempty"`
 	Operations             *OperationsConfig             `yaml:"operations,omitempty"`
 }
@@ -271,6 +278,32 @@ type RegistryConfig struct {
 	LoadContainerImages bool   `yaml:"loadContainerImages"`
 }
 
+// AdditionalRegistryConfig is a named registry the installation logs in to, independent of
+// RegistryConfig, which describes the registry the installation's images are served from. Its
+// credentials are kept in the vault under AdditionalRegistryUsernameSecret and
+// AdditionalRegistryPasswordSecret.
+type AdditionalRegistryConfig struct {
+	Name     string `yaml:"name"`
+	Registry string `yaml:"registry"`
+}
+
+// SetAdditionalRegistry adds the registry or replaces the one with the same name.
+func (c *RootConfig) SetAdditionalRegistry(registry AdditionalRegistryConfig) {
+	for i, existing := range c.AdditionalRegistries {
+		if existing.Name == registry.Name {
+			c.AdditionalRegistries[i] = registry
+			return
+		}
+	}
+
+	c.AdditionalRegistries = append(c.AdditionalRegistries, registry)
+}
+
+// WorkspaceImage is the name, without tag, that a flavor built from a Dockerfile is pushed under.
+func (r RegistryConfig) WorkspaceImage(imageKey, flavorKey string) string {
+	return fmt.Sprintf("%s/%s-%s", strings.TrimRight(r.Server, "/"), imageKey, flavorKey)
+}
+
 // PostgresPort is the port the Postgres installed by OMS listens on.
 const PostgresPort = 5432
 
@@ -386,6 +419,7 @@ type K8sNode struct {
 }
 
 type ClusterConfig struct {
+	ClusterConfig       *ChartOverrideConfig       `yaml:"clusterConfig,omitempty"`
 	Certificates        ClusterCertificates        `yaml:"certificates"`
 	CertManager         *CertManagerConfig         `yaml:"certManager,omitempty"`
 	TrustManager        *TrustManagerConfig        `yaml:"trustManager,omitempty"`
@@ -395,9 +429,11 @@ type ClusterConfig struct {
 	MetalLB             *MetalLBConfig             `yaml:"metallb,omitempty"`
 	RookExternalCluster *RookExternalClusterConfig `yaml:"rookExternalCluster,omitempty"`
 	PgOperator          *PgOperatorConfig          `yaml:"pgOperator,omitempty"`
-	BarmanCloudPlugin   *BarmanCloudPluginConfig   `yaml:"BarmanCloudPluginConfig,omitempty"`
-	RgwLoadBalancer     *RgwLoadBalancerConfig     `yaml:"rgwLoadBalancer,omitempty"`
-	Kyverno             *KyvernoConfig             `yaml:"kyverno,omitempty"`
+	// Deprecated: use ManagedServiceBackendsConfig.BarmanCloudPlugin. The PC installer never
+	// read this key; Unmarshal moves it to managedServiceBackends.barmanCloudPlugin.
+	LegacyBarmanCloudPlugin *BarmanCloudPluginConfig `yaml:"BarmanCloudPluginConfig,omitempty"`
+	RgwLoadBalancer         *RgwLoadBalancerConfig   `yaml:"rgwLoadBalancer,omitempty"`
+	Kyverno                 *KyvernoConfig           `yaml:"kyverno,omitempty"`
 }
 
 type ClusterCertificates struct {
@@ -446,6 +482,11 @@ type GatewayConfig struct {
 type GatewayAPIConfig struct {
 	Enabled bool  `yaml:"enabled"`
 	Use     *bool `yaml:"use,omitempty"`
+}
+
+// ChartOverrideConfig preserves Helm values supplied through legacy component settings.
+type ChartOverrideConfig struct {
+	Override ChartOverride `yaml:"override,omitempty"`
 }
 
 type CertManagerConfig struct {
@@ -513,6 +554,9 @@ type MetalLBBGPConfig struct {
 	PeerAddress string `yaml:"peerAddress"`
 	BFDProfile  string `yaml:"bfdProfile,omitempty"`
 }
+
+// WorkspacePVCStorageFlag stores workspaces on PVCs instead of CephFS.
+const WorkspacePVCStorageFlag = "workspace-pvc-storage"
 
 type CodesphereConfig struct {
 	Domain                     string                   `yaml:"domain"`
@@ -623,9 +667,8 @@ type OpenBaoConfig struct {
 	User   string `yaml:"user,omitempty"`
 }
 
-// OpenfgaBackupsConfig is the friendly representation of the OpenFGA database
-// backup settings. On marshal it is translated into the openfga application
-// values under pcApps.applications.openfga (see buildOpenfgaBackupValues).
+// OpenfgaBackupsConfig configures the backups of the OpenFGA database. The install turns it
+// into the openfga pc-applications values (see pcapps.OpenFgaPcAppsValues).
 type OpenfgaBackupsConfig struct {
 	Enabled bool `yaml:"enabled"`
 	// Schedule is an optional 6-field cron expression. When empty the chart default applies.
@@ -674,6 +717,9 @@ func (c *OpenFgaConfig) ExposesOpenFga() bool {
 type OAuthProvidersConfig struct {
 	Oidc *OidcOAuthProvider `yaml:"oidc,omitempty"`
 }
+
+// DefaultOidcProviderName names an OIDC provider the config leaves unnamed.
+const DefaultOidcProviderName = "OIDC"
 
 type OidcOAuthProvider struct {
 	Type      string   `yaml:"type"`
@@ -745,8 +791,12 @@ type TelemetryExport struct {
 	SpanMetrics    bool   `yaml:"spanMetrics"`
 }
 
-type ChartOverride = map[string]interface{}
-type ChartValues = map[string]interface{}
+type (
+	// ChartOverride holds Helm values a component override in the install config sets.
+	ChartOverride = map[string]interface{}
+	// ChartValues holds Helm values passed to a chart.
+	ChartValues = map[string]interface{}
+)
 
 type ImageRef struct {
 	BomRef     string `yaml:"bomRef,omitempty"`
@@ -772,8 +822,10 @@ func (i *ImageRef) UnmarshalYAML(node *yaml.Node) error {
 	if err := node.Decode(&ref); err != nil {
 		return err
 	}
+
 	i.BomRef = ref.BomRef
 	i.Dockerfile = ref.Dockerfile
+
 	return nil
 }
 
@@ -792,6 +844,7 @@ func (i *ImageRef) GetImageReference() string {
 	if i.ImageName != "" {
 		return i.ImageName
 	}
+
 	return i.BomRef
 }
 
@@ -894,8 +947,9 @@ type ResourceParam struct {
 }
 
 type ManagedServiceBackendsConfig struct {
-	Postgres *PgManagedServiceConfig `yaml:"postgres,omitempty"`
-	S3       *S3ManagedServiceConfig `yaml:"s3,omitempty"`
+	Postgres          *PgManagedServiceConfig  `yaml:"postgres,omitempty"`
+	S3                *S3ManagedServiceConfig  `yaml:"s3,omitempty"`
+	BarmanCloudPlugin *BarmanCloudPluginConfig `yaml:"barmanCloudPlugin,omitempty"`
 }
 
 type MonitoringConfig struct {
@@ -982,7 +1036,7 @@ type S3ManagedServiceConfig struct {
 // Marshal serializes the RootConfig to YAML
 func (c *RootConfig) Marshal() ([]byte, error) {
 	c.buildACMEOverride()
-	c.buildOpenfgaBackupValues()
+
 	return yaml.Marshal(c)
 }
 
@@ -1008,7 +1062,10 @@ func (c *RootConfig) Unmarshal(data []byte) error {
 	if err := yaml.Unmarshal(data, c); err != nil {
 		return err
 	}
+
 	c.extractACMESolverFromOverride()
+	c.migrateLegacyBarmanCloudPlugin()
+
 	return nil
 }
 
@@ -1024,6 +1081,7 @@ func (c *CodesphereConfig) EnsureCertIssuer() *CertIssuerConfig {
 	if c.CertIssuer == nil {
 		c.CertIssuer = &CertIssuerConfig{}
 	}
+
 	return c.CertIssuer
 }
 
@@ -1039,6 +1097,7 @@ func (c *RootConfig) EnsureRegistry() *RegistryConfig {
 
 func (c *RootConfig) ExtractBomRefs() []string {
 	var bomRefs []string
+
 	for _, imageConfig := range c.Codesphere.DeployConfig.Images {
 		for _, flavor := range imageConfig.Flavors {
 			if flavor.Image.BomRef != "" {
@@ -1054,7 +1113,9 @@ func Capitalize(s string) string {
 	if s == "" {
 		return ""
 	}
+
 	s = strings.ReplaceAll(s, "_", "")
+
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
@@ -1073,11 +1134,13 @@ func (c *RootConfig) buildACMEOverride() {
 	// Build dnsSolver section
 	if dns01.Provider != "" {
 		solverConfig := map[string]interface{}{}
+
 		if dns01.Config != nil {
 			for k, v := range dns01.Config {
 				solverConfig[k] = v
 			}
 		}
+
 		acmeOverride["dnsSolver"] = map[string]interface{}{
 			dns01.Provider: solverConfig,
 		}
@@ -1097,6 +1160,7 @@ func (c *RootConfig) buildACMEOverride() {
 	if !ok {
 		existingAcme = map[string]interface{}{}
 	}
+
 	for k, v := range acmeOverride {
 		existingAcme[k] = v
 	}
@@ -1105,68 +1169,123 @@ func (c *RootConfig) buildACMEOverride() {
 	c.Cluster.Certificates.Override["issuers"] = issuers
 }
 
-// buildOpenfgaBackupValues translates codesphere.openfgaBackups into the openfga
-// application values under pcApps.applications.openfga.valuesObject.postgres.backup.
-// OpenFGA is deployed via the pc-apps app-of-apps (ArgoCD), not the codesphere
-// umbrella chart, so this is where its Helm values belong. Optional fields
-// (schedule, retentionPolicy) are only emitted when set so the chart defaults
-// apply otherwise. Existing pcApps entries (e.g. other applications) are preserved.
-func (c *RootConfig) buildOpenfgaBackupValues() {
-	ob := c.Codesphere.OpenfgaBackups
-	if ob == nil {
+const (
+	legacyBarmanCloudPluginKey  = "BarmanCloudPluginConfig"
+	barmanCloudPluginKey        = "barmanCloudPlugin"
+	legacyBarmanCloudPluginPath = "cluster.BarmanCloudPluginConfig"
+	barmanCloudPluginPath       = "managedServiceBackends.barmanCloudPlugin"
+)
+
+// migrateLegacyBarmanCloudPlugin moves cluster.BarmanCloudPluginConfig to
+// managedServiceBackends.barmanCloudPlugin.
+func (c *RootConfig) migrateLegacyBarmanCloudPlugin() {
+	legacy := c.Cluster.LegacyBarmanCloudPlugin
+	if legacy == nil {
 		return
 	}
 
-	backup := map[string]interface{}{
-		"enabled": ob.Enabled,
-	}
-	if ob.Schedule != "" {
-		backup["schedule"] = ob.Schedule
-	}
-	if ob.DestinationPath != "" {
-		backup["destinationPath"] = ob.DestinationPath
-	}
-	if ob.EndpointURL != "" {
-		backup["endpointURL"] = ob.EndpointURL
-	}
-	if ob.RetentionPolicy != "" {
-		backup["retentionPolicy"] = ob.RetentionPolicy
+	c.Cluster.LegacyBarmanCloudPlugin = nil
+
+	if c.ManagedServiceBackends == nil {
+		c.ManagedServiceBackends = &ManagedServiceBackendsConfig{}
 	}
 
-	if c.PcApps == nil {
-		c.PcApps = ChartValues{}
+	c.ManagedServiceBackends.BarmanCloudPlugin = mergeLegacyBarmanCloudPlugin(legacy, c.ManagedServiceBackends.BarmanCloudPlugin)
+}
+
+// mergeLegacyBarmanCloudPlugin returns the barmanCloudPlugin entry once the legacy one is
+// moved in. The new key wins when both are set.
+func mergeLegacyBarmanCloudPlugin(legacy, current *BarmanCloudPluginConfig) *BarmanCloudPluginConfig {
+	if current != nil {
+		logLegacyBarmanCloudPluginIgnored()
+		return current
 	}
 
-	applications, ok := c.PcApps["applications"].(map[string]interface{})
+	logLegacyBarmanCloudPluginMoved(legacy.Enabled)
+	// The PC installer never read the legacy key, so every install that has it runs the
+	// plugin; its enabled: false, which the dev profile wrote by accident, must not now
+	// stop installing the plugin that database backups depend on.
+	return &BarmanCloudPluginConfig{
+		Enabled:  true,
+		Override: legacy.Override,
+	}
+}
+
+// MigrateLegacyBarmanCloudPluginKey applies Unmarshal's barman plugin migration to a raw config
+// map, for a map that reaches the PC installer without passing through RootConfig.
+func MigrateLegacyBarmanCloudPluginKey(config map[string]any) error {
+	cluster, ok := config["cluster"].(map[string]any)
 	if !ok {
-		applications = map[string]interface{}{}
+		return nil
 	}
 
-	openfga, ok := applications["openfga"].(map[string]interface{})
+	legacyValue, ok := cluster[legacyBarmanCloudPluginKey]
 	if !ok {
-		openfga = map[string]interface{}{}
-	}
-	// Only enable the openfga application when backups are on; never emit
-	// enabled:false here, as that would disable the whole openfga application
-	// (a core component) rather than just its backups.
-	if ob.Enabled {
-		openfga["enabled"] = true
+		return nil
 	}
 
-	valuesObject, ok := openfga["valuesObject"].(map[string]interface{})
-	if !ok {
-		valuesObject = map[string]interface{}{}
-	}
-	postgres, ok := valuesObject["postgres"].(map[string]interface{})
-	if !ok {
-		postgres = map[string]interface{}{}
+	delete(cluster, legacyBarmanCloudPluginKey)
+
+	var legacy *BarmanCloudPluginConfig
+	if err := convertThroughYAML(legacyValue, &legacy); err != nil {
+		return fmt.Errorf("read %s: %w", legacyBarmanCloudPluginPath, err)
 	}
 
-	postgres["backup"] = backup
-	valuesObject["postgres"] = postgres
-	openfga["valuesObject"] = valuesObject
-	applications["openfga"] = openfga
-	c.PcApps["applications"] = applications
+	if legacy == nil {
+		return nil
+	}
+
+	backends, ok := config["managedServiceBackends"].(map[string]any)
+	if !ok {
+		backends = map[string]any{}
+		config["managedServiceBackends"] = backends
+	}
+
+	var current *BarmanCloudPluginConfig
+	if err := convertThroughYAML(backends[barmanCloudPluginKey], &current); err != nil {
+		return fmt.Errorf("read %s: %w", barmanCloudPluginPath, err)
+	}
+
+	migrated := mergeLegacyBarmanCloudPlugin(legacy, current)
+	// A new key that wins stays as written, with any fields the struct does not model.
+	if migrated == current {
+		return nil
+	}
+
+	var migratedFields map[string]any
+	if err := convertThroughYAML(migrated, &migratedFields); err != nil {
+		return fmt.Errorf("write %s: %w", barmanCloudPluginPath, err)
+	}
+
+	backends[barmanCloudPluginKey] = migratedFields
+
+	return nil
+}
+
+// convertThroughYAML decodes value into target as yaml.Unmarshal would decode it from a file.
+func convertThroughYAML(value, target any) error {
+	data, err := yaml.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("encode: %w", err)
+	}
+
+	if err := yaml.Unmarshal(data, target); err != nil {
+		return fmt.Errorf("decode: %w", err)
+	}
+
+	return nil
+}
+
+func logLegacyBarmanCloudPluginMoved(legacyEnabled bool) {
+	log.Printf("Moved %s to %s, the key the PC installer reads", legacyBarmanCloudPluginPath, barmanCloudPluginPath)
+
+	if !legacyEnabled {
+		log.Printf("Warning: %s had enabled: false, which the PC installer never applied; %s is set to enabled: true so the plugin stays installed", legacyBarmanCloudPluginPath, barmanCloudPluginPath)
+	}
+}
+
+func logLegacyBarmanCloudPluginIgnored() {
+	log.Printf("Warning: ignoring %s because %s is set", legacyBarmanCloudPluginPath, barmanCloudPluginPath)
 }
 
 // extractACMESolverFromOverride populates the ACMEConfig.Solver from
@@ -1204,7 +1323,9 @@ func (c *RootConfig) extractACMESolverFromOverride() {
 		if cfgMap, ok := cfg.(map[string]interface{}); ok && len(cfgMap) > 0 {
 			solver.Config = cfgMap
 		}
+
 		c.Codesphere.CertIssuer.Acme.Solver.DNS01 = solver
+
 		break // only one provider expected
 	}
 }

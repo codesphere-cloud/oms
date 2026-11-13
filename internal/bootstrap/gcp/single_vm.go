@@ -208,7 +208,7 @@ func (b *GCPBootstrapper) provideSingleVMConfig() error {
 	issuerConfig := files.NewRootConfig()
 
 	dc.InstallConfig = &issuerConfig
-	if err := b.applyACMEConfig(dc); err != nil {
+	if err := b.applyCertificateConfig(dc); err != nil {
 		return fmt.Errorf("failed to configure Google Public CA for single VM: %w", err)
 	}
 
@@ -221,6 +221,11 @@ func (b *GCPBootstrapper) provideSingleVMConfig() error {
 	config.Codesphere.CertIssuer = issuerConfig.Codesphere.CertIssuer
 	config.Cluster.Certificates.Override = util.DeepMergeMaps(config.Cluster.Certificates.Override, issuerConfig.Cluster.Certificates.Override)
 	dc.InstallConfig = &config
+
+	// Applied after vault recovery so the current portal key replaces any recovered credentials.
+	if err := b.applyCodesphereRegistry(dc); err != nil {
+		return fmt.Errorf("failed to apply codesphere registry: %w", err)
+	}
 
 	data, err := config.Marshal()
 	if err != nil {

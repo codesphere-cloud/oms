@@ -7,6 +7,7 @@
 package apikey_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -36,7 +37,7 @@ var _ = Describe("API Key Integration Tests", func() {
 			Fail("Integration tests require OMS_PORTAL_API_KEY and OMS_PORTAL_API environment variables")
 		}
 
-		portalClient = portal.NewPortalClient()
+		portalClient = portal.NewPortalClient(context.Background())
 		// test env wrapper
 		portalClient.(*portal.PortalClient).Env = NewTestEnv(apiKey, os.Getenv("OMS_PORTAL_API"), "")
 
@@ -70,7 +71,7 @@ var _ = Describe("API Key Integration Tests", func() {
 			Expect(newKey.Role).To(Equal(registerCmd.Opts.Role))
 			Expect(newKey.ApiKey).NotTo(BeEmpty(), "Created API key must include secret value")
 
-			client := portal.NewPortalClient()
+			client := portal.NewPortalClient(context.Background())
 			client.Env = NewTestEnv(newKey.ApiKey, os.Getenv("OMS_PORTAL_API"), "")
 
 			builds, err := client.ListBuilds(portal.CodesphereProduct, portal.SortSemver)
@@ -106,7 +107,7 @@ var _ = Describe("API Key Integration Tests", func() {
 			By("Ensuring the customer can see builds")
 			Expect(newKey.ApiKey).NotTo(BeEmpty(), "Registered key must include the API key value")
 
-			p := portal.NewPortalClient()
+			p := portal.NewPortalClient(context.Background())
 			// switch to the new key
 			p.Env = NewTestEnv(newKey.ApiKey, os.Getenv("OMS_PORTAL_API"), "")
 

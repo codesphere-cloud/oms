@@ -14,7 +14,7 @@ Environment variables:
   OMS_GIT_PASSWORD       Optional Git password/token for ArgoCD repository access.
   OMS_PORTAL_API_KEY     OMS portal API key for installer downloads with --install-version.
   OMS_PORTAL_API         Portal API URL (default: https://oms-portal.codesphere.com/api).
-  OMS_WORKDIR            Installer working directory (default: ./oms-workdir).
+  OMS_WORKDIR            Installer working directory (default: oms-workdir).
   KUBECONFIG             Kubeconfig file(s); uses the current context (default: ~/.kube/config).
   HELM_DRIVER            Helm release storage driver (default: secret).
   XDG_CONFIG_HOME       Overrides the config directory searched for sops/age/keys.txt.
@@ -29,16 +29,16 @@ oms beta bootstrap-local [flags]
       --base-domain string               Base domain for Codesphere (default "cs.local")
       --ceph-device-filter string        Regular expression selecting Ceph block devices by name
       --ceph-device-path-filter string   Regular expression selecting Ceph block devices by path
-      --expose-shared                    Expose both Envoy Gateways and the SSH workspace proxy through one edge Gateway (single-node k0s)
+      --expose-shared[=true|false]       Expose both Envoy Gateways and the SSH workspace proxy through one edge Gateway (single-node k0s)
       --feature-flags stringArray        Feature flags to enable in Codesphere installation (optional)
-  -h, --help                             help for bootstrap-local
+  -h, --help[=true|false]                help for bootstrap-local
       --install-config string            Path to install config file (default: <install-dir>/config.yaml)
       --install-dir string               Directory for config, secrets, and bundle files (default ".installer")
       --install-hash string              Optional Codesphere package hash used to select a specific build
       --install-local string             Path to a local installer package (tar.gz or unpacked directory)
       --install-version string           Codesphere version to install (downloaded from the OMS portal)
       --internal-flags stringArray       Internal flags to enable in Codesphere installation (optional) (default [headless-services,vcluster,custom-service-image,ms-in-ls])
-      --k0s                              Use k0s-specific configuration (required to deploy to k0s clusters)
+      --k0s[=true|false]                 Use k0s-specific configuration (required to deploy to k0s clusters)
       --pod-cidr string                  Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.
       --preview-flags stringArray        Preview flags to enable in Codesphere installation (optional) (default [openfga-authz,secret-management,sub-path-mount,workspace-ssh,virtual-machines])
       --profile string                   Profile to apply to the install config like resources (supported: dev, minimal, prod) (default "dev")
@@ -47,14 +47,14 @@ oms beta bootstrap-local [flags]
       --secrets-file string              Path to secrets file (default: <install-dir>/prod.vault.yaml)
       --service-cidr string              Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.
       --storage-engine string            Storage engine (supported: rook-ceph, local) (default "rook-ceph")
-      --timer                            Show how long each step took and a final timing summary table
-  -y, --yes                              Auto-approve the local bootstrapping warning prompt
+      --timer[=true|false]               Show how long each step took and a final timing summary table
+  -y, --yes[=true|false]                 Auto-approve the local bootstrapping warning prompt
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

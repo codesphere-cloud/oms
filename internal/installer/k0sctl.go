@@ -4,6 +4,7 @@
 package installer
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -44,16 +45,30 @@ type K0sctl struct {
 	FileWriter util.FileIO
 	Goos       string
 	Goarch     string
+	// ctx is the command context. The binaries started by this manager are interrupted with it.
+	ctx context.Context
 }
 
-func NewK0sctl(hw portal.Http, env env.Env, fw util.FileIO) *K0sctl {
+// NewK0sctl returns a K0sctl manager whose started binaries are interrupted once ctx is cancelled.
+// HTTP requests are cancelled through hw, which carries its own context.
+func NewK0sctl(ctx context.Context, hw portal.Http, env env.Env, fw util.FileIO) *K0sctl {
 	return &K0sctl{
 		Env:        env,
 		Http:       hw,
 		FileWriter: fw,
 		Goos:       runtime.GOOS,
 		Goarch:     runtime.GOARCH,
+		ctx:        ctx,
 	}
+}
+
+// context returns the manager's context, or a background context for one built without it.
+func (k *K0sctl) context() context.Context {
+	if k.ctx == nil {
+		return context.Background()
+	}
+
+	return k.ctx
 }
 
 func (k *K0sctl) GetLatestVersion() (string, error) {
@@ -91,7 +106,7 @@ func (k *K0sctl) Download(version string, opts DownloadOptions) (string, error) 
 	}
 
 	cachePath := filepath.Join(cacheDir, k0sctlBinaryName)
-	if reuseCachedBinary(k.FileWriter, cachePath, version, k0sctlBinaryName, opts) {
+	if reuseCachedBinary(k.context(), k.FileWriter, cachePath, version, k0sctlBinaryName, opts) {
 		return cachePath, nil
 	}
 
@@ -115,9 +130,11 @@ func (k *K0sctl) requireBinaryAndConfig(configPath, k0sctlPath string) error {
 	if !k.FileWriter.Exists(k0sctlPath) {
 		return fmt.Errorf("k0sctl binary does not exist at '%s', please download first", k0sctlPath)
 	}
+
 	if !k.FileWriter.Exists(configPath) {
 		return fmt.Errorf("k0sctl config does not exist at '%s'", configPath)
 	}
+
 	return nil
 }
 
@@ -137,12 +154,13 @@ func (k *K0sctl) Apply(configPath string, k0sctlPath string, force bool) error {
 
 	log.Printf("Running k0sctl apply with config: %s", configPath)
 
-	err := util.RunCommand(k0sctlPath, args, "")
+	err := util.RunCommand(k.context(), k0sctlPath, args, "")
 	if err != nil {
 		return fmt.Errorf("k0sctl apply failed: %w", err)
 	}
 
 	log.Println("k0sctl apply completed successfully")
+
 	return nil
 }
 
@@ -150,6 +168,7 @@ func (k *K0sctl) Reset(configPath string, k0sctlPath string) error {
 	if !k.FileWriter.Exists(k0sctlPath) {
 		return nil
 	}
+
 	if err := k.requireBinaryAndConfig(configPath, k0sctlPath); err != nil {
 		return err
 	}
@@ -158,12 +177,13 @@ func (k *K0sctl) Reset(configPath string, k0sctlPath string) error {
 
 	args := []string{"reset", "--config", configPath, "--force"}
 
-	err := util.RunCommand(k0sctlPath, args, "")
+	err := util.RunCommand(k.context(), k0sctlPath, args, "")
 	if err != nil {
 		return fmt.Errorf("k0sctl reset failed: %w", err)
 	}
 
 	log.Println("k0sctl reset completed successfully")
+
 	return nil
 }
 
@@ -175,7 +195,8 @@ func (k *K0sctl) GetKubeconfig(configPath string, k0sctlPath string) (string, er
 	args := []string{"kubeconfig", "--config", configPath}
 
 	log.Println("Retrieving kubeconfig from k0sctl...")
-	output, err := util.RunCommandWithOutput(k0sctlPath, args, "")
+
+	output, err := util.RunCommandWithOutput(k.context(), k0sctlPath, args, "")
 	if err != nil {
 		return "", fmt.Errorf("k0sctl kubeconfig failed: %w", err)
 	}

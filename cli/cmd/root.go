@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"context"
 	"log"
 	"os"
 
@@ -88,8 +89,14 @@ func Execute() {
 	//Disable printing timestamps on log lines
 	log.SetFlags(0)
 
-	err := GetRootCmd().Execute()
-	if err != nil {
-		os.Exit(1)
+	ctx, stop := util.NotifySignalContext(context.Background())
+	err := GetRootCmd().ExecuteContext(ctx)
+	// A command cancelled by Ctrl-C/SIGTERM exits 130, like an interrupted prompt does.
+	code := util.ExitCode(ctx, err)
+
+	stop()
+
+	if code != 0 {
+		os.Exit(code)
 	}
 }

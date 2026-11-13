@@ -106,16 +106,8 @@ func ParseJSON(data []byte) (*Config, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON BOM: %w", err)
 	}
-	return &cfg, nil
-}
 
-// GetPCApps returns the pc-applications chart version from the BOM by
-// parsing the tag out of the OCI image reference stored at
-// components["pc-applications"].files["chart"].ociRef.
-// Returns (nil, false) when the component is absent, the chart file entry is
-// missing, or the ociRef has no recognisable tag.
-func (b *Config) GetPCApps() (reference.NamedTagged, bool) {
-	return b.GetChart("pc-applications")
+	return &cfg, nil
 }
 
 // GetChart returns the tagged OCI chart reference stored in the named
@@ -125,6 +117,7 @@ func (b *Config) GetChart(component string) (reference.NamedTagged, bool) {
 	if !ok {
 		return nil, false
 	}
+
 	chart, ok := comp.Files["chart"]
 	if !ok || chart.OciRef == "" {
 		return nil, false
@@ -139,6 +132,7 @@ func (b *Config) GetChart(component string) (reference.NamedTagged, bool) {
 	if !ok {
 		return nil, false
 	}
+
 	return tagged, true
 }
 
@@ -147,9 +141,11 @@ func (b *Config) GetCodesphereContainerImages() (map[string]string, error) {
 	if b.Components == nil {
 		return nil, fmt.Errorf("codesphere component not found in BOM")
 	}
+
 	comp, exists := b.Components["codesphere"]
 	if !exists {
 		return nil, fmt.Errorf("codesphere component not found in BOM")
 	}
+
 	return comp.ContainerImages, nil
 }

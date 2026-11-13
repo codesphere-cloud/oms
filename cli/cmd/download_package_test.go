@@ -4,6 +4,7 @@
 package cmd_test
 
 import (
+	"context"
 	"os"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -18,7 +19,6 @@ import (
 )
 
 var _ = Describe("DownloadPackages", func() {
-
 	var (
 		c              cmd.DownloadPackageCmd
 		filename       string
@@ -60,8 +60,10 @@ var _ = Describe("DownloadPackages", func() {
 	})
 
 	Context("AddDownloadPackageCmd", func() {
-		var downloadCmd cobra.Command
-		var opts *util.GlobalOptions
+		var (
+			downloadCmd cobra.Command
+			opts        *util.GlobalOptions
+		)
 
 		BeforeEach(func() {
 			downloadCmd = cobra.Command{}
@@ -208,9 +210,9 @@ var _ = Describe("DownloadPackages", func() {
 		Expect(err).NotTo(HaveOccurred())
 		mockFileWriter.EXPECT().OpenAppend(build.BuildPackageFilename(filename)).Return(file, nil)
 		mockFileWriter.EXPECT().Open(build.BuildPackageFilename(filename)).Return(file, nil)
-		mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuild, file, 0, suppressProgress).Return(nil)
+		mockPortal.EXPECT().DownloadBuildArtifact(mock.Anything, portal.CodesphereProduct, expectedBuild, file, 0, suppressProgress).Return(nil)
 		mockPortal.EXPECT().VerifyBuildArtifactDownload(file, expectedBuild).Return(nil)
-		Expect(c.DownloadBuild(mockPortal, build, filename)).To(Succeed())
+		Expect(c.DownloadBuild(context.Background(), mockPortal, build, filename)).To(Succeed())
 	},
 		Entry("progress by default", false, false, false, false),
 		Entry("progress with verbose", false, false, true, false),
@@ -236,9 +238,9 @@ var _ = Describe("DownloadPackages", func() {
 			Expect(err).NotTo(HaveOccurred())
 			mockFileWriter.EXPECT().OpenAppend(version+"-"+hash+"-"+filename).Return(fakeFile, nil)
 			mockFileWriter.EXPECT().Open(version+"-"+hash+"-"+filename).Return(fakeFile, nil)
-			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil)
+			mockPortal.EXPECT().DownloadBuildArtifact(mock.Anything, portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil)
 			mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, expectedBuildToDownload).Return(nil)
-			err = c.DownloadBuild(mockPortal, build, filename)
+			err = c.DownloadBuild(context.Background(), mockPortal, build, filename)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -264,9 +266,9 @@ var _ = Describe("DownloadPackages", func() {
 			Expect(err).NotTo(HaveOccurred())
 			mockFileWriter.EXPECT().OpenAppend(version+"-"+longHash+"-"+filename).Return(fakeFile, nil)
 			mockFileWriter.EXPECT().Open(version+"-"+longHash+"-"+filename).Return(fakeFile, nil)
-			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil)
+			mockPortal.EXPECT().DownloadBuildArtifact(mock.Anything, portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil)
 			mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, expectedBuildToDownload).Return(nil)
-			err = c.DownloadBuild(mockPortal, buildWithLongHash, filename)
+			err = c.DownloadBuild(context.Background(), mockPortal, buildWithLongHash, filename)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -287,9 +289,9 @@ var _ = Describe("DownloadPackages", func() {
 				Expect(err).NotTo(HaveOccurred())
 				mockFileWriter.EXPECT().OpenAppend("other-version-v1.42.0-"+hash+"-"+filename).Return(fakeFile, nil)
 				mockFileWriter.EXPECT().Open("other-version-v1.42.0-"+hash+"-"+filename).Return(fakeFile, nil)
-				mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil)
+				mockPortal.EXPECT().DownloadBuildArtifact(mock.Anything, portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil)
 				mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, expectedBuildToDownload).Return(nil)
-				err = c.DownloadBuild(mockPortal, build, filename)
+				err = c.DownloadBuild(context.Background(), mockPortal, build, filename)
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -297,7 +299,7 @@ var _ = Describe("DownloadPackages", func() {
 
 	Context("File doesn't exist in build", func() {
 		It("Returns an error", func() {
-			err := c.DownloadBuild(mockPortal, build, "installer-lite.tar.gz")
+			err := c.DownloadBuild(context.Background(), mockPortal, build, "installer-lite.tar.gz")
 			Expect(err).To(MatchError("failed to download and verify build: failed to find artifact in package: artifact not found: installer-lite.tar.gz"))
 		})
 	})

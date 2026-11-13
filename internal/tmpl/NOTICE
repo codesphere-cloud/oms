@@ -17,15 +17,15 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/dbc26066f70a/aut
  
 ----------
 Module: cloud.google.com/go/auth/oauth2adapt
-Version: v0.3.0
+Version: v0.3.1
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/auth/oauth2adapt/v0.3.0/auth/oauth2adapt/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/auth/oauth2adapt/v0.3.1/auth/oauth2adapt/LICENSE
  
 ----------
 Module: cloud.google.com/go/compute
-Version: v1.74.1
+Version: v1.75.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.74.1/compute/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.75.0/compute/LICENSE
  
 ----------
 Module: cloud.google.com/go/compute/metadata
@@ -299,9 +299,9 @@ License URL: https://github.com/cloudnative-pg/machinery/blob/v0.5.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
-Version: v1.61.0
+Version: v1.65.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.61.0/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.65.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -311,9 +311,9 @@ License URL: https://github.com/codesphere-cloud/oms/blob/HEAD/internal/tmpl/LIC
  
 ----------
 Module: github.com/containernetworking/cni
-Version: v1.2.3
+Version: v1.3.1
 License: Apache-2.0
-License URL: https://github.com/containernetworking/cni/blob/v1.2.3/LICENSE
+License URL: https://github.com/containernetworking/cni/blob/v1.3.1/LICENSE
  
 ----------
 Module: github.com/cpuguy83/go-md2man/v2/md2man
@@ -323,9 +323,9 @@ License URL: https://github.com/cpuguy83/go-md2man/blob/v2.0.7/LICENSE.md
  
 ----------
 Module: github.com/creativeprojects/go-selfupdate
-Version: v1.7.0
+Version: v1.7.1
 License: MIT
-License URL: https://github.com/creativeprojects/go-selfupdate/blob/v1.7.0/LICENSE
+License URL: https://github.com/creativeprojects/go-selfupdate/blob/v1.7.1/LICENSE
  
 ----------
 Module: github.com/cyphar/filepath-securejoin
@@ -377,9 +377,9 @@ License URL: https://github.com/dylibso/observe-sdk/blob/9145d8ad07e1/go/LICENSE
  
 ----------
 Module: github.com/emicklei/go-restful/v3
-Version: v3.13.0
+Version: v3.14.0
 License: MIT
-License URL: https://github.com/emicklei/go-restful/blob/v3.13.0/LICENSE
+License URL: https://github.com/emicklei/go-restful/blob/v3.14.0/LICENSE
  
 ----------
 Module: github.com/emirpasic/gods
@@ -443,9 +443,9 @@ License URL: https://github.com/fsnotify/fsnotify/blob/v1.10.1/LICENSE
  
 ----------
 Module: github.com/fxamacker/cbor/v2
-Version: v2.9.3
+Version: v2.10.0
 License: MIT
-License URL: https://github.com/fxamacker/cbor/blob/v2.9.3/LICENSE
+License URL: https://github.com/fxamacker/cbor/blob/v2.10.0/LICENSE
  
 ----------
 Module: github.com/getsops/gopgagent
@@ -497,15 +497,15 @@ License URL: https://github.com/go-gorp/gorp/blob/v3.1.0/LICENSE
  
 ----------
 Module: github.com/go-jose/go-jose/v4
-Version: v4.1.6
+Version: v4.1.8
 License: Apache-2.0
-License URL: https://github.com/go-jose/go-jose/blob/v4.1.6/LICENSE
+License URL: https://github.com/go-jose/go-jose/blob/v4.1.8/LICENSE
  
 ----------
 Module: github.com/go-jose/go-jose/v4/json
-Version: v4.1.6
+Version: v4.1.8
 License: BSD-3-Clause
-License URL: https://github.com/go-jose/go-jose/blob/v4.1.6/json/LICENSE
+License URL: https://github.com/go-jose/go-jose/blob/v4.1.8/json/LICENSE
  
 ----------
 Module: github.com/go-logr/logr
@@ -527,15 +527,15 @@ License URL: https://github.com/go-logr/zapr/blob/v1.3.0/LICENSE
  
 ----------
 Module: github.com/go-openapi/jsonpointer
-Version: v1.0.0
+Version: v1.0.2
 License: Apache-2.0
-License URL: https://github.com/go-openapi/jsonpointer/blob/v1.0.0/LICENSE
+License URL: https://github.com/go-openapi/jsonpointer/blob/v1.0.2/LICENSE
  
 ----------
 Module: github.com/go-openapi/jsonreference
-Version: v1.0.1
+Version: v1.0.3
 License: Apache-2.0
-License URL: https://github.com/go-openapi/jsonreference/blob/v1.0.1/LICENSE
+License URL: https://github.com/go-openapi/jsonreference/blob/v1.0.3/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag
@@ -551,9 +551,9 @@ License URL: https://github.com/go-openapi/swag/blob/cmdutils/v0.29.1/cmdutils/L
  
 ----------
 Module: github.com/go-openapi/swag/conv
-Version: v0.29.1
+Version: v0.29.2
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/conv/v0.29.1/conv/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/conv/v0.29.2/conv/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/fileutils
@@ -563,9 +563,9 @@ License URL: https://github.com/go-openapi/swag/blob/fileutils/v0.29.1/fileutils
  
 ----------
 Module: github.com/go-openapi/swag/jsonutils
-Version: v0.29.1
+Version: v0.29.2
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/jsonutils/v0.29.1/jsonutils/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/jsonutils/v0.29.2/jsonutils/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/loading
@@ -587,9 +587,9 @@ License URL: https://github.com/go-openapi/swag/blob/netutils/v0.29.1/netutils/L
  
 ----------
 Module: github.com/go-openapi/swag/pools
-Version: v0.29.1
+Version: v0.29.2
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/pools/v0.29.1/pools/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/pools/v0.29.2/pools/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/stringutils
@@ -599,9 +599,9 @@ License URL: https://github.com/go-openapi/swag/blob/stringutils/v0.29.1/stringu
  
 ----------
 Module: github.com/go-openapi/swag/typeutils
-Version: v0.29.1
+Version: v0.29.2
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/typeutils/v0.29.1/typeutils/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/typeutils/v0.29.2/typeutils/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/yamlutils
@@ -676,16 +676,16 @@ License: BSD-3-Clause
 License URL: https://github.com/google/go-github/blob/v69.2.0/LICENSE
  
 ----------
-Module: github.com/google/go-github/v86/github
-Version: v86.0.0
-License: BSD-3-Clause
-License URL: https://github.com/google/go-github/blob/v86.0.0/LICENSE
- 
-----------
 Module: github.com/google/go-github/v88/github
 Version: v88.0.0
 License: BSD-3-Clause
 License URL: https://github.com/google/go-github/blob/v88.0.0/LICENSE
+ 
+----------
+Module: github.com/google/go-github/v93/github
+Version: v93.0.0
+License: BSD-3-Clause
+License URL: https://github.com/google/go-github/blob/v93.0.0/LICENSE
  
 ----------
 Module: github.com/google/go-querystring/query
@@ -713,9 +713,9 @@ License URL: https://github.com/google/uuid/blob/2d3c2a9cc518/LICENSE
  
 ----------
 Module: github.com/googleapis/enterprise-certificate-proxy/client
-Version: v0.3.24
+Version: v0.3.25
 License: Apache-2.0
-License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.3.24/LICENSE
+License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.3.25/LICENSE
  
 ----------
 Module: github.com/googleapis/gax-go/v2
@@ -767,9 +767,9 @@ License URL: https://github.com/hashicorp/go-retryablehttp/blob/v0.7.8/LICENSE
  
 ----------
 Module: github.com/hashicorp/go-rootcerts
-Version: v1.0.2
+Version: v1.1.0
 License: MPL-2.0
-License URL: https://github.com/hashicorp/go-rootcerts/blob/v1.0.2/LICENSE
+License URL: https://github.com/hashicorp/go-rootcerts/blob/v1.1.0/LICENSE
  
 ----------
 Module: github.com/hashicorp/go-secure-stdlib/parseutil
@@ -809,15 +809,15 @@ License URL: https://github.com/hashicorp/vault/blob/api/v1.23.0/api/LICENSE
  
 ----------
 Module: github.com/hashicorp/vault/api/auth/approle
-Version: v0.8.0
-License: Unknown
-License URL: Unknown
+Version: v0.12.0
+License: MPL-2.0
+License URL: https://github.com/hashicorp/vault/blob/api/auth/approle/v0.12.0/api/auth/approle/LICENSE
  
 ----------
 Module: github.com/hashicorp/vault/api/auth/kubernetes
-Version: v0.8.0
-License: Unknown
-License URL: Unknown
+Version: v0.12.0
+License: MPL-2.0
+License URL: https://github.com/hashicorp/vault/blob/api/auth/kubernetes/v0.12.0/api/auth/kubernetes/LICENSE
  
 ----------
 Module: github.com/huandu/xstrings
@@ -839,9 +839,9 @@ License URL: https://github.com/jbenet/go-context/blob/d14ea06fba99/LICENSE
  
 ----------
 Module: github.com/jedib0t/go-pretty/v6
-Version: v6.8.3
+Version: v6.9.1
 License: MIT
-License URL: https://github.com/jedib0t/go-pretty/blob/v6.8.3/LICENSE
+License URL: https://github.com/jedib0t/go-pretty/blob/v6.9.1/LICENSE
  
 ----------
 Module: github.com/jmoiron/sqlx
@@ -977,15 +977,15 @@ License URL: https://github.com/lithammer/shortuuid/blob/v3.0.0/LICENSE
  
 ----------
 Module: github.com/mattn/go-colorable
-Version: v0.1.15
+Version: v0.1.16
 License: MIT
-License URL: https://github.com/mattn/go-colorable/blob/v0.1.15/LICENSE
+License URL: https://github.com/mattn/go-colorable/blob/v0.1.16/LICENSE
  
 ----------
 Module: github.com/mattn/go-isatty
-Version: v0.0.23
+Version: v0.0.24
 License: MIT
-License URL: https://github.com/mattn/go-isatty/blob/v0.0.23/LICENSE
+License URL: https://github.com/mattn/go-isatty/blob/v0.0.24/LICENSE
  
 ----------
 Module: github.com/mattn/go-runewidth
@@ -1168,6 +1168,12 @@ License: BSD-2-Clause
 License URL: https://github.com/redis/go-redis/blob/v9.20.1/LICENSE
  
 ----------
+Module: github.com/rivo/uniseg
+Version: v0.4.7
+License: MIT
+License URL: https://github.com/rivo/uniseg/blob/v0.4.7/LICENSE.txt
+ 
+----------
 Module: github.com/robfig/cron/v3
 Version: v3.0.2-0.20210106135023-bc59245fe10e
 License: MIT
@@ -1175,9 +1181,9 @@ License URL: https://github.com/robfig/cron/blob/bc59245fe10e/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20261104052232-a37804538bbb
+Version: v0.0.0-20261113055517-2afff53ced45
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/a37804538bbb/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/2afff53ced45/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
@@ -1223,9 +1229,9 @@ License URL: https://github.com/shopspring/decimal/blob/v1.4.0/LICENSE
  
 ----------
 Module: github.com/sirupsen/logrus
-Version: v1.10.1
+Version: v1.10.2
 License: MIT
-License URL: https://github.com/sirupsen/logrus/blob/v1.10.1/LICENSE
+License URL: https://github.com/sirupsen/logrus/blob/v1.10.2/LICENSE
  
 ----------
 Module: github.com/skeema/knownhosts
@@ -1247,15 +1253,15 @@ License URL: https://github.com/spf13/cobra/blob/v1.10.2/LICENSE.txt
  
 ----------
 Module: github.com/spf13/pflag
-Version: v1.0.10
+Version: v1.1.0
 License: BSD-3-Clause
-License URL: https://github.com/spf13/pflag/blob/v1.0.10/LICENSE
+License URL: https://github.com/spf13/pflag/blob/v1.1.0/LICENSE
  
 ----------
 Module: github.com/stretchr/objx
-Version: v0.5.3
+Version: v0.8.0
 License: MIT
-License URL: https://github.com/stretchr/objx/blob/v0.5.3/LICENSE
+License URL: https://github.com/stretchr/objx/blob/v0.8.0/LICENSE
  
 ----------
 Module: github.com/stretchr/testify
@@ -1457,51 +1463,51 @@ License URL: https://github.com/yaml/go-yaml/blob/v3.0.6/LICENSE
  
 ----------
 Module: golang.org/x/crypto
-Version: v0.58.0
+Version: v0.59.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/crypto/+/v0.58.0:LICENSE
+License URL: https://cs.opensource.google/go/x/crypto/+/v0.59.0:LICENSE
  
 ----------
 Module: golang.org/x/mod/semver
-Version: v0.42.0
+Version: v0.43.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/mod/+/v0.42.0:LICENSE
+License URL: https://cs.opensource.google/go/x/mod/+/v0.43.0:LICENSE
  
 ----------
 Module: golang.org/x/net
-Version: v0.61.0
+Version: v0.62.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/net/+/v0.61.0:LICENSE
+License URL: https://cs.opensource.google/go/x/net/+/v0.62.0:LICENSE
  
 ----------
 Module: golang.org/x/oauth2
-Version: v0.37.0
+Version: v0.38.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/oauth2/+/v0.37.0:LICENSE
+License URL: https://cs.opensource.google/go/x/oauth2/+/v0.38.0:LICENSE
  
 ----------
 Module: golang.org/x/sync
-Version: v0.24.0
+Version: v0.25.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/sync/+/v0.24.0:LICENSE
+License URL: https://cs.opensource.google/go/x/sync/+/v0.25.0:LICENSE
  
 ----------
 Module: golang.org/x/sys
-Version: v0.49.0
+Version: v0.50.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/sys/+/v0.49.0:LICENSE
+License URL: https://cs.opensource.google/go/x/sys/+/v0.50.0:LICENSE
  
 ----------
 Module: golang.org/x/term
-Version: v0.47.0
+Version: v0.48.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/term/+/v0.47.0:LICENSE
+License URL: https://cs.opensource.google/go/x/term/+/v0.48.0:LICENSE
  
 ----------
 Module: golang.org/x/text
-Version: v0.43.0
+Version: v0.44.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/text/+/v0.43.0:LICENSE
+License URL: https://cs.opensource.google/go/x/text/+/v0.44.0:LICENSE
  
 ----------
 Module: golang.org/x/time/rate
@@ -1517,15 +1523,15 @@ License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
  
 ----------
 Module: google.golang.org/api
-Version: v0.310.0
+Version: v0.314.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.310.0/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.314.0/LICENSE
  
 ----------
 Module: google.golang.org/api/internal/third_party/uritemplates
-Version: v0.310.0
+Version: v0.314.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.310.0/internal/third_party/uritemplates/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.314.0/internal/third_party/uritemplates/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis
@@ -1541,9 +1547,9 @@ License URL: https://github.com/googleapis/go-genproto/blob/4341edf3f941/googlea
  
 ----------
 Module: google.golang.org/genproto/googleapis/rpc
-Version: v0.0.0-20261019180522-ce908d29299b
+Version: v0.0.0-20261104224025-d1e00e9f33ab
 License: Apache-2.0
-License URL: https://github.com/googleapis/go-genproto/blob/ce908d29299b/googleapis/rpc/LICENSE
+License URL: https://github.com/googleapis/go-genproto/blob/d1e00e9f33ab/googleapis/rpc/LICENSE
  
 ----------
 Module: google.golang.org/grpc

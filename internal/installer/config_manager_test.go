@@ -10,6 +10,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/utils/ptr"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -36,6 +37,7 @@ func (m *MockFileIO) Create(filename string) (*os.File, error) {
 	if m.createError != nil {
 		return nil, m.createError
 	}
+
 	return nil, nil
 }
 
@@ -43,19 +45,23 @@ func (m *MockFileIO) CreateAndWrite(filePath string, data []byte, fileType strin
 	if m.writeError != nil {
 		return m.writeError
 	}
+
 	m.files[filePath] = data
+
 	return nil
 }
 
 func (m *MockFileIO) CreateTemp(dir, pattern string) (string, error) {
 	path := filepath.Join(dir, pattern+"mock")
 	m.files[path] = nil
+
 	return path, nil
 }
 
 func (m *MockFileIO) Rename(oldPath, newPath string) error {
 	m.files[newPath] = m.files[oldPath]
 	delete(m.files, oldPath)
+
 	return nil
 }
 
@@ -63,6 +69,7 @@ func (m *MockFileIO) Open(filename string) (*os.File, error) {
 	if m.openError != nil {
 		return nil, m.openError
 	}
+
 	return nil, nil
 }
 
@@ -91,7 +98,9 @@ func (m *MockFileIO) WriteFile(filename string, data []byte, perm os.FileMode) e
 	if m.writeError != nil {
 		return m.writeError
 	}
+
 	m.files[filename] = data
+
 	return nil
 }
 
@@ -103,6 +112,7 @@ func (m *MockFileIO) ReadFile(filename string) ([]byte, error) {
 	if data, ok := m.files[filename]; ok {
 		return data, nil
 	}
+
 	return nil, os.ErrNotExist
 }
 
@@ -270,7 +280,6 @@ var _ = Describe("ConfigManager", func() {
 					Expect(errors).To(ContainElement(ContainSubstring("postgres server address is required")))
 				})
 			})
-
 		})
 
 		Context("openBao validation", func() {
@@ -519,6 +528,81 @@ var _ = Describe("ConfigManager", func() {
 			})
 		})
 
+		Context("deploy config validation", func() {
+			deployConfig := files.DeployConfig{Images: map[string]files.ImageConfig{"ubuntu-24.04": {}}}
+
+			It("deploy config and nonzero pooled instances -> ambiguity error", func() {
+				configManager.Config.Codesphere.DeployConfig = deployConfig
+				configManager.Config.Codesphere.Plans.HostingPlans = map[int]files.HostingPlan{1: {PooledInstances: ptr.To(1)}}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).To(ContainElement(ContainSubstring(".pooledInstances is ambiguous")))
+			})
+
+			It("deploy config and zero pooled instances -> no ambiguity error", func() {
+				configManager.Config.Codesphere.DeployConfig = deployConfig
+				configManager.Config.Codesphere.Plans.HostingPlans = map[int]files.HostingPlan{1: {PooledInstances: ptr.To(0)}, 2: {}}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).NotTo(ContainElement(ContainSubstring(".pooledInstances is ambiguous")))
+			})
+
+			It("pooled instances without a deploy config -> no ambiguity error", func() {
+				configManager.Config.Codesphere.DeployConfig = files.DeployConfig{}
+				configManager.Config.Codesphere.Plans.HostingPlans = map[int]files.HostingPlan{1: {PooledInstances: ptr.To(1)}}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).NotTo(ContainElement(ContainSubstring(".pooledInstances is ambiguous")))
+			})
+		})
+
+		Context("workspace image build validation", func() {
+			agentWithDockerfile := &files.ImageRef{BomRef: "workspace-agent-24.04", Dockerfile: "Dockerfile.agent"}
+
+			It("agent Dockerfile without a registry -> registry error", func() {
+				configManager.Config.Registry = nil
+				configManager.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{Agent: agentWithDockerfile}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).To(ContainElement(ContainSubstring("Dockerfile.agent requires registry.server")))
+			})
+
+			It("deploy config flavor Dockerfile with an empty registry server -> registry error", func() {
+				configManager.Config.Registry = &files.RegistryConfig{}
+				configManager.Config.Codesphere.DeployConfig = files.DeployConfig{Images: map[string]files.ImageConfig{
+					"ubuntu-24.04": {Flavors: map[string]files.FlavorConfig{"gpu": {Image: files.ImageRef{Dockerfile: "Dockerfile.gpu"}}}},
+				}}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).To(ContainElement(ContainSubstring("Dockerfile.gpu requires registry.server")))
+			})
+
+			It("agent Dockerfile with a registry -> no registry error", func() {
+				configManager.Config.Registry = &files.RegistryConfig{Server: "registry.example.com"}
+				configManager.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{Agent: agentWithDockerfile}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).NotTo(ContainElement(ContainSubstring("requires registry.server")))
+			})
+
+			It("Dockerfile next to an explicit image name -> no registry error", func() {
+				configManager.Config.Registry = nil
+				configManager.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{
+					Agent: &files.ImageRef{ImageName: "registry.example.com/agent", Dockerfile: "Dockerfile.agent"},
+				}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).NotTo(ContainElement(ContainSubstring("requires registry.server")))
+			})
+		})
+
 		Context("with valid configuration", func() {
 			BeforeEach(func() {
 				configManager.Config = &files.RootConfig{
@@ -596,6 +680,19 @@ var _ = Describe("ConfigManager", func() {
 			It("should return no errors", func() {
 				errors := configManager.ValidateVault()
 				Expect(errors).To(BeEmpty())
+			})
+
+			It("requires the username and password of every additional registry", func() {
+				configManager.Config.AdditionalRegistries = []files.AdditionalRegistryConfig{
+					{Name: "codesphere", Registry: "registry.codesphere.com"},
+					{Name: "other", Registry: "other.example.com"},
+				}
+				configManager.Vault.SetSecret(files.SecretEntry{Name: "codesphereRegistryUsername"})
+				configManager.Vault.SetSecret(files.SecretEntry{Name: "codesphereRegistryPassword"})
+				configManager.Vault.SetSecret(files.SecretEntry{Name: "otherRegistryPassword"})
+
+				errors := configManager.ValidateVault()
+				Expect(errors).To(ConsistOf("required secret for additional registry other missing: otherRegistryUsername"))
 			})
 		})
 
@@ -723,6 +820,7 @@ var _ = Describe("ConfigManager", func() {
 				vault := &files.InstallVault{}
 				err = vault.Unmarshal(firstVaultBytes)
 				Expect(err).ToNot(HaveOccurred())
+
 				configManager.Vault = vault
 
 				// Re-write vault (simulating a second run)
@@ -763,6 +861,7 @@ var _ = Describe("ConfigManager", func() {
 				// Save the original cert and key for later comparison
 				origCert := configManager.Config.Postgres.Primary.SSLConfig.ServerCertPem
 				origKey := primaryKeySecret.File.Content
+
 				Expect(origCert).ToNot(BeEmpty())
 				Expect(origKey).ToNot(BeEmpty())
 
@@ -779,9 +878,11 @@ var _ = Describe("ConfigManager", func() {
 				// Reload config from written YAML
 				configBytes := mockIO.GetFileContent("/tmp/config.yaml")
 				Expect(configBytes).ToNot(BeNil())
+
 				config2 := files.NewRootConfig()
 				err = config2.Unmarshal(configBytes)
 				Expect(err).ToNot(HaveOccurred())
+
 				configManager2.Config = &config2
 
 				Expect(configManager2.Config.Postgres.Primary.SSLConfig.ServerCertPem).To(Equal(origCert),
@@ -791,9 +892,11 @@ var _ = Describe("ConfigManager", func() {
 				vaultBytes, err := mockIO.ReadFile(vaultPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(vaultBytes).ToNot(BeNil())
+
 				vault2 := &files.InstallVault{}
 				err = vault2.Unmarshal(vaultBytes)
 				Expect(err).ToNot(HaveOccurred())
+
 				configManager2.Vault = vault2
 
 				// Private key lives in vault, not config
@@ -824,17 +927,20 @@ var _ = Describe("ConfigManager", func() {
 				for _, secret := range vault3.Secrets {
 					nameCount[secret.Name]++
 				}
+
 				for name, count := range nameCount {
 					Expect(count).To(Equal(1), "secret '%s' has %d entries (expected 1) — duplication bug!", name, count)
 				}
 
 				// Verify the key in re-written vault still matches the cert
 				var rewrittenKey string
+
 				for _, secret := range vault3.Secrets {
 					if secret.Name == "postgresPrimaryServerKeyPem" && secret.File != nil {
 						rewrittenKey = secret.File.Content
 					}
 				}
+
 				Expect(rewrittenKey).To(Equal(origKey),
 					"re-written vault should contain the same key")
 				err = secrets.ValidateCertKeyPair(
@@ -844,6 +950,5 @@ var _ = Describe("ConfigManager", func() {
 				Expect(err).ToNot(HaveOccurred(), "cert/key should match in re-written vault")
 			})
 		})
-
 	})
 })

@@ -4,6 +4,8 @@
 package files_test
 
 import (
+	"bytes"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -27,6 +29,7 @@ var _ = Describe("ConfigYaml", func() {
 		rootConfig = files.NewRootConfig()
 
 		var err error
+
 		tempDir, err = os.MkdirTemp("", "config_yaml_test")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -199,6 +202,63 @@ codesphere:
 			Expect(rootConfig.Registry.Server).To(Equal("minimal.registry.com"))
 			Expect(rootConfig.Codesphere.DeployConfig.Images).To(BeEmpty())
 		})
+
+		It("parses additional registries independently of the registry config", func() {
+			var cfg files.RootConfig
+			Expect(cfg.Unmarshal([]byte(`registry:
+  server: ghcr.io
+additionalRegistries:
+  - name: codesphere
+    registry: registry.codesphere.com
+`))).To(Succeed())
+
+			Expect(cfg.Registry.Server).To(Equal("ghcr.io"))
+			Expect(cfg.AdditionalRegistries).To(Equal([]files.AdditionalRegistryConfig{
+				{Name: "codesphere", Registry: "registry.codesphere.com"},
+			}))
+		})
+
+		It("omits additional registries when they are not configured", func() {
+			cfg := files.RootConfig{}
+
+			data, err := cfg.Marshal()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(data)).NotTo(ContainSubstring("additionalRegistries"))
+		})
+	})
+
+	Describe("SetAdditionalRegistry", func() {
+		It("appends a registry with a new name", func() {
+			cfg := files.RootConfig{AdditionalRegistries: []files.AdditionalRegistryConfig{
+				{Name: "other", Registry: "other.example.com"},
+			}}
+
+			cfg.SetAdditionalRegistry(files.AdditionalRegistryConfig{Name: "codesphere", Registry: "registry.codesphere.com"})
+
+			Expect(cfg.AdditionalRegistries).To(Equal([]files.AdditionalRegistryConfig{
+				{Name: "other", Registry: "other.example.com"},
+				{Name: "codesphere", Registry: "registry.codesphere.com"},
+			}))
+		})
+
+		It("replaces the registry with the same name", func() {
+			cfg := files.RootConfig{AdditionalRegistries: []files.AdditionalRegistryConfig{
+				{Name: "codesphere", Registry: "registry.dev.codesphere.com"},
+			}}
+
+			cfg.SetAdditionalRegistry(files.AdditionalRegistryConfig{Name: "codesphere", Registry: "registry.codesphere.com"})
+
+			Expect(cfg.AdditionalRegistries).To(Equal([]files.AdditionalRegistryConfig{
+				{Name: "codesphere", Registry: "registry.codesphere.com"},
+			}))
+		})
+	})
+
+	Describe("additional registry secret names", func() {
+		It("prefixes the username and password entries with the registry name", func() {
+			Expect(files.AdditionalRegistryUsernameSecret("codesphere")).To(Equal("codesphereRegistryUsername"))
+			Expect(files.AdditionalRegistryPasswordSecret("codesphere")).To(Equal("codesphereRegistryPassword"))
+		})
 	})
 
 	Describe("ExtractBomRefs", func() {
@@ -271,6 +331,20 @@ codesphere:
 
 			err = rootConfig.Unmarshal(data)
 			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Describe("RegistryConfig.WorkspaceImage", func() {
+		It("registry server -> image named after the image and flavor", func() {
+			registry := files.RegistryConfig{Server: "registry.example.com"}
+
+			Expect(registry.WorkspaceImage("ubuntu-24.04", "default")).To(Equal("registry.example.com/ubuntu-24.04-default"))
+		})
+
+		It("registry server with a trailing slash -> image without a double slash", func() {
+			registry := files.RegistryConfig{Server: "registry.example.com/private-cloud/"}
+
+			Expect(registry.WorkspaceImage("ubuntu-24.04", "gpu")).To(Equal("registry.example.com/private-cloud/ubuntu-24.04-gpu"))
 		})
 	})
 
@@ -370,7 +444,9 @@ cluster:
               api-token: fake-api-token
             name: acme-solver
 `
+
 			var parsed files.RootConfig
+
 			err := parsed.Unmarshal([]byte(acmeYaml))
 			Expect(err).NotTo(HaveOccurred())
 
@@ -384,96 +460,6 @@ cluster:
 			// Solver should be populated from override
 			Expect(parsed.Codesphere.CertIssuer.Acme.Solver.DNS01).NotTo(BeNil())
 			Expect(parsed.Codesphere.CertIssuer.Acme.Solver.DNS01.Provider).To(Equal("cloudflare"))
-		})
-
-	})
-
-	Describe("OpenFGA backup config structure", func() {
-		It("should marshal openfgaBackups into the pc-apps openfga application values", func() {
-			rootConfig.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{
-				Enabled:         true,
-				Schedule:        "0 */30 * * * *",
-				DestinationPath: "s3://backup-openfga-dev",
-				EndpointURL:     "https://s3.de.io.cloud.ovh.net",
-			}
-
-			data, err := rootConfig.Marshal()
-			Expect(err).NotTo(HaveOccurred())
-
-			var raw map[string]interface{}
-			Expect(yaml.Unmarshal(data, &raw)).NotTo(HaveOccurred())
-
-			pcApps := raw["pcApps"].(map[string]interface{})
-			applications := pcApps["applications"].(map[string]interface{})
-			Expect(applications["openfga"]).To(Equal(map[string]interface{}{
-				"enabled": true,
-				"valuesObject": map[string]interface{}{
-					"postgres": map[string]interface{}{
-						"backup": map[string]interface{}{
-							"enabled":         true,
-							"schedule":        "0 */30 * * * *",
-							"destinationPath": "s3://backup-openfga-dev",
-							"endpointURL":     "https://s3.de.io.cloud.ovh.net",
-						},
-					},
-				},
-			}))
-		})
-
-		It("omits optional fields (schedule, retentionPolicy) when unset", func() {
-			rootConfig.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{
-				Enabled:         true,
-				DestinationPath: "s3://backup-openfga-dev",
-				EndpointURL:     "https://s3.de.io.cloud.ovh.net",
-			}
-
-			data, err := rootConfig.Marshal()
-			Expect(err).NotTo(HaveOccurred())
-
-			var raw map[string]interface{}
-			Expect(yaml.Unmarshal(data, &raw)).NotTo(HaveOccurred())
-
-			backup := raw["pcApps"].(map[string]interface{})["applications"].(map[string]interface{})["openfga"].(map[string]interface{})["valuesObject"].(map[string]interface{})["postgres"].(map[string]interface{})["backup"].(map[string]interface{})
-			Expect(backup).To(HaveKey("destinationPath"))
-			Expect(backup).NotTo(HaveKey("schedule"))
-			Expect(backup).NotTo(HaveKey("retentionPolicy"))
-		})
-
-		It("preserves other pc-apps applications", func() {
-			rootConfig.PcApps = files.ChartValues{
-				"applications": map[string]interface{}{
-					"ssh-workspace-proxy": map[string]interface{}{"enabled": true},
-				},
-			}
-			rootConfig.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{
-				Enabled:         true,
-				DestinationPath: "s3://backup-openfga-dev",
-				EndpointURL:     "https://s3.de.io.cloud.ovh.net",
-			}
-
-			data, err := rootConfig.Marshal()
-			Expect(err).NotTo(HaveOccurred())
-
-			var raw map[string]interface{}
-			Expect(yaml.Unmarshal(data, &raw)).NotTo(HaveOccurred())
-
-			applications := raw["pcApps"].(map[string]interface{})["applications"].(map[string]interface{})
-			Expect(applications).To(HaveKey("ssh-workspace-proxy"))
-			Expect(applications).To(HaveKey("openfga"))
-		})
-
-		It("does not generate openfga application values when openfgaBackups is unset", func() {
-			data, err := rootConfig.Marshal()
-			Expect(err).NotTo(HaveOccurred())
-
-			var raw map[string]interface{}
-			Expect(yaml.Unmarshal(data, &raw)).NotTo(HaveOccurred())
-
-			if pcApps, ok := raw["pcApps"].(map[string]interface{}); ok {
-				if applications, ok := pcApps["applications"].(map[string]interface{}); ok {
-					Expect(applications).NotTo(HaveKey("openfga"))
-				}
-			}
 		})
 	})
 })
@@ -615,6 +601,146 @@ var _ = Describe("RootConfig Clone", func() {
 	})
 })
 
+var _ = Describe("Barman Cloud plugin migration", func() {
+	const legacyOverride = "    override:\n      plugin-barman-cloud:\n        replicaCount: 2\n"
+
+	var logOutput bytes.Buffer
+
+	BeforeEach(func() {
+		logOutput.Reset()
+
+		previousLogWriter := log.Writer()
+
+		log.SetOutput(&logOutput)
+		DeferCleanup(func() { log.SetOutput(previousLogWriter) })
+	})
+
+	replicaOverride := files.ChartOverride{"plugin-barman-cloud": map[string]any{"replicaCount": 2}}
+
+	expectBarmanCloudPlugin := func(actual, expected *files.BarmanCloudPluginConfig) {
+		if expected == nil {
+			Expect(actual).To(BeNil())
+			return
+		}
+
+		Expect(actual).To(Equal(expected))
+	}
+
+	expectLog := func(expected string) {
+		if expected == "" {
+			Expect(logOutput.String()).To(BeEmpty())
+			return
+		}
+
+		Expect(logOutput.String()).To(ContainSubstring(expected))
+	}
+
+	cases := []TableEntry{
+		Entry("with the legacy key enabled, it moves with its override and logs the move",
+			"cluster:\n  BarmanCloudPluginConfig:\n    enabled: true\n"+legacyOverride,
+			&files.BarmanCloudPluginConfig{Enabled: true, Override: replicaOverride},
+			"Moved cluster.BarmanCloudPluginConfig to managedServiceBackends.barmanCloudPlugin"),
+		Entry("with the legacy key disabled, it moves enabled and warns",
+			"cluster:\n  BarmanCloudPluginConfig:\n    enabled: false\n"+legacyOverride,
+			&files.BarmanCloudPluginConfig{Enabled: true, Override: replicaOverride},
+			"Warning: cluster.BarmanCloudPluginConfig had enabled: false"),
+		Entry("with both keys set, it keeps the new key and warns that the legacy key is ignored",
+			"cluster:\n  BarmanCloudPluginConfig:\n    enabled: true\n"+legacyOverride+
+				"managedServiceBackends:\n  barmanCloudPlugin:\n    enabled: false\n",
+			&files.BarmanCloudPluginConfig{Enabled: false},
+			"Warning: ignoring cluster.BarmanCloudPluginConfig"),
+		Entry("with override: null, it moves the key without an override",
+			"cluster:\n  BarmanCloudPluginConfig:\n    enabled: true\n    override: null\n",
+			&files.BarmanCloudPluginConfig{Enabled: true},
+			"Moved cluster.BarmanCloudPluginConfig"),
+		Entry("with managedServiceBackends: null, it creates the block",
+			"cluster:\n  BarmanCloudPluginConfig:\n    enabled: true\nmanagedServiceBackends: null\n",
+			&files.BarmanCloudPluginConfig{Enabled: true},
+			"Moved cluster.BarmanCloudPluginConfig"),
+		Entry("with a null legacy key, it drops it without creating the new key",
+			"cluster:\n  BarmanCloudPluginConfig: null\n",
+			nil,
+			""),
+		Entry("without the legacy key, it leaves the new key unchanged and logs nothing",
+			"managedServiceBackends:\n  barmanCloudPlugin:\n    enabled: false\n",
+			&files.BarmanCloudPluginConfig{Enabled: false},
+			""),
+	}
+
+	DescribeTable("through RootConfig.Unmarshal", func(configYAML string, expected *files.BarmanCloudPluginConfig, expectedLog string) {
+		config := files.NewRootConfig()
+		Expect(config.Unmarshal([]byte(configYAML))).To(Succeed())
+
+		expectBarmanCloudPlugin(config.ManagedServiceBackends.BarmanCloudPlugin, expected)
+		expectLog(expectedLog)
+	}, cases)
+
+	DescribeTable("through MigrateLegacyBarmanCloudPluginKey on the raw map", func(configYAML string, expected *files.BarmanCloudPluginConfig, expectedLog string) {
+		var raw map[string]any
+		Expect(yaml.Unmarshal([]byte(configYAML), &raw)).To(Succeed())
+
+		Expect(files.MigrateLegacyBarmanCloudPluginKey(raw)).To(Succeed())
+
+		if cluster, ok := raw["cluster"].(map[string]any); ok {
+			Expect(cluster).NotTo(HaveKey("BarmanCloudPluginConfig"))
+		}
+
+		data, err := yaml.Marshal(raw)
+		Expect(err).NotTo(HaveOccurred())
+
+		config := files.NewRootConfig()
+		Expect(config.Unmarshal(data)).To(Succeed())
+		expectBarmanCloudPlugin(config.ManagedServiceBackends.BarmanCloudPlugin, expected)
+		expectLog(expectedLog)
+	}, cases)
+
+	It("with the legacy key loaded, marshal writes only managedServiceBackends.barmanCloudPlugin", func() {
+		config := files.NewRootConfig()
+		Expect(config.Unmarshal([]byte("cluster:\n  BarmanCloudPluginConfig:\n    enabled: true\n" + legacyOverride))).To(Succeed())
+
+		data, err := config.Marshal()
+		Expect(err).NotTo(HaveOccurred())
+
+		var written map[string]any
+		Expect(yaml.Unmarshal(data, &written)).To(Succeed())
+		Expect(written["cluster"]).NotTo(HaveKey("BarmanCloudPluginConfig"))
+		Expect(written["managedServiceBackends"]).To(HaveKeyWithValue("barmanCloudPlugin", map[string]any{
+			"enabled":  true,
+			"override": map[string]any{"plugin-barman-cloud": map[string]any{"replicaCount": 2}},
+		}))
+	})
+
+	It("with override: null in the raw map, migrating writes no override key", func() {
+		raw := map[string]any{"cluster": map[string]any{
+			"BarmanCloudPluginConfig": map[string]any{"enabled": true, "override": nil},
+		}}
+
+		Expect(files.MigrateLegacyBarmanCloudPluginKey(raw)).To(Succeed())
+
+		Expect(raw["managedServiceBackends"]).To(Equal(map[string]any{"barmanCloudPlugin": map[string]any{"enabled": true}}))
+	})
+
+	It("with both keys set in the raw map, migrating keeps the new key as written, unmodelled fields included", func() {
+		current := map[string]any{"enabled": false, "unmodelled": "kept"}
+		raw := map[string]any{
+			"cluster":                map[string]any{"BarmanCloudPluginConfig": map[string]any{"enabled": true}},
+			"managedServiceBackends": map[string]any{"barmanCloudPlugin": current},
+		}
+
+		Expect(files.MigrateLegacyBarmanCloudPluginKey(raw)).To(Succeed())
+
+		Expect(raw["managedServiceBackends"]).To(Equal(map[string]any{"barmanCloudPlugin": map[string]any{"enabled": false, "unmodelled": "kept"}}))
+	})
+
+	It("with a legacy key that is not a mapping, migrating the raw map fails", func() {
+		raw := map[string]any{"cluster": map[string]any{"BarmanCloudPluginConfig": "enabled"}}
+
+		err := files.MigrateLegacyBarmanCloudPluginKey(raw)
+
+		Expect(err).To(MatchError(ContainSubstring("read cluster.BarmanCloudPluginConfig")))
+	})
+})
+
 var _ = Describe("ManagedService plan parameters", func() {
 	It("parses the new format with scalar plan parameters and a provider-level resourceParameters block", func() {
 		yamlData := `
@@ -635,6 +761,7 @@ codesphere:
             storage: 512
             cpu: 0
 `
+
 		var config files.RootConfig
 		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
 
@@ -674,6 +801,7 @@ codesphere:
             cpu: 50
             loadBalancerLimit: 0
 `
+
 		var config files.RootConfig
 		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
 		Expect(config.Codesphere.ManagedServices[0].SchemaVersion).To(Equal("v1"))
@@ -697,6 +825,7 @@ codesphere:
           parameters:
             storage: null
 `
+
 		var config files.RootConfig
 		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
 		Expect(config.Codesphere.ManagedServices[0].SchemaVersion).To(Equal("v0"))

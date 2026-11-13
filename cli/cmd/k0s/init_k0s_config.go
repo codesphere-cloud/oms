@@ -38,9 +38,11 @@ type InitK0sConfigOpts struct {
 
 // RunE generates the k0sctl config with the real package, k0s and filesystem implementations.
 func (c *InitK0sConfigCmd) RunE(_ *cobra.Command, _ []string) error {
-	hw := portal.NewHttpWrapper()
+	ctx := c.cmd.Context()
+	hw := portal.NewHTTPWrapper(ctx)
 	pm := installer.NewPackage(c.Env.GetOmsWorkdir(), c.Opts.Package)
-	k0s := installer.NewK0s(hw, c.Env, c.FileWriter)
+	k0s := installer.NewK0s(ctx, hw, c.Env, c.FileWriter)
+	c.Prompter = prompt.NewPrompter(ctx, true)
 
 	return c.InitK0sConfig(pm, k0s)
 }
@@ -80,7 +82,6 @@ func AddInitK0sConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 		Opts:       InitK0sConfigOpts{GlobalOptions: opts},
 		Env:        env.NewEnv(),
 		FileWriter: intutil.NewFilesystemWriter(),
-		Prompter:   prompt.NewPrompter(true),
 	}
 	flags := k0sConfig.cmd.Flags()
 	flags.StringVar(&k0sConfig.Opts.InstallConfig, "install-config", "", "Path to Codesphere install-config file")

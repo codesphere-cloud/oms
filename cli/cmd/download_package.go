@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -31,7 +32,8 @@ type DownloadPackageOpts struct {
 	NoProgress bool
 }
 
-func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE resolves the requested package version and downloads it, aborting when the command context is cancelled.
+func (c *DownloadPackageCmd) RunE(cmd *cobra.Command, args []string) error {
 	if c.Opts.Version == "" && len(args) == 1 {
 		c.Opts.Version = args[0]
 	}
@@ -42,13 +44,14 @@ func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
 		log.Printf("Downloading package '%s'\n", c.Opts.Version)
 	}
 
-	p := portal.NewPortalClient()
+	p := portal.NewPortalClient(cmd.Context())
+
 	build, err := p.GetBuild(portal.CodesphereProduct, c.Opts.Version, c.Opts.Hash)
 	if err != nil {
 		return fmt.Errorf("failed to get codesphere package: %w", err)
 	}
 
-	err = c.DownloadBuild(p, build, c.Opts.Filename)
+	err = c.DownloadBuild(cmd.Context(), p, build, c.Opts.Filename)
 	if err != nil {
 		return fmt.Errorf("failed to download codesphere package: %w", err)
 	}
@@ -101,14 +104,16 @@ func AddDownloadPackageCmd(download *cobra.Command, opts *util.GlobalOptions) {
 	pkg.cmd.RunE = pkg.RunE
 }
 
-func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, filename string) error {
+// DownloadBuild downloads and verifies the artifact filename of build, resuming a partial download.
+func (c *DownloadPackageCmd) DownloadBuild(ctx context.Context, p portal.Portal, build portal.Build, filename string) error {
 	fullFilename := build.BuildPackageFilename(filename)
 
-	if err := portal.DownloadAndVerifyBuild(p, c.FileWriter, portal.CodesphereProduct, build, filename, fullFilename, portal.DownloadOptions{
+	if err := portal.DownloadAndVerifyBuild(ctx, p, c.FileWriter, portal.CodesphereProduct, build, filename, fullFilename, portal.DownloadOptions{
 		Resume: true,
 		Quiet:  c.Opts.Quiet || c.Opts.NoProgress,
 	}); err != nil {
 		return fmt.Errorf("failed to download and verify build: %w", err)
 	}
+
 	return nil
 }

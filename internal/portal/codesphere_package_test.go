@@ -4,6 +4,7 @@
 package portal_test
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -47,13 +48,13 @@ var _ = Describe("EnsureCodespherePackage", func() {
 
 		downloadFinished := false
 
-		p.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, build, mock.Anything, len(contents), false).Run(func(_ portal.Product, _ portal.Build, _ io.Writer, _ int, _ bool) {
+		p.EXPECT().DownloadBuildArtifact(mock.Anything, portal.CodesphereProduct, build, mock.Anything, len(contents), false).Run(func(_ context.Context, _ portal.Product, _ portal.Build, _ io.Writer, _ int, _ bool) {
 			downloadFinished = true
 		}).Return(nil).Once()
 		p.EXPECT().VerifyBuildArtifactDownload(mock.Anything, build).Run(func(_ io.Reader, _ portal.Build) {
 			Expect(downloadFinished).To(BeTrue())
 		}).Return(nil).Once()
-		result, err := portal.EnsureCodespherePackage(p, workdir, version, "", artifact, false)
+		result, err := portal.EnsureCodespherePackage(context.Background(), p, workdir, version, "", artifact, false)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result).To(Equal(cached))
 	})
@@ -99,9 +100,9 @@ var _ = Describe("EnsureCodespherePackage", func() {
 		GinkgoT().Setenv("OMS_PORTAL_API", server.URL)
 		GinkgoT().Setenv("OMS_PORTAL_API_KEY", "test-key")
 
-		client := portal.NewPortalClient()
+		client := portal.NewPortalClient(context.Background())
 
-		result, err := portal.EnsureCodespherePackage(client, workdir, version, "", artifact, true)
+		result, err := portal.EnsureCodespherePackage(context.Background(), client, workdir, version, "", artifact, true)
 		if succeeds {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(cached))
@@ -128,12 +129,12 @@ var _ = Describe("EnsureCodespherePackage", func() {
 
 	It("downloads and verifies a missing package", func() {
 		p.EXPECT().GetBuild(portal.CodesphereProduct, version, "").Return(build, nil).Once()
-		p.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, build, mock.Anything, 0, true).Run(func(_ portal.Product, _ portal.Build, out io.Writer, _ int, _ bool) {
+		p.EXPECT().DownloadBuildArtifact(mock.Anything, portal.CodesphereProduct, build, mock.Anything, 0, true).Run(func(_ context.Context, _ portal.Product, _ portal.Build, out io.Writer, _ int, _ bool) {
 			_, err := out.Write([]byte("package contents"))
 			Expect(err).NotTo(HaveOccurred())
 		}).Return(nil)
 		p.EXPECT().VerifyBuildArtifactDownload(mock.Anything, build).Return(nil).Once()
-		result, err := portal.EnsureCodespherePackage(p, workdir, version, "", artifact, true)
+		result, err := portal.EnsureCodespherePackage(context.Background(), p, workdir, version, "", artifact, true)
 		Expect(err).NotTo(HaveOccurred())
 		contents, err := os.ReadFile(result)
 		Expect(err).NotTo(HaveOccurred())
@@ -143,17 +144,17 @@ var _ = Describe("EnsureCodespherePackage", func() {
 		const prefix = "partial "
 
 		p.EXPECT().GetBuild(portal.CodesphereProduct, version, "").Return(build, nil).Twice()
-		p.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, build, mock.Anything, 0, false).Run(func(_ portal.Product, _ portal.Build, out io.Writer, _ int, _ bool) {
+		p.EXPECT().DownloadBuildArtifact(mock.Anything, portal.CodesphereProduct, build, mock.Anything, 0, false).Run(func(_ context.Context, _ portal.Product, _ portal.Build, out io.Writer, _ int, _ bool) {
 			_, err := out.Write([]byte(prefix))
 			Expect(err).NotTo(HaveOccurred())
 		}).Return(fmt.Errorf("interrupted")).Once()
-		_, err := portal.EnsureCodespherePackage(p, workdir, version, "", artifact, false)
+		_, err := portal.EnsureCodespherePackage(context.Background(), p, workdir, version, "", artifact, false)
 		Expect(err).To(MatchError(ContainSubstring("interrupted")))
 		interrupted, err := os.ReadFile(filepath.Join(workdir, build.BuildPackageFilename(artifact)))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(interrupted)).To(Equal(prefix))
 
-		p.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, build, mock.Anything, len(prefix), false).Run(func(_ portal.Product, _ portal.Build, out io.Writer, _ int, _ bool) {
+		p.EXPECT().DownloadBuildArtifact(mock.Anything, portal.CodesphereProduct, build, mock.Anything, len(prefix), false).Run(func(_ context.Context, _ portal.Product, _ portal.Build, out io.Writer, _ int, _ bool) {
 			_, err := out.Write([]byte("contents"))
 			Expect(err).NotTo(HaveOccurred())
 		}).Return(nil).Once()
@@ -162,22 +163,22 @@ var _ = Describe("EnsureCodespherePackage", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(contents)).To(Equal("partial contents"))
 		}).Return(nil).Once()
-		result, err := portal.EnsureCodespherePackage(p, workdir, version, "", artifact, false)
+		result, err := portal.EnsureCodespherePackage(context.Background(), p, workdir, version, "", artifact, false)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result).To(Equal(filepath.Join(workdir, build.BuildPackageFilename(artifact))))
 	})
 
 	It("returns no usable package when verification fails", func() {
 		p.EXPECT().GetBuild(portal.CodesphereProduct, version, "").Return(build, nil)
-		p.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, build, mock.Anything, 0, false).Return(nil)
+		p.EXPECT().DownloadBuildArtifact(mock.Anything, portal.CodesphereProduct, build, mock.Anything, 0, false).Return(nil)
 		p.EXPECT().VerifyBuildArtifactDownload(mock.Anything, build).Return(fmt.Errorf("checksum mismatch"))
-		result, err := portal.EnsureCodespherePackage(p, workdir, version, "", artifact, false)
+		result, err := portal.EnsureCodespherePackage(context.Background(), p, workdir, version, "", artifact, false)
 		Expect(err).To(MatchError(ContainSubstring("checksum mismatch")))
 		Expect(result).To(BeEmpty())
 	})
 	It("propagates lookup errors without creating a cached package", func() {
 		p.EXPECT().GetBuild(portal.CodesphereProduct, version, "abc").Return(portal.Build{}, fmt.Errorf("unavailable"))
-		_, err := portal.EnsureCodespherePackage(p, workdir, version, "abc", artifact, false)
+		_, err := portal.EnsureCodespherePackage(context.Background(), p, workdir, version, "abc", artifact, false)
 		Expect(err).To(MatchError(ContainSubstring("unavailable")))
 		Expect(workdir).NotTo(BeADirectory())
 	})

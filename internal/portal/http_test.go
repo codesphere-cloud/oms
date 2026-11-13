@@ -5,6 +5,7 @@ package portal_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"log"
@@ -46,9 +47,9 @@ var _ = Describe("HttpWrapper", func() {
 		mockHttpClient.AssertExpectations(GinkgoT())
 	})
 
-	Describe("NewHttpWrapper", func() {
+	Describe("NewHTTPWrapper", func() {
 		It("creates a new HttpWrapper with default client", func() {
-			wrapper := portal.NewHttpWrapper()
+			wrapper := portal.NewHTTPWrapper(context.Background())
 			Expect(wrapper).ToNot(BeNil())
 			Expect(wrapper.HttpClient).ToNot(BeNil())
 		})
@@ -238,7 +239,9 @@ var _ = Describe("HttpWrapper", func() {
 			It("downloads content and shows progress", func() {
 				// Capture log output to verify progress is shown
 				var logBuf bytes.Buffer
+
 				prev := log.Writer()
+
 				log.SetOutput(&logBuf)
 				defer log.SetOutput(prev)
 
@@ -253,7 +256,9 @@ var _ = Describe("HttpWrapper", func() {
 				quiet = true // Set quiet to true to suppress progress output
 
 				var logBuf bytes.Buffer
+
 				prev := log.Writer()
+
 				log.SetOutput(&logBuf)
 				defer log.SetOutput(prev)
 
@@ -352,7 +357,6 @@ var _ = Describe("HttpWrapper", func() {
 			})
 		})
 	})
-
 })
 
 // Helper types for testing

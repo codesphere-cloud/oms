@@ -41,7 +41,10 @@ var _ = Describe("Single VM configuration", func() {
 		fw = util.NewMockFileIO(GinkgoT())
 		n = &node.Node{NodeClient: nodeClient, ExternalIP: "192.0.2.13"}
 		b = &GCPBootstrapper{
-			Env:       &CodesphereEnvironment{BaseDomain: "example.com", ProjectID: "project", DNSProjectID: "dns-project", OmsWorkdir: "/work", Jumpbox: n, GoogleACMEIssuer: true},
+			Env: &CodesphereEnvironment{
+				BaseDomain: "example.com", ProjectID: "project", DNSProjectID: "dns-project", OmsWorkdir: "/work", Jumpbox: n, GoogleACMEIssuer: true,
+				CodesphereRegistry: DefaultCodesphereRegistry, CodesphereRegistryPassword: "portal-api-key",
+			},
 			GCPClient: client, icg: manager, fw: fw,
 		}
 		uploadedConfig = files.NewRootConfig()
@@ -106,6 +109,39 @@ var _ = Describe("Single VM configuration", func() {
 		Expect(uploadedVault.GetSecret(files.SecretMongoDbPasswordEncryptionKey).Fields.Password).To(Equal("existing-encryption-key"))
 		Expect(uploadedVault.GetSecret(files.SecretTokenPrivateKey).File.Content).To(Equal("existing-signing-key"))
 		Expect(uploadedVault.GetSecret(files.SecretAcmeEabMacKey).Fields.Password).To(Equal("default-mac"))
+	})
+
+	It("writes the codesphere registry and its credentials for a fresh installation", func() {
+		nodeClient.EXPECT().RunCommand(n, "root", "test ! -e '/root/codesphere/prod.vault.yaml'").Return(nil).Once()
+		expectConfigUpload()
+		Expect(b.provideSingleVMConfig()).To(Succeed())
+		Expect(uploadedConfig.AdditionalRegistries).To(ContainElement(files.AdditionalRegistryConfig{
+			Name:     CodesphereRegistryName,
+			Registry: DefaultCodesphereRegistry,
+		}))
+		Expect(uploadedVault.GetSecret(files.AdditionalRegistryUsernameSecret(CodesphereRegistryName)).Fields.Password).To(Equal(CodesphereRegistryUsername))
+		Expect(uploadedVault.GetSecret(files.AdditionalRegistryPasswordSecret(CodesphereRegistryName)).Fields.Password).To(Equal("portal-api-key"))
+	})
+
+	It("replaces recovered codesphere registry credentials with the current portal key", func() {
+		existing := &files.InstallVault{}
+		existing.SetSecret(files.SecretEntry{Name: files.AdditionalRegistryPasswordSecret(CodesphereRegistryName), Fields: &files.SecretFields{Password: "old-key"}})
+		data, err := existing.Marshal()
+		Expect(err).NotTo(HaveOccurred())
+		expectVaultRecovery(data)
+		expectConfigUpload()
+		Expect(b.provideSingleVMConfig()).To(Succeed())
+		Expect(uploadedVault.GetSecret(files.AdditionalRegistryPasswordSecret(CodesphereRegistryName)).Fields.Password).To(Equal("portal-api-key"))
+	})
+
+	It("stops before uploading when the codesphere registry password is missing", func() {
+		b.Env.CodesphereRegistryPassword = ""
+
+		fw.EXPECT().MkdirAll("/work", os.FileMode(0755)).Return(nil).Once()
+		client.EXPECT().CreatePublicCAExternalAccountKey("project").Return("default-id", "default-mac", nil).Once()
+		client.EXPECT().CreatePublicCAExternalAccountKey("project").Return("custom-id", "custom-mac", nil).Once()
+		nodeClient.EXPECT().RunCommand(n, "root", "test ! -e '/root/codesphere/prod.vault.yaml'").Return(nil).Once()
+		Expect(b.provideSingleVMConfig()).To(MatchError(ContainSubstring("codesphere registry password is not set")))
 	})
 
 	It("keeps active secrets over seed values while retaining new seed entries", func() {

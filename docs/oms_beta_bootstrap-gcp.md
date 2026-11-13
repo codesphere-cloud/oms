@@ -20,8 +20,8 @@ oms beta bootstrap-gcp [flags]
 ### Options
 
 ```
-      --acme-staging                              Use the Let's Encrypt staging ACME endpoint (certificates are not browser-trusted)
-      --airgapped                                 Set up an airgapped installation: run a local container registry on the jumpbox, copy the package images into it and point the install config at it. k0s is installed from the k0s airgap image bundle. Firewall rules block internet egress of all VMs except the jumpbox, and the nodes install OS packages (e.g. Docker, LVM tools) through a package proxy on the jumpbox. Selects the local-container registry type and fails if another --registry-type is given. (default: false)
+      --acme-staging[=true|false]                 Use the Let's Encrypt staging ACME endpoint (certificates are not browser-trusted)
+      --airgapped[=true|false]                    Set up an airgapped installation: run a local container registry on the jumpbox, copy the package images into it and point the install config at it. k0s is installed from the k0s airgap image bundle. Firewall rules block internet egress of all VMs except the jumpbox, and the nodes install OS packages (e.g. Docker, LVM tools) through a package proxy on the jumpbox. Uses the generated self-signed ingress CA instead of ACME for certificates. Selects the local-container registry type and fails if another --registry-type is given. (default: false)
       --azure-devops-app-client-id string         Azure DevOps App Client ID (optional)
       --azure-devops-app-client-secret string     Azure DevOps App Client Secret (optional)
       --base-domain string                        Base domain for Codesphere (required)
@@ -30,11 +30,12 @@ oms beta bootstrap-gcp [flags]
       --bitbucket-app-client-secret string        Bitbucket App Client Secret (optional)
       --central-otel-endpoint string              Central OpenTelemetry collector endpoint. Needed when sending spans to central collector (optional)
       --central-otel-password string              Central OpenTelemetry password. Needed when sending spans to central collector (optional)
-      --central-otel-span-metrics                 Enable span metrics in Central OpenTelemetry export (default: false)
+      --central-otel-span-metrics[=true|false]    Enable span metrics in Central OpenTelemetry export (default: false)
       --central-otel-username string              Central OpenTelemetry username. Needed when sending spans to central collector (optional)
       --cluster-admin-email string                Email address of the initial cluster admin. Written to the install config and applied as the cluster-admin-email secret before the Codesphere platform is installed (optional)
+      --codesphere-registry string                Codesphere registry server written to the "codesphere" entry of additionalRegistries in the install config; override only for development. Its password is read from OMS_PORTAL_API_KEY (default "registry.codesphere.com")
       --config stringArray                        Local config.yaml file; repeat to merge in order before VM settings
-      --create-test-user                          Create a test user with API token on the bootstrapped instance for smoke testing (default: false)
+      --create-test-user[=true|false]             Create a test user with API token on the bootstrapped instance for smoke testing (default: false)
       --custom-pg-ip string                       Custom PostgreSQL IP (optional)
       --datacenter-id int                         Datacenter ID (default: 1) (default 1)
       --datacenter-name string                    Datacenter name (default: dev) (default "dev")
@@ -53,9 +54,9 @@ oms beta bootstrap-gcp [flags]
       --github-team-slug string                   GitHub team slug used to fetch team SSH keys (optional, used with --github-team-org). Requires --github-pat with at least the read:org scope.
       --gitlab-app-client-id string               GitLab App Client ID (optional)
       --gitlab-app-client-secret string           GitLab App Client Secret (optional)
-      --google-acme-issuer                        Use Google Public CA as the ACME issuer instead of Let's Encrypt. External Account Binding credentials are obtained automatically via the publicca API (default: false)
-  -h, --help                                      help for bootstrap-gcp
-      --install-codesphere-only                   Re-install only Codesphere into an already bootstrapped project, e.g. to roll back to an earlier release. Passes --codesphere-only to the "oms install codesphere" the bootstrap runs on the jumpbox, and skips installing k0s and its config script. Requires --install-version or --install-local, and --recover-config (default: false)
+      --google-acme-issuer[=true|false]           Use Google Public CA as the ACME issuer instead of Let's Encrypt. External Account Binding credentials are obtained automatically via the publicca API (default: false)
+  -h, --help[=true|false]                         help for bootstrap-gcp
+      --install-codesphere-only[=true|false]      Re-install only Codesphere into an already bootstrapped project, e.g. to roll back to an earlier release. Passes --codesphere-only to the "oms install codesphere" the bootstrap runs on the jumpbox, and skips installing k0s and its config script. Requires --install-version or --install-local, and --recover-config (default: false)
       --install-config string                     Path to install config file (optional) (default "config.yaml")
       --install-config-template string            Initial config.yaml template, applied before --config files
       --install-hash string                       Codesphere package hash to install (default: none)
@@ -66,7 +67,7 @@ oms beta bootstrap-gcp [flags]
       --k0s-version string                        K0s version to use for bootstrapping (optional) (default "v1.36.5+k0s.0")
       --local-trace-endpoint string               Endpoint for exporting traces to an in-cluster storage (optional)
       --machine-type string                       GCP machine type override for all VMs (default: role-specific sizes; e2-standard-8 for a single VM)
-      --multi-dc                                  Bootstrap two data centers that share one PostgreSQL server but run separate Kubernetes and Ceph clusters. Doubles the Ceph and k0s nodes to 14 VMs (~100 vCPUs) and reserves 6 static IPs, so the region's CPU quota may need raising. Cannot be combined with --datacenter-id. (default: false)
+      --multi-dc[=true|false]                     Bootstrap two data centers that share one PostgreSQL server but run separate Kubernetes and Ceph clusters. Doubles the Ceph and k0s nodes to 14 VMs (~100 vCPUs) and reserves 6 static IPs, so the region's CPU quota may need raising. Cannot be combined with --datacenter-id. (default: false)
       --oidc-client-id string                     OIDC OAuth provider Client ID (optional)
       --oidc-client-secret string                 OIDC OAuth provider Client Secret (optional)
       --oidc-issuer-url string                    OIDC OAuth provider issuer URL (optional)
@@ -77,7 +78,7 @@ oms beta bootstrap-gcp [flags]
       --openbao-user string                       OpenBao username (optional) (default "admin")
       --os string                                 Operating system of all VMs (options: rhel-9, ubuntu). rhel-9 boots RHEL 9.6 with Extended Update Support, which GCP bills as a premium image. Existing VMs keep their OS (default "ubuntu")
       --pc-apps-values stringArray                pc-apps values YAML file passed unchanged to the Codesphere installation (can be specified multiple times, optional)
-      --preemptible                               Use preemptible VMs for Codesphere infrastructure. Mutually exclusive with --spot-vms (default: false)
+      --preemptible[=true|false]                  Use preemptible VMs for Codesphere infrastructure. Mutually exclusive with --spot-vms (default: false)
       --preview-flags stringArray                 Preview flags to enable in Codesphere installation (optional) (default [openfga-authz,secret-management,sub-path-mount,workspace-ssh,virtual-machines])
       --priv-key string                           Age private key for --vault (or use the age key environment variable)
       --project-name string                       Unique GCP Project Name (required)
@@ -85,7 +86,7 @@ oms beta bootstrap-gcp [flags]
       --prometheus-remote-write-password string   Prometheus remote write password stored in the generated vault (optional)
       --prometheus-remote-write-url string        Prometheus remote write URL (optional)
       --prometheus-remote-write-user string       Prometheus remote write username (optional)
-      --recover-config                            Recover previously generated install config from the jumpbox. This will overwrite the local config! (default: false)
+      --recover-config[=true|false]               Recover previously generated install config from the jumpbox. This will overwrite the local config! (default: false)
       --region string                             GCP Region (default: europe-west4) (default "europe-west4")
       --registry-type string                      Container registry type to use (options: local-container, artifact-registry, github) (default: github) (default "github")
       --registry-user string                      Registry username for ghcr.io. Required for the GitHub registry type, and for the local-container registry type when installing Codesphere.
@@ -93,20 +94,20 @@ oms beta bootstrap-gcp [flags]
       --root-disk-size int                        Instance root disk size in GB (default: 50) (default 50)
       --secrets-dir string                        Directory for secrets (default: /etc/codesphere/secrets) (default "/etc/codesphere/secrets")
       --secrets-file string                       Path to secrets files (optional) (default "prod.vault.yaml")
-      --spot-vms                                  Use Spot VMs for Codesphere infrastructure. Falls back to standard VMs if spot capacity unavailable. (default: false)
+      --spot-vms[=true|false]                     Use Spot VMs for Codesphere infrastructure. Falls back to standard VMs if spot capacity unavailable. (default: false)
       --ssh-private-key-path string               SSH Private Key Path (default: ~/.ssh/id_rsa) (default "~/.ssh/id_rsa")
       --ssh-public-key-path string                SSH Public Key Path (default: ~/.ssh/id_rsa.pub) (default "~/.ssh/id_rsa.pub")
-      --ssh-quiet                                 Suppress SSH command output (default: false)
-      --timer                                     Show how long each step took and a final timing summary table
+      --ssh-quiet[=true|false]                    Suppress SSH command output (default: false)
+      --timer[=true|false]                        Show how long each step took and a final timing summary table
       --vault string                              SOPS vault for config templating and initial install secrets
-      --write-config                              Write generated install config to file (default: true) (default true)
+      --write-config[=true|false]                 Write generated install config to file (default: true) (default true)
       --zone string                               GCP Zone (default: europe-west4-a) (default "europe-west4-a")
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

@@ -119,6 +119,7 @@ func (i *ansibleInventory) fetchCephHosts() ([]files.CephHost, error) {
 	}
 
 	count := 0
+
 	for _, key := range getSortedHostsGroupKeys(i.Ceph.Hosts) {
 		hostVars := i.Ceph.Hosts[key]
 

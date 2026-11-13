@@ -19,7 +19,7 @@ import (
 //
 //	"auth-service": "ghcr.io/codesphere-cloud/codesphere-monorepo/auth-service:v1.111.0"
 //
-// Reference, Name, Tag and NameAndTag return the reference or one of its parts, named as OCI and
+// Reference, Name, Tag, NameAndTag and Image return the reference or one of its parts, named as OCI and
 // distribution/reference name them:
 //
 //	                       6
@@ -39,6 +39,12 @@ import (
 //	6  reference   Reference.String         Reference
 type Images map[string]string
 
+// Image is an image reference split into name and tag, as the charts take it.
+type Image struct {
+	Name string `yaml:"name"`
+	Tag  string `yaml:"tag"`
+}
+
 // New reads the codesphere component's image references.
 func New(b *bom.Config) (Images, error) {
 	images, err := b.GetCodesphereContainerImages()
@@ -47,6 +53,11 @@ func New(b *bom.Config) (Images, error) {
 	}
 
 	return images, nil
+}
+
+// Has reports whether the BOM has the named image.
+func (images Images) Has(name string) bool {
+	return images[name] != ""
 }
 
 // Reference returns the named image's reference as the BOM has it.
@@ -92,6 +103,16 @@ func (images Images) NameAndTag(name string) (string, string, error) {
 	}
 
 	return named.Name(), imageTag, nil
+}
+
+// Image returns the named image split into name and tag.
+func (images Images) Image(name string) (Image, error) {
+	imageName, imageTag, err := images.NameAndTag(name)
+	if err != nil {
+		return Image{}, err
+	}
+
+	return Image{Name: imageName, Tag: imageTag}, nil
 }
 
 func tag(named reference.Named) (string, error) {

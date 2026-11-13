@@ -4,6 +4,7 @@
 package github_test
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/codesphere-cloud/oms/internal/github"
@@ -32,7 +33,7 @@ var _ = Describe("Github", func() {
 					{Login: "alice", Keys: []string{"ssh-rsa AAALICE..."}},
 				}, nil).Once()
 
-				keys, err := github.GetSSHKeysFromGitHubTeam(mockGitHubClient, org, teamSlug)
+				keys, err := github.GetSSHKeysFromGitHubTeam(context.Background(), mockGitHubClient, org, teamSlug)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(keys).To(ContainSubstring("root:ssh-rsa AAALICE... alice"))
 				Expect(keys).To(ContainSubstring("ubuntu:ssh-rsa AAALICE... alice"))
@@ -41,7 +42,7 @@ var _ = Describe("Github", func() {
 			Context("when fetching team member keys fails", func() {
 				It("returns an error", func() {
 					mockGitHubClient.EXPECT().GetTeamMemberSSHKeys(mock.Anything, org, teamSlug).Return(nil, fmt.Errorf("GitHub API error")).Once()
-					keys, err := github.GetSSHKeysFromGitHubTeam(mockGitHubClient, org, teamSlug)
+					keys, err := github.GetSSHKeysFromGitHubTeam(context.Background(), mockGitHubClient, org, teamSlug)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to fetch SSH keys from GitHub team"))
 					Expect(keys).To(BeEmpty())
@@ -53,7 +54,7 @@ var _ = Describe("Github", func() {
 					mockGitHubClient.EXPECT().GetTeamMemberSSHKeys(mock.Anything, org, teamSlug).Return([]github.TeamMemberKeys{
 						{Login: "alice", Keys: nil},
 					}, nil).Once()
-					keys, err := github.GetSSHKeysFromGitHubTeam(mockGitHubClient, org, teamSlug)
+					keys, err := github.GetSSHKeysFromGitHubTeam(context.Background(), mockGitHubClient, org, teamSlug)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(keys).To(BeEmpty())
 				})
@@ -62,7 +63,7 @@ var _ = Describe("Github", func() {
 			Context("when team has no members", func() {
 				It("returns an empty string", func() {
 					mockGitHubClient.EXPECT().GetTeamMemberSSHKeys(mock.Anything, org, teamSlug).Return([]github.TeamMemberKeys{}, nil).Once()
-					keys, err := github.GetSSHKeysFromGitHubTeam(mockGitHubClient, org, teamSlug)
+					keys, err := github.GetSSHKeysFromGitHubTeam(context.Background(), mockGitHubClient, org, teamSlug)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(keys).To(BeEmpty())
 				})
@@ -80,8 +81,9 @@ var _ = Describe("Github", func() {
 
 					mockGitHubClient.EXPECT().GetTeamMemberSSHKeys(mock.Anything, org, teamSlug).Return(members, nil).Once()
 
-					keys, err := github.GetSSHKeysFromGitHubTeam(mockGitHubClient, org, teamSlug)
+					keys, err := github.GetSSHKeysFromGitHubTeam(context.Background(), mockGitHubClient, org, teamSlug)
 					Expect(err).ToNot(HaveOccurred())
+
 					for i := 1; i <= 150; i++ {
 						Expect(keys).To(ContainSubstring(fmt.Sprintf("root:ssh-rsa AAAUSER%d... user%d", i, i)))
 						Expect(keys).To(ContainSubstring(fmt.Sprintf("ubuntu:ssh-rsa AAAUSER%d... user%d", i, i)))
@@ -92,17 +94,16 @@ var _ = Describe("Github", func() {
 
 		Context("when org or team slug is missing", func() {
 			It("returns an error if org is missing", func() {
-				keys, err := github.GetSSHKeysFromGitHubTeam(mockGitHubClient, "", "dev")
+				keys, err := github.GetSSHKeysFromGitHubTeam(context.Background(), mockGitHubClient, "", "dev")
 				Expect(err).To(HaveOccurred())
 				Expect(keys).To(BeEmpty())
 			})
 
 			It("returns an error if team slug is missing", func() {
-				keys, err := github.GetSSHKeysFromGitHubTeam(mockGitHubClient, "example-org", "")
+				keys, err := github.GetSSHKeysFromGitHubTeam(context.Background(), mockGitHubClient, "example-org", "")
 				Expect(err).To(HaveOccurred())
 				Expect(keys).To(BeEmpty())
 			})
 		})
-
 	})
 })
