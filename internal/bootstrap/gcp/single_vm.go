@@ -62,7 +62,6 @@ func (b *GCPBootstrapper) BootstrapSingleVM(registryUser, storageEngine string, 
 		{"Ensure root login enabled", func() error { return b.ensureRootLoginEnabledInNode(b.Env.Jumpbox) }},
 		{"Configure OMS on VM", b.EnsureJumpboxConfigured},
 		{"Configure VM host", b.configureSingleVMHost},
-		{"Install NFS client for local storage", func() error { return b.installSingleVMNFSClient(storageEngine) }},
 		{"Ensure installer package", b.ensureSingleVMPackage},
 		{"Provide install config", b.provideSingleVMConfig},
 		{"Install k0s", b.installSingleVMK0s},
@@ -142,22 +141,6 @@ func (b *GCPBootstrapper) configureSingleVMHost() error {
 	}
 
 	return nil
-}
-
-// installSingleVMNFSClient prepares the host for the local provisioner's NFS volumes.
-func (b *GCPBootstrapper) installSingleVMNFSClient(storageEngine string) error {
-	if storageEngine != "local" {
-		return nil
-	}
-
-	hostOS, err := b.Env.HostOS.settings()
-	if err != nil {
-		return fmt.Errorf("get host OS settings: %w", err)
-	}
-
-	hostOS.hostPackages = []string{hostOS.nfsClientPackage}
-
-	return ensureHostPackages(b.Env.Jumpbox, hostOS)
 }
 
 func (b *GCPBootstrapper) ensureSingleVMPackage() error {
