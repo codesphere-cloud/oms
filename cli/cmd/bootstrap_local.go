@@ -15,8 +15,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"golang.org/x/term"
-
 	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
@@ -24,7 +22,9 @@ import (
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/local"
+	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	rookcephv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
 	"github.com/spf13/cobra"
@@ -76,7 +76,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 				  OMS_GIT_PASSWORD       Optional Git password/token for ArgoCD repository access.
 				  OMS_PORTAL_API_KEY     OMS portal API key for installer downloads with --install-version.
 				  OMS_PORTAL_API         Portal API URL (default: https://oms-portal.codesphere.com/api).
-				  OMS_WORKDIR            Installer working directory (default: ./oms-workdir).
+				  OMS_WORKDIR            Installer working directory (default: ` + env.DefaultOmsWorkdir + `).
 				  KUBECONFIG             Kubeconfig file(s); uses the current context (default: ~/.kube/config).
 				  HELM_DRIVER            Helm release storage driver (default: secret).
 				  XDG_CONFIG_HOME       Overrides the config directory searched for sops/age/keys.txt.`),
@@ -131,11 +131,11 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 	}
 
 	ctx := c.cmd.Context()
-	if err := c.ConfirmLocalBootstrapWarning(); err != nil {
+	if err := c.ConfirmLocalBootstrapWarning(ctx); err != nil {
 		return err
 	}
 
-	if err := c.resolveRegistryPassword(); err != nil {
+	if err := c.resolveRegistryPassword(ctx); err != nil {
 		return err
 	}
 
@@ -203,7 +203,7 @@ func validateLocalStorageEngine(engine string) error {
 	}
 }
 
-func (c *BootstrapLocalCmd) resolveRegistryPassword() error {
+func (c *BootstrapLocalCmd) resolveRegistryPassword(ctx context.Context) error {
 	if pw := os.Getenv("OMS_REGISTRY_PASSWORD"); len(pw) != 0 {
 		c.CodesphereEnv.RegistryPassword = pw
 		return nil
@@ -211,7 +211,7 @@ func (c *BootstrapLocalCmd) resolveRegistryPassword() error {
 
 	fmt.Print("Registry password: ")
 
-	pw, err := term.ReadPassword(int(os.Stdin.Fd()))
+	pw, err := prompt.ReadPassword(ctx, prompt.OSTerminal{}, int(os.Stdin.Fd()))
 
 	fmt.Println()
 
@@ -228,8 +228,8 @@ func (c *BootstrapLocalCmd) resolveRegistryPassword() error {
 	return nil
 }
 
-// ConfirmLocalBootstrapWarning warns that local bootstrap is for testing only and asks the user to confirm.
-func (c *BootstrapLocalCmd) ConfirmLocalBootstrapWarning() error {
+// ConfirmLocalBootstrapWarning asks the operator to confirm the local bootstrap, unless --yes is set.
+func (c *BootstrapLocalCmd) ConfirmLocalBootstrapWarning(ctx context.Context) error {
 	if c.CodesphereEnv.StorageEngine != local.StorageEngineLocal {
 		fmt.Println(csio.Long(`
 		############################################################
@@ -262,7 +262,7 @@ func (c *BootstrapLocalCmd) ConfirmLocalBootstrapWarning() error {
 
 	fmt.Print("\nType 'yes' to continue: ")
 
-	reader := bufio.NewReader(os.Stdin)
+	reader := bufio.NewReader(prompt.NewContextReader(ctx, os.Stdin))
 
 	input, err := reader.ReadString('\n')
 	if err != nil && !errors.Is(err, stdio.EOF) {

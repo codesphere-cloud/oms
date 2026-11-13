@@ -4,6 +4,7 @@
 package portal
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -19,16 +20,29 @@ type Http interface {
 
 type HttpWrapper struct {
 	HttpClient HttpClient
+	// ctx is the command context. Requests are cancelled with it.
+	ctx context.Context
 }
 
-func NewHttpWrapper() *HttpWrapper {
+// NewHTTPWrapper returns an HTTP wrapper whose requests are cancelled with ctx.
+func NewHTTPWrapper(ctx context.Context) *HttpWrapper {
 	return &HttpWrapper{
 		HttpClient: http.DefaultClient,
+		ctx:        ctx,
 	}
 }
 
+// context returns the wrapper's context, or a background context for a wrapper built without one.
+func (c *HttpWrapper) context() context.Context {
+	if c.ctx == nil {
+		return context.Background()
+	}
+
+	return c.ctx
+}
+
 func (c *HttpWrapper) Request(url string, method string, body io.Reader) (responseBody []byte, err error) {
-	req, err := http.NewRequest(method, url, body)
+	req, err := http.NewRequestWithContext(c.context(), method, url, body)
 	if err != nil {
 		log.Fatalf("Error creating request: %v", err)
 		return
@@ -59,7 +73,7 @@ func (c *HttpWrapper) Get(url string) (responseBody []byte, err error) {
 }
 
 func (c *HttpWrapper) Download(url string, file io.Writer, quiet bool) error {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(c.context(), http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}

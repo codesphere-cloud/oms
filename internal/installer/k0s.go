@@ -4,6 +4,7 @@
 package installer
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -36,16 +37,30 @@ type K0s struct {
 	FileWriter util.FileIO
 	Goos       string
 	Goarch     string
+	// ctx is the command context. The binaries started by this manager are interrupted with it.
+	ctx context.Context
 }
 
-func NewK0s(hw portal.Http, env env.Env, fw util.FileIO) K0sManager {
+// NewK0s returns a K0s manager whose started binaries are interrupted once ctx is cancelled.
+// HTTP requests are cancelled through hw, which carries its own context.
+func NewK0s(ctx context.Context, hw portal.Http, env env.Env, fw util.FileIO) K0sManager {
 	return &K0s{
 		Env:        env,
 		Http:       hw,
 		FileWriter: fw,
 		Goos:       runtime.GOOS,
 		Goarch:     runtime.GOARCH,
+		ctx:        ctx,
 	}
+}
+
+// context returns the manager's context, or a background context for one built without it.
+func (k *K0s) context() context.Context {
+	if k.ctx == nil {
+		return context.Background()
+	}
+
+	return k.ctx
 }
 
 func (k *K0s) GetLatestVersion() (string, error) {
@@ -78,7 +93,7 @@ func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 	assetName := fmt.Sprintf("%s-%s-%s", k0sBinaryName, version, k.Goarch)
 
 	cachePath := filepath.Join(cacheDir, assetName)
-	if reuseCachedBinary(k.FileWriter, cachePath, version, k0sBinaryName, opts) {
+	if reuseCachedBinary(k.context(), k.FileWriter, cachePath, version, k0sBinaryName, opts) {
 		return cachePath, nil
 	}
 

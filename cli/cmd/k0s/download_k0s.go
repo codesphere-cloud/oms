@@ -35,10 +35,11 @@ type DownloadK0sOpts struct {
 }
 
 func (c *DownloadK0sCmd) RunE(_ *cobra.Command, args []string) error {
-	hw := portal.NewHttpWrapper()
+	ctx := c.cmd.Context()
+	hw := portal.NewHTTPWrapper(ctx)
 	env := c.Env
-	k0s := installer.NewK0s(hw, env, c.FileWriter)
-	k0sctl := installer.NewK0sctl(hw, env, c.FileWriter)
+	k0s := installer.NewK0s(ctx, hw, env, c.FileWriter)
+	k0sctl := installer.NewK0sctl(ctx, hw, env, c.FileWriter)
 
 	return c.DownloadK0s(k0s, k0sctl)
 }

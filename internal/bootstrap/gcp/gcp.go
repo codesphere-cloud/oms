@@ -31,9 +31,6 @@ import (
 // InstallerArchiveName is the package artifact bootstrapping downloads and installs.
 const InstallerArchiveName = "installer-lite.tar.gz"
 
-// jumpboxOmsWorkdir is shared by package mirroring and config-based installation.
-const jumpboxOmsWorkdir = "oms-workdir"
-
 // remoteK0sConfigScriptPath is where each data center's k0s configuration script is placed on
 // that data center's first control plane node. Data centers have separate nodes, so the path can
 // be the same for all of them.
@@ -314,6 +311,8 @@ func NewGCPBootstrapper(
 	}, nil
 }
 
+const defaultStepMaxRetries = 3
+
 func (b *GCPBootstrapper) Bootstrap() error {
 	err := b.stlog.Step("Validate input", b.ValidateInput)
 	if err != nil {
@@ -330,7 +329,7 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to ensure secrets: %w", err)
 	}
 
-	err = b.stlog.Step("Ensure project", b.EnsureProject)
+	err = b.stlog.StepWithRetry("Ensure project", b.EnsureProject, defaultStepMaxRetries)
 	if err != nil {
 		return fmt.Errorf("failed to ensure GCP project: %w", err)
 	}
@@ -340,12 +339,12 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to write infrastructure file: %w", err)
 	}
 
-	err = b.stlog.Step("Ensure billing", b.EnsureBilling)
+	err = b.stlog.StepWithRetry("Ensure billing", b.EnsureBilling, defaultStepMaxRetries)
 	if err != nil {
 		return fmt.Errorf("failed to ensure billing is enabled: %w", err)
 	}
 
-	err = b.stlog.Step("Ensure APIs enabled", b.EnsureAPIsEnabled)
+	err = b.stlog.StepWithRetry("Ensure APIs enabled", b.EnsureAPIsEnabled, defaultStepMaxRetries)
 	if err != nil {
 		return fmt.Errorf("failed to enable required APIs: %w", err)
 	}
@@ -357,37 +356,37 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		}
 	}
 
-	err = b.stlog.Step("Ensure service accounts", b.EnsureServiceAccounts)
+	err = b.stlog.StepWithRetry("Ensure service accounts", b.EnsureServiceAccounts, defaultStepMaxRetries)
 	if err != nil {
 		return fmt.Errorf("failed to ensure service accounts: %w", err)
 	}
 
-	err = b.stlog.Step("Ensure IAM roles", b.EnsureIAMRoles)
+	err = b.stlog.StepWithRetry("Ensure IAM roles", b.EnsureIAMRoles, defaultStepMaxRetries)
 	if err != nil {
 		return fmt.Errorf("failed to ensure IAM roles: %w", err)
 	}
 
-	err = b.stlog.Step("Ensure openfga backup bucket", b.EnsureOpenfgaBackupBucket)
+	err = b.stlog.StepWithRetry("Ensure openfga backup bucket", b.EnsureOpenfgaBackupBucket, defaultStepMaxRetries)
 	if err != nil {
 		return fmt.Errorf("failed to ensure openfga backup bucket: %w", err)
 	}
 
-	err = b.stlog.Step("Ensure VPC", b.EnsureVPC)
+	err = b.stlog.StepWithRetry("Ensure VPC", b.EnsureVPC, defaultStepMaxRetries)
 	if err != nil {
 		return fmt.Errorf("failed to ensure VPC: %w", err)
 	}
 
-	err = b.stlog.Step("Ensure firewall rules", b.EnsureFirewallRules)
+	err = b.stlog.StepWithRetry("Ensure firewall rules", b.EnsureFirewallRules, defaultStepMaxRetries)
 	if err != nil {
 		return fmt.Errorf("failed to ensure firewall rules: %w", err)
 	}
 
-	err = b.stlog.Step("Ensure compute instances", b.EnsureComputeInstances)
+	err = b.stlog.StepWithRetry("Ensure compute instances", b.EnsureComputeInstances, defaultStepMaxRetries)
 	if err != nil {
 		return fmt.Errorf("failed to ensure compute instances: %w", err)
 	}
 
-	err = b.stlog.Step("Ensure gateway IP addresses", b.EnsureGatewayIPAddresses)
+	err = b.stlog.StepWithRetry("Ensure gateway IP addresses", b.EnsureGatewayIPAddresses, defaultStepMaxRetries)
 	if err != nil {
 		return fmt.Errorf("failed to ensure external IP addresses: %w", err)
 	}
@@ -1310,6 +1309,10 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 	}
 
 	for _, dc := range b.Env.DataCenters {
+		if err := b.ctx.Err(); err != nil {
+			return fmt.Errorf("stopped before installing Codesphere in data center %d: %w", dc.ID, err)
+		}
+
 		err := b.stlog.Step(dc.StepName("Install Codesphere"), func() error {
 			return b.runInstallCommand(dc, packageFilename)
 		})
@@ -1330,7 +1333,8 @@ func (b *GCPBootstrapper) codespherePackageFilename() string {
 		return "local-" + InstallerArchiveName
 	}
 
-	return filepath.Join(jumpboxOmsWorkdir, portal.BuildPackageFilenameFromParts(b.codesphereVersionForPortal(), b.Env.InstallHash, InstallerArchiveName))
+	// oms on the jumpbox runs in /root without OMS_WORKDIR, so it finds the package in its default workdir.
+	return filepath.Join(env.DefaultOmsWorkdir, portal.BuildPackageFilenameFromParts(b.codesphereVersionForPortal(), b.Env.InstallHash, InstallerArchiveName))
 }
 
 func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
@@ -1361,7 +1365,7 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
 
 	b.stlog.Logf("Downloading Codesphere package...")
 	downloadCmd := fmt.Sprintf("mkdir -p %[1]s && cd %[1]s && oms download package -f %[2]s -H %[3]s %[4]s",
-		jumpboxOmsWorkdir, InstallerArchiveName, b.Env.InstallHash, b.codesphereVersionForPortal())
+		env.DefaultOmsWorkdir, InstallerArchiveName, b.Env.InstallHash, b.codesphereVersionForPortal())
 
 	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {

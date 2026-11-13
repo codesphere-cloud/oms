@@ -35,7 +35,7 @@ func (c *ListBuildsCmd) RunE(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("invalid sort parameter: %s (must be '%s' or '%s')", c.Opts.Sort, portal.SortSemver, portal.SortDate)
 	}
 
-	p := portal.NewPortalClient()
+	p := portal.NewPortalClient(c.cmd.Context())
 
 	packages, err := p.ListBuilds(portal.CodesphereProduct, c.Opts.Sort)
 	if err != nil {

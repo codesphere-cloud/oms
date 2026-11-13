@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
@@ -120,8 +121,8 @@ type InitInstallConfigOpts struct {
 	OpenfgaBackupsSecretAccessKey string
 }
 
-// RunE executes the init install-config command.
-func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, _ []string) error {
+// RunE creates the install config manager for the configured vault type and generates the install config.
+func (c *InitInstallConfigCmd) RunE(cmd *cobra.Command, _ []string) error {
 	vaultType, err := vault.ParseType(c.Opts.VaultType)
 	if err != nil {
 		return fmt.Errorf("failed to parse vault type %s: %w", c.Opts.VaultType, err)
@@ -138,7 +139,7 @@ func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("failed to initialize config manager: %w", err)
 	}
 
-	return c.InitInstallConfig(icg)
+	return c.InitInstallConfig(cmd.Context(), icg)
 }
 
 // generateMissingAgeKey is called for a SOPS vault without a configured age key. It
@@ -289,8 +290,9 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	util.AddCmd(init, c.cmd)
 }
 
-// InitInstallConfig generates a new install config and vault, or only validates existing ones if requested.
-func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigManager) error {
+// InitInstallConfig generates the install config, asking for it interactively when requested.
+// An interrupt (ctx cancelled) ends the interactive collection at the next question.
+func (c *InitInstallConfigCmd) InitInstallConfig(ctx context.Context, icg installer.InstallConfigManager) error {
 	if c.Opts.CodesphereHash != "" && c.Opts.CodesphereVersion == "" {
 		return fmt.Errorf("--codesphere-hash requires --codesphere-version")
 	}
@@ -320,7 +322,7 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 	}
 
 	if c.Opts.Interactive {
-		err = icg.CollectInteractively()
+		err = icg.CollectInteractively(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to collect configuration interactively: %w", err)
 		}

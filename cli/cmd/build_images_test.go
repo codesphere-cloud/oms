@@ -69,7 +69,7 @@ var _ = Describe("BuildImagesCmd", func() {
 
 			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir")
 
-			err := c.RunE(nil, []string{})
+			err := c.RunE(newCommandWithContext(), []string{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to build and push images"))
 		})
@@ -92,7 +92,7 @@ var _ = Describe("BuildImagesCmd", func() {
 
 			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir")
 
-			err = c.RunE(nil, []string{})
+			err = c.RunE(newCommandWithContext(), []string{})
 			// This will fail because the dockerfile doesn't exist and build will fail
 			// But it should at least parse the config successfully
 			Expect(err).To(HaveOccurred())

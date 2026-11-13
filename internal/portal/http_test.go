@@ -5,6 +5,7 @@ package portal_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"log"
@@ -46,9 +47,9 @@ var _ = Describe("HttpWrapper", func() {
 		mockHttpClient.AssertExpectations(GinkgoT())
 	})
 
-	Describe("NewHttpWrapper", func() {
+	Describe("NewHTTPWrapper", func() {
 		It("creates a new HttpWrapper with default client", func() {
-			wrapper := portal.NewHttpWrapper()
+			wrapper := portal.NewHTTPWrapper(context.Background())
 			Expect(wrapper).ToNot(BeNil())
 			Expect(wrapper.HttpClient).ToNot(BeNil())
 		})

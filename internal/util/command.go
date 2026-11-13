@@ -9,10 +9,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+
+	"github.com/codesphere-cloud/oms/internal/system"
 )
 
-func RunCommand(command string, args []string, cmdDir string) error {
-	cmd := newCommand(command, args, cmdDir)
+// RunCommand runs command with args in cmdDir, forwarding its output, and interrupts it when ctx is cancelled.
+func RunCommand(ctx context.Context, command string, args []string, cmdDir string) error {
+	cmd := newCommand(ctx, command, args, cmdDir)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -25,8 +28,8 @@ func RunCommand(command string, args []string, cmdDir string) error {
 
 // RunCommandWithOutput runs a command and returns its stdout as a string.
 // Stderr is still forwarded to os.Stderr for visibility.
-func RunCommandWithOutput(command string, args []string, cmdDir string) (string, error) {
-	cmd := newCommand(command, args, cmdDir)
+func RunCommandWithOutput(ctx context.Context, command string, args []string, cmdDir string) (string, error) {
+	cmd := newCommand(ctx, command, args, cmdDir)
 
 	var stdout bytes.Buffer
 
@@ -40,9 +43,11 @@ func RunCommandWithOutput(command string, args []string, cmdDir string) (string,
 	return stdout.String(), nil
 }
 
-// newCommand creates an exec.Cmd with context and optional working directory.
-func newCommand(command string, args []string, cmdDir string) *exec.Cmd {
-	cmd := exec.CommandContext(context.Background(), command, args...)
+// newCommand creates an exec.Cmd with context and optional working directory. On cancellation the
+// command is interrupted first so it can run its own clean-up (for example k0sctl removing partial
+// downloads), and only killed after system.InterruptGracePeriod.
+func newCommand(ctx context.Context, command string, args []string, cmdDir string) *exec.Cmd {
+	cmd := system.CommandContext(ctx, command, args...)
 	if cmdDir != "" {
 		cmd.Dir = cmdDir
 	}

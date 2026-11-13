@@ -4,7 +4,9 @@
 package k0s_test
 
 import (
+	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,7 +84,7 @@ var _ = Describe("CleanupK0sCmd", func() {
 				mockNodeClient.EXPECT().RunCommand(n, "root", installer.K0sRebootCommand).Return(nil).Once()
 			}
 
-			Expect(c.CleanupK0s(nodes)).To(Succeed())
+			Expect(c.CleanupK0s(context.Background(), nodes)).To(Succeed())
 		})
 
 		It("does not reboot with --skip-reboot", func() {
@@ -92,7 +94,7 @@ var _ = Describe("CleanupK0sCmd", func() {
 				mockNodeClient.EXPECT().RunCommand(n, "root", installer.K0sCleanupScript()).Return(nil).Once()
 			}
 
-			Expect(c.CleanupK0s(nodes)).To(Succeed())
+			Expect(c.CleanupK0s(context.Background(), nodes)).To(Succeed())
 		})
 
 		It("continues with the remaining nodes and skips the reboot of failed ones", func() {
@@ -100,7 +102,7 @@ var _ = Describe("CleanupK0sCmd", func() {
 			mockNodeClient.EXPECT().RunCommand(nodes[1], "root", installer.K0sCleanupScript()).Return(nil).Once()
 			mockNodeClient.EXPECT().RunCommand(nodes[1], "root", installer.K0sRebootCommand).Return(nil).Once()
 
-			err := c.CleanupK0s(nodes)
+			err := c.CleanupK0s(context.Background(), nodes)
 			Expect(err).To(MatchError(ContainSubstring("failed to clean up k0s on 10.0.0.1")))
 			Expect(err).To(MatchError(ContainSubstring("connection refused")))
 		})
@@ -111,12 +113,12 @@ var _ = Describe("CleanupK0sCmd", func() {
 			mockNodeClient.EXPECT().RunCommand(nodes[0], "root", installer.K0sCleanupScript()).Return(nil).Once()
 			mockNodeClient.EXPECT().RunCommand(nodes[0], "root", installer.K0sRebootCommand).Return(errors.New("boom")).Once()
 
-			err := c.CleanupK0s(nodes[:1])
+			err := c.CleanupK0s(context.Background(), nodes[:1])
 			Expect(err).To(MatchError(ContainSubstring("failed to reboot 10.0.0.1")))
 		})
 
 		It("fails without nodes", func() {
-			err := c.CleanupK0s(nil)
+			err := c.CleanupK0s(context.Background(), nil)
 			Expect(err).To(MatchError(ContainSubstring("does not contain any Kubernetes nodes")))
 		})
 
@@ -129,15 +131,56 @@ var _ = Describe("CleanupK0sCmd", func() {
 				mockNodeClient.EXPECT().RunCommand(n, "root", installer.K0sCleanupScript()).Return(nil).Once()
 			}
 
-			Expect(c.CleanupK0s(nodes)).To(Succeed())
+			Expect(c.CleanupK0s(context.Background(), nodes)).To(Succeed())
 		})
 
 		It("aborts without touching any node when the cleanup is not confirmed", func() {
 			c.Opts.Force = false
 			c.ConfirmReader = strings.NewReader("no\n")
 
-			err := c.CleanupK0s(nodes)
+			err := c.CleanupK0s(context.Background(), nodes)
 			Expect(err).To(MatchError("cleanup not confirmed, aborting"))
+		})
+
+		It("stops cleaning up further nodes once cancelled", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			mockNodeClient.EXPECT().RunCommand(nodes[0], "root", installer.K0sCleanupScript()).
+				Run(func(*node.Node, string, string) { cancel() }).Return(nil).Once()
+
+			err := c.CleanupK0s(ctx, nodes)
+			Expect(err).To(MatchError(ContainSubstring("k0s cleanup cancelled, remaining nodes were not touched")))
+			Expect(err).To(MatchError(context.Canceled))
+		})
+
+		It("does not reboot any node once cancelled", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			mockNodeClient.EXPECT().RunCommand(nodes[0], "root", installer.K0sCleanupScript()).Return(nil).Once()
+			mockNodeClient.EXPECT().RunCommand(nodes[1], "root", installer.K0sCleanupScript()).
+				Run(func(*node.Node, string, string) { cancel() }).Return(errors.New("connection refused")).Once()
+
+			err := c.CleanupK0s(ctx, nodes)
+			Expect(err).To(MatchError(context.Canceled))
+			Expect(err).To(MatchError(ContainSubstring("failed to clean up k0s on 10.0.0.2")))
+		})
+
+		It("aborts without touching any node when cancelled at the confirmation", func() {
+			c.Opts.Force = false
+			confirmation, writer := io.Pipe()
+
+			DeferCleanup(func() { Expect(writer.Close()).To(Succeed()) })
+
+			c.ConfirmReader = confirmation
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			err := c.CleanupK0s(ctx, nodes)
+			Expect(err).To(MatchError(ContainSubstring("failed to read confirmation")))
+			Expect(err).To(MatchError(context.Canceled))
 		})
 	})
 })

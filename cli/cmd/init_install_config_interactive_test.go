@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -81,7 +82,7 @@ var _ = Describe("Interactive profile usage", func() {
 			// In non-interactive mode, CollectInteractively would use defaults
 			// We simulate this by checking that the prompter returns defaults
 			// when interactive=false
-			prompter := prompt.NewPrompter(false)
+			prompter := prompt.NewPrompter(context.Background(), false)
 
 			// Test that prompter returns defaults when not interactive
 			Expect(prompter.String("Test", "default-value")).To(Equal("default-value"))
@@ -106,7 +107,7 @@ var _ = Describe("Interactive profile usage", func() {
 			}
 
 			icg := newPlainInstallConfigManager()
-			err := c.InitInstallConfig(icg)
+			err := c.InitInstallConfig(context.Background(), icg)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify files were created
@@ -147,7 +148,7 @@ var _ = Describe("Interactive profile usage", func() {
 			config := &files.RootConfig{Registry: &files.RegistryConfig{Server: "mirror.example.com/team"}}
 
 			mockIcg.EXPECT().ApplyProfile("dev").Return(nil)
-			mockIcg.EXPECT().CollectInteractively().Return(nil)
+			mockIcg.EXPECT().CollectInteractively(context.Background()).Return(nil)
 			mockIcg.EXPECT().GetInstallConfig().Return(config)
 			mockIcg.EXPECT().ValidateInstallConfig().Return([]string{"configuration validation failed"})
 			mockIcg.EXPECT().GenerateSecrets().Return(nil)
@@ -165,7 +166,7 @@ var _ = Describe("Interactive profile usage", func() {
 				FileWriter: intutil.NewFilesystemWriter(),
 			}
 
-			err := c.InitInstallConfig(mockIcg)
+			err := c.InitInstallConfig(context.Background(), mockIcg)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(config.PcApps).To(HaveKeyWithValue("chartsRegistry", "mirror.example.com/team/codesphere-cloud/charts"))
 		})
@@ -187,7 +188,7 @@ var _ = Describe("Interactive profile usage", func() {
 
 			icg := newPlainInstallConfigManager()
 
-			err := c.InitInstallConfig(icg)
+			err := c.InitInstallConfig(context.Background(), icg)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("configuration validation failed"))
 		})
@@ -211,7 +212,7 @@ var _ = Describe("Non-interactive install-config generation", func() {
 			}
 
 			icg := newPlainInstallConfigManager()
-			err := c.InitInstallConfig(icg)
+			err := c.InitInstallConfig(context.Background(), icg)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Both files must have been written.
@@ -282,7 +283,7 @@ var _ = Describe("Install-config vault encryption", func() {
 
 			c := buildCmd("sops")
 
-			Expect(c.RunE(nil, nil)).To(Succeed())
+			Expect(c.RunE(commandWithContext(), nil)).To(Succeed())
 			Expect(c.Opts.VaultType).To(Equal("sops"))
 			Expect(c.generatedAgeKey).To(HavePrefix("AGE-SECRET-KEY-"))
 			Expect(c.generatedAgeRecipient).To(HavePrefix("age1"))
@@ -305,7 +306,7 @@ var _ = Describe("Install-config vault encryption", func() {
 		It("writes a plain vault only when requested explicitly", func() {
 			c := buildCmd("plain")
 
-			Expect(c.RunE(nil, nil)).To(Succeed())
+			Expect(c.RunE(commandWithContext(), nil)).To(Succeed())
 			Expect(c.Opts.VaultType).To(Equal("plain"))
 			Expect(c.generatedAgeKey).To(BeEmpty())
 
@@ -317,14 +318,14 @@ var _ = Describe("Install-config vault encryption", func() {
 		It("rejects an unsupported vault type", func() {
 			c := buildCmd("auto")
 
-			Expect(c.RunE(nil, nil)).To(MatchError(ContainSubstring("unsupported vault type")))
+			Expect(c.RunE(commandWithContext(), nil)).To(MatchError(ContainSubstring("unsupported vault type")))
 		})
 
 		It("fails validation with a hint to pass an age key or use a plain vault", func() {
 			c := buildCmd("sops")
 			c.Opts.ValidateOnly = true
 
-			err := c.RunE(nil, nil)
+			err := c.RunE(commandWithContext(), nil)
 			Expect(err).To(MatchError(ContainSubstring("requires an age key")))
 			Expect(err.Error()).To(ContainSubstring("--age-key"))
 			Expect(err.Error()).To(ContainSubstring("--vault-type plain"))
@@ -337,7 +338,7 @@ var _ = Describe("Install-config vault encryption", func() {
 				"secrets:\n    - name: registryPassword\n      fields:\n        password: keep-me\n"
 			Expect(os.WriteFile(c.Opts.VaultFile, []byte(encryptedVault), 0600)).To(Succeed())
 
-			err := c.RunE(nil, nil)
+			err := c.RunE(commandWithContext(), nil)
 			Expect(err).To(MatchError(ContainSubstring("already SOPS-encrypted")))
 			Expect(err.Error()).To(ContainSubstring("--age-key"))
 
@@ -363,7 +364,7 @@ var _ = Describe("Install-config vault encryption", func() {
 
 			c := buildCmd("sops")
 
-			Expect(c.RunE(nil, nil)).To(Succeed())
+			Expect(c.RunE(commandWithContext(), nil)).To(Succeed())
 			Expect(c.Opts.VaultType).To(Equal("sops"))
 
 			vaultContent, err := os.ReadFile(c.Opts.VaultFile)
@@ -434,7 +435,7 @@ var _ = Describe("Non-interactive Kubernetes CIDR flags", func() {
 		Expect(c.cmd.Flags().Set("k8s-managed", "false")).To(Succeed())
 
 		icg := newPlainInstallConfigManager()
-		err := c.InitInstallConfig(icg)
+		err := c.InitInstallConfig(context.Background(), icg)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("pod CIDR is required"))
 	})
@@ -454,7 +455,7 @@ var _ = Describe("init install-config package selection", func() {
 		}
 
 		if interactive {
-			manager.EXPECT().CollectInteractively().Run(func() {
+			manager.EXPECT().CollectInteractively(context.Background()).Run(func(context.Context) {
 				Expect(cfg.Operations.Codesphere).To(Equal(files.CodespherePackageConfig{Version: "1.111.0", Hash: hash}))
 
 				if override {
@@ -477,7 +478,7 @@ var _ = Describe("init install-config package selection", func() {
 			GlobalOptions: &util.GlobalOptions{}, Profile: "minimal", Interactive: interactive,
 			ConfigFile: "config.yaml", VaultFile: "vault.yaml", VaultType: "plain", CodesphereVersion: "1.111.0", CodesphereHash: hash,
 		}}
-		Expect(command.InitInstallConfig(manager)).To(Succeed())
+		Expect(command.InitInstallConfig(context.Background(), manager)).To(Succeed())
 	},
 		Entry("noninteractive version only", false, "", false),
 		Entry("noninteractive pinned build", false, "abc123", false),
@@ -486,7 +487,7 @@ var _ = Describe("init install-config package selection", func() {
 	)
 	It("rejects a hash without a version before generating files", func() {
 		command := InitInstallConfigCmd{Opts: &InitInstallConfigOpts{CodesphereHash: "abc123"}}
-		Expect(command.InitInstallConfig(installer.NewMockInstallConfigManager(GinkgoT()))).To(MatchError("--codesphere-hash requires --codesphere-version"))
+		Expect(command.InitInstallConfig(context.Background(), installer.NewMockInstallConfigManager(GinkgoT()))).To(MatchError("--codesphere-hash requires --codesphere-version"))
 	})
 	It("registers optional install version and hash flags", func() {
 		parent := &cobra.Command{Use: "init"}
@@ -505,3 +506,11 @@ var _ = Describe("init install-config package selection", func() {
 		Expect(parent.Execute()).To(Succeed())
 	})
 })
+
+// commandWithContext returns a command carrying a background context, as cobra provides one to RunE.
+func commandWithContext() *cobra.Command {
+	command := &cobra.Command{}
+	command.SetContext(context.Background())
+
+	return command
+}
