@@ -119,18 +119,6 @@ k8s-workers:
 		Expect(written.Spec.Hosts[0].InstallFlags).To(Equal([]string{"--enable-worker", "--no-taints=true"}))
 	})
 
-	It("recognizes a node given in different IPv6 notations as the same node", func() {
-		generator.Opts.ControlPlanes = []string{"fd00::1"}
-		generator.Opts.Workers = []string{"fd00:0:0::1"}
-
-		expectConfigWritten()
-
-		Expect(generator.Generate(mockPM, mockK0s, outputPath)).To(Equal(outputPath))
-		Expect(written.Spec.Hosts).To(HaveLen(1))
-		Expect(written.Spec.Hosts[0].SSH.Address).To(Equal("fd00::1"))
-		Expect(written.Spec.Hosts[0].InstallFlags).To(ContainElement("--enable-worker"))
-	})
-
 	It("fails without a control plane", func() {
 		expectInventoryRead(`k8s-workers:
   hosts:

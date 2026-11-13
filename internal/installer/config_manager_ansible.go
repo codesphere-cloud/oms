@@ -37,7 +37,12 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 		g.Config = &files.RootConfig{}
 	}
 
-	inventory, err := readAnsibleInventory(inventoryPath)
+	data, err := os.ReadFile(inventoryPath)
+	if err != nil {
+		return fmt.Errorf("failed to read Ansible inventory file: %w", err)
+	}
+
+	inventory, err := parseAnsibleInventory(data)
 	if err != nil {
 		return err
 	}
@@ -66,27 +71,6 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 	}
 
 	return nil
-}
-
-// ParseAnsibleKubernetesHosts returns the Kubernetes control plane and worker hosts of the
-// ansible inventory data. A group the inventory does not define yields no hosts.
-func ParseAnsibleKubernetesHosts(data []byte) (controlPlanes, workers []files.K8sNode, err error) {
-	inventory, err := parseAnsibleInventory(data)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return inventory.fetchK8sHosts()
-}
-
-// readAnsibleInventory reads and parses the ansible inventory file.
-func readAnsibleInventory(inventoryPath string) (*ansibleInventory, error) {
-	data, err := os.ReadFile(inventoryPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read Ansible inventory file: %w", err)
-	}
-
-	return parseAnsibleInventory(data)
 }
 
 // parseAnsibleInventory parses the ansible inventory data.

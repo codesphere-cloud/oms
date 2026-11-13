@@ -31,20 +31,13 @@ type K0sctlConfigOpts struct {
 	Airgap bool
 	// AirgapBundlePath is the airgap image bundle to upload. Empty uses the OMS cache.
 	AirgapBundlePath string
-	// The following options are only exposed by 'oms init k0s-config'. 'oms install k0s'
-	// generates its config from an install-config alone, or applies a config created by
-	// 'oms init k0s-config' with --config.
-
-	// AnsibleInventory replaces the Kubernetes control planes and workers of the
-	// install-config with the hosts of the inventory groups it defines.
+	// Only exposed by 'oms init k0s-config', with precedence
+	// install-config < AnsibleInventory < the remaining flags.
 	AnsibleInventory string
-	// ControlPlanes and Workers are node IPs that replace the Kubernetes control planes and
-	// workers of the install-config and the Ansible inventory.
-	ControlPlanes []string
-	Workers       []string
-	// DatacenterName and APIServerHost replace the ones of the install-config.
-	DatacenterName string
-	APIServerHost  string
+	ControlPlanes    []string
+	Workers          []string
+	DatacenterName   string
+	APIServerHost    string
 }
 
 // K0sctlConfigGenerator generates a k0sctl config and writes it to disk.
@@ -194,7 +187,7 @@ func (g *K0sctlConfigGenerator) applyAnsibleInventory(config *files.RootConfig) 
 		return nil
 	}
 
-	controlPlanes, workers, err := g.loadAnsibleKubernetesHosts()
+	controlPlanes, workers, err := g.readAnsibleKubernetesHosts()
 	if err != nil {
 		return fmt.Errorf("failed to load Ansible inventory %q: %w", g.Opts.AnsibleInventory, err)
 	}
@@ -203,59 +196,40 @@ func (g *K0sctlConfigGenerator) applyAnsibleInventory(config *files.RootConfig) 
 		return fmt.Errorf("no k8s-cp or k8s-workers hosts defined in Ansible inventory %q", g.Opts.AnsibleInventory)
 	}
 
-	if len(controlPlanes) > 0 {
-		config.Kubernetes.ControlPlanes = controlPlanes
+	if err := replaceK8sNodes(&config.Kubernetes.ControlPlanes, controlPlanes, "k8s-cp host"); err != nil {
+		return fmt.Errorf("failed to load Ansible inventory %q: %w", g.Opts.AnsibleInventory, err)
 	}
 
-	if len(workers) > 0 {
-		config.Kubernetes.Workers = workers
+	if err := replaceK8sNodes(&config.Kubernetes.Workers, workers, "k8s-workers host"); err != nil {
+		return fmt.Errorf("failed to load Ansible inventory %q: %w", g.Opts.AnsibleInventory, err)
 	}
 
 	return nil
 }
 
-// loadAnsibleKubernetesHosts reads the Kubernetes hosts of the Ansible inventory with
-// validated IP addresses.
-func (g *K0sctlConfigGenerator) loadAnsibleKubernetesHosts() (controlPlanes, workers []files.K8sNode, err error) {
+// readAnsibleKubernetesHosts reads the Kubernetes hosts of the Ansible inventory.
+func (g *K0sctlConfigGenerator) readAnsibleKubernetesHosts() (controlPlanes, workers []files.K8sNode, err error) {
 	data, err := g.FileWriter.ReadFile(g.Opts.AnsibleInventory)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	controlPlanes, workers, err = ParseAnsibleKubernetesHosts(data)
+	inventory, err := parseAnsibleInventory(data)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if err := validateK8sNodeIPs(controlPlanes); err != nil {
-		return nil, nil, fmt.Errorf("invalid k8s-cp host: %w", err)
-	}
-
-	if err := validateK8sNodeIPs(workers); err != nil {
-		return nil, nil, fmt.Errorf("invalid k8s-workers host: %w", err)
-	}
-
-	return controlPlanes, workers, nil
+	return inventory.fetchK8sHosts()
 }
 
 // applyFlags replaces the values of the config with the ones set in the options.
 func (g *K0sctlConfigGenerator) applyFlags(config *files.RootConfig) error {
-	if len(g.Opts.ControlPlanes) > 0 {
-		controlPlanes, err := k8sNodesFromIPs(g.Opts.ControlPlanes)
-		if err != nil {
-			return fmt.Errorf("invalid control plane: %w", err)
-		}
-
-		config.Kubernetes.ControlPlanes = controlPlanes
+	if err := replaceK8sNodes(&config.Kubernetes.ControlPlanes, k8sNodesFromIPs(g.Opts.ControlPlanes), "control plane"); err != nil {
+		return err
 	}
 
-	if len(g.Opts.Workers) > 0 {
-		workers, err := k8sNodesFromIPs(g.Opts.Workers)
-		if err != nil {
-			return fmt.Errorf("invalid worker: %w", err)
-		}
-
-		config.Kubernetes.Workers = workers
+	if err := replaceK8sNodes(&config.Kubernetes.Workers, k8sNodesFromIPs(g.Opts.Workers), "worker"); err != nil {
+		return err
 	}
 
 	if g.Opts.DatacenterName != "" {
@@ -270,25 +244,26 @@ func (g *K0sctlConfigGenerator) applyFlags(config *files.RootConfig) error {
 }
 
 // k8sNodesFromIPs turns IP addresses into Kubernetes nodes.
-func k8sNodesFromIPs(addresses []string) ([]files.K8sNode, error) {
+func k8sNodesFromIPs(addresses []string) []files.K8sNode {
 	nodes := make([]files.K8sNode, 0, len(addresses))
 	for _, address := range addresses {
 		nodes = append(nodes, files.K8sNode{IPAddress: address})
 	}
 
-	if err := validateK8sNodeIPs(nodes); err != nil {
-		return nil, err
-	}
-
-	return nodes, nil
+	return nodes
 }
 
-// validateK8sNodeIPs checks that the nodes have valid IP addresses.
-func validateK8sNodeIPs(nodes []files.K8sNode) error {
+// replaceK8sNodes replaces target with nodes after checking that they have valid IP
+// addresses. Without nodes, target is kept.
+func replaceK8sNodes(target *[]files.K8sNode, nodes []files.K8sNode, source string) error {
 	for _, node := range nodes {
 		if !IsValidIP(node.IPAddress) {
-			return fmt.Errorf("invalid IP address %q", node.IPAddress)
+			return fmt.Errorf("invalid %s: invalid IP address %q", source, node.IPAddress)
 		}
+	}
+
+	if len(nodes) > 0 {
+		*target = nodes
 	}
 
 	return nil
