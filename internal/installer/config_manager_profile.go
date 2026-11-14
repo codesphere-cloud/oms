@@ -289,7 +289,7 @@ func (g *InstallConfig) applyProfileMinimal() error {
 
 	if g.Config.Cluster.RgwLoadBalancer == nil {
 		g.Config.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{
-			Enabled: true,
+			Enabled: new(true),
 		}
 	}
 

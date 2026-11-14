@@ -200,7 +200,7 @@ func applyNoRequestsProfile(config *files.RootConfig, serviceReplicas int) {
 	})
 
 	if config.Cluster.RgwLoadBalancer == nil {
-		config.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{}
+		config.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{Enabled: new(false)}
 	}
 
 	config.Cluster.RgwLoadBalancer.Override = util.DeepMergeMaps(config.Cluster.RgwLoadBalancer.Override, map[string]any{
