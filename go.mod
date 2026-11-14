@@ -13,7 +13,7 @@ replace (
 	// The commit tagged for argo-cd v3.4.6 still imports the autoscaling v2beta*
 	// packages that k8s.io/api v0.36 dropped, so use the newer commit that no
 	// longer does.
-	github.com/argoproj/argo-cd/gitops-engine => github.com/argoproj/argo-cd/gitops-engine v0.0.0-20260728075051-7660efb23b2d
+	github.com/argoproj/argo-cd/gitops-engine => github.com/argoproj/argo-cd/gitops-engine 9c2b1f8b5993
 	github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v5.2.0+incompatible
 
@@ -32,7 +32,7 @@ require (
 	filippo.io/age v1.3.2
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/Masterminds/semver/v3 v3.5.0
-	github.com/argoproj/argo-cd/gitops-engine v0.7.1-0.20250908182407-97ad5b59a627
+	github.com/argoproj/argo-cd/gitops-engine 9c2b1f8b5993
 	github.com/argoproj/argo-cd/v3 v3.5.7
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
 	github.com/codesphere-cloud/cs-go v1.66.0
