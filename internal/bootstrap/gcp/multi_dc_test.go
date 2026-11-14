@@ -354,6 +354,11 @@ var _ = Describe("Multi-DC bootstrap", func() {
 		Expect(secondary.InstallConfig.Codesphere.WorkspaceHostingBaseDomain).To(Equal("2.ws.example.com"))
 		Expect(secondary.InstallConfig.Codesphere.CustomDomains.CNameBaseDomain).To(Equal("2.ws.example.com"))
 
+		By("pointing each data center's custom domains to its own public gateway")
+		Expect(primary.InstallConfig.Codesphere.PublicIP).To(Equal(primary.PublicGatewayIP))
+		Expect(secondary.InstallConfig.Codesphere.PublicIP).To(Equal(secondary.PublicGatewayIP))
+		Expect(primary.PublicGatewayIP).NotTo(Equal(secondary.PublicGatewayIP))
+
 		By("giving each data center a distinct ID and name")
 		Expect(primary.InstallConfig.Datacenter.ID).To(Equal(1))
 		Expect(secondary.InstallConfig.Datacenter.ID).To(Equal(2))

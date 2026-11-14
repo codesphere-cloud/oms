@@ -229,6 +229,10 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 		errors = append(errors, "Codesphere domain is required")
 	}
 
+	if err := g.Config.Codesphere.ValidatePublicIP(); err != nil {
+		errors = append(errors, err.Error())
+	}
+
 	if g.Config.Codesphere.OpenBao != nil {
 		if g.Config.Codesphere.OpenBao.URI == "" {
 			errors = append(errors, "OpenBao URI is required when OpenBao integration is enabled")

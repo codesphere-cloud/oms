@@ -93,6 +93,23 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 			Expect(config.Cluster.MetalLB.Pools[0].Name).To(Equal("existing-pool"))
 			Expect(config.Cluster.MetalLB.Pools[0].IPAddresses).To(Equal([]string{"10.0.0.1-10.0.0.5"}))
 		})
+
+		It("should preserve the existing Codesphere public IP as prompt default", func() {
+			Expect(manager.ApplyProfile(installer.PROFILE_DEV)).To(Succeed())
+			manager.GetInstallConfig().Codesphere.PublicIP = "203.0.113.10"
+
+			// An empty stdin resolves every prompt to its default value.
+			stdin, err := os.Open(os.DevNull)
+			Expect(err).NotTo(HaveOccurred())
+
+			oldStdin := os.Stdin
+			os.Stdin = stdin
+
+			DeferCleanup(func() { os.Stdin = oldStdin; Expect(stdin.Close()).To(Succeed()) })
+
+			Expect(manager.CollectInteractively(context.Background())).To(Succeed())
+			Expect(manager.GetInstallConfig().Codesphere.PublicIP).To(Equal("203.0.113.10"))
+		})
 	})
 
 	Describe("Prompter", func() {

@@ -68,7 +68,7 @@ $ oms update install-config --k8s-api-server 10.0.0.10 --config config.yaml --va
       --postgres-replica-ip string                   Replica PostgreSQL server IP
       --postgres-replica-name string                 Replica PostgreSQL server name
       --postgres-server string                       PostgreSQL server: primary hostname in install mode, connection address in external mode
-      --public-ip string                             Codesphere public IP address
+      --public-ip string                             Public IP that custom domains' A records point to (public gateway IP)
       --vault string                                 Path to existing prod.vault.yaml file (default "prod.vault.yaml")
       --vault-type string                            Vault storage type (sops or plain) (default "sops")
       --with-comments[=true|false]                   Add helpful comments to the generated YAML files

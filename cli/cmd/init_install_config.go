@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -267,6 +268,10 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	c.cmd.Flags().StringVar(&c.Opts.ACMEDNS01Provider, "acme-dns01-provider", "", "DNS provider for DNS-01 solver (e.g., cloudflare)")
 
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereDomain, "domain", "", "Main Codesphere domain")
+	c.cmd.Flags().StringVar(&c.Opts.CodespherePublicIP, "public-ip", "", "Public IP that custom domains' A records point to (public gateway IP)")
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereWorkspaceHostingBaseDomain, "workspace-hosting-base-domain", "", "Workspace hosting base domain")
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereCustomDomainsCNameBaseDomain, "custom-domains-cname-base-domain", "", "Custom domains CNAME base domain")
+	c.cmd.Flags().StringSliceVar(&c.Opts.CodesphereDNSServers, "dns-servers", []string{}, "DNS servers (comma-separated)")
 
 	// OpenBao
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoURI, "openbao-uri", "", "URI for OpenBao (e.g., https://openbao.example.com)")
@@ -343,6 +348,8 @@ func (c *InitInstallConfigCmd) InitInstallConfig(ctx context.Context, icg instal
 		c.printWarningsMessage(validationWarnings)
 	}
 
+	warnIfPublicIPUnreachable(icg.GetInstallConfig())
+
 	if err := icg.GenerateSecrets(); err != nil {
 		return fmt.Errorf("failed to generate secrets: %w", err)
 	}
@@ -380,6 +387,18 @@ func (c *InitInstallConfigCmd) printWarningsMessage(warnings []string) {
 	log.Println(strings.Repeat("!", 70))
 	log.Println("The configuration files will be generated.")
 	log.Println("Please review and fix the issues in the generated files before use!")
+}
+
+// warnIfPublicIPUnreachable flags a public IP that `install codesphere` will reject, such as the
+// 127.0.0.1 placeholder the profiles default to. It only warns because local component installs
+// legitimately keep the placeholder.
+func warnIfPublicIPUnreachable(config *files.RootConfig) {
+	err := config.Codesphere.ValidateReachablePublicIP()
+	if !errors.Is(err, files.ErrPublicIPUnreachable) {
+		return
+	}
+
+	log.Printf("WARNING: %v. 'oms install codesphere' rejects it unless --local-components is set; update it with 'oms update install-config --public-ip'.\n", err)
 }
 
 func (c *InitInstallConfigCmd) printSuccessMessage(warningCount int) {
@@ -437,6 +456,8 @@ func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) 
 	if len(errors) > 0 {
 		return fmt.Errorf("install config validation failed: %s", strings.Join(errors, ", "))
 	}
+
+	warnIfPublicIPUnreachable(icg.GetInstallConfig())
 
 	if c.Opts.VaultFile != "" {
 		log.Printf("Reading vault file: %s\n", c.Opts.VaultFile)
