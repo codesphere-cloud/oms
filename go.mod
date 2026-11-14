@@ -33,7 +33,7 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/argoproj/argo-cd/gitops-engine v0.7.1-0.20250908182407-97ad5b59a627
-	github.com/argoproj/argo-cd/v3 v3.5.7
+	github.com/argoproj/argo-cd/v3 v3.6.1
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
 	github.com/codesphere-cloud/cs-go v1.66.0
 	github.com/creativeprojects/go-selfupdate v1.7.1
