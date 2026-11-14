@@ -103,6 +103,7 @@ type CodesphereEnvironment struct {
 	InstallConfig        *files.RootConfig   `json:"-"`
 	Vault                *files.InstallVault `json:"-"`
 	K0s                  bool                `json:"-"`
+	CodesphereViaArgoCD  bool                `json:"-"`
 	ExposeShared         bool                `json:"-"`
 	PodCIDR              string              `json:"pod_cidr"`
 	ServiceCIDR          string              `json:"service_cidr"`

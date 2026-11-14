@@ -23,7 +23,8 @@ $ oms install codesphere platform -p codesphere-v1.2.3-installer-lite.tar.gz -k 
 ### Options
 
 ```
-  -h, --help[=true|false]   help for platform
+      --codesphere-via-argocd[=true|false]   Deploy Codesphere through the cs-applications ArgoCD app of apps instead of Helm
+  -h, --help[=true|false]                    help for platform
 ```
 
 ### Options inherited from parent commands

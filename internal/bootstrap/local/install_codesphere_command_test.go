@@ -30,4 +30,10 @@ var _ = Describe("Local Codesphere installer options", func() {
 		opts := b.localInstallCodesphereOptions("/bundle", "/config.yaml", "/vault.yaml", "/age-key", "/config")
 		Expect(opts.VaultSecretName).To(Equal(vault.VaultSecretName))
 	})
+
+	It("codesphere-via-argocd set -> forwards it to the install", func() {
+		b := &LocalBootstrapper{Env: &CodesphereEnvironment{CodesphereViaArgoCD: true}}
+		opts := b.localInstallCodesphereOptions("/bundle", "/config.yaml", "/vault.yaml", "/age-key", "/config")
+		Expect(opts.CodesphereViaArgoCD).To(BeTrue())
+	})
 })

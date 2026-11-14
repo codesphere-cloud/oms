@@ -105,6 +105,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.Profile, "profile", installer.PROFILE_DEV, "Profile to apply to the install config like resources (supported: dev, minimal, prod)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.StorageEngine, "storage-engine", local.StorageEngineRookCeph, "Storage engine (supported: rook-ceph, local)")
 	flags.BoolVar(&bootstrapLocalCmd.CodesphereEnv.K0s, "k0s", false, "Use k0s-specific configuration (required to deploy to k0s clusters)")
+	flags.BoolVar(&bootstrapLocalCmd.CodesphereEnv.CodesphereViaArgoCD, "codesphere-via-argocd", false, "Deploy Codesphere through the cs-applications ArgoCD app of apps instead of Helm")
 	flags.BoolVar(&bootstrapLocalCmd.CodesphereEnv.ExposeShared, "expose-shared", false, "Expose both Envoy Gateways and the SSH workspace proxy through one edge Gateway (single-node k0s)")
 
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.ServiceCIDR, "service-cidr", "", "Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.")
