@@ -259,4 +259,48 @@ var _ = Describe("Install", func() {
 		Expect(kubeClient.Get(context.Background(), client.ObjectKey{Name: parentAppName, Namespace: "argocd"}, &argo.Application{})).
 			NotTo(Succeed())
 	})
+
+	Describe("image pre-pull", func() {
+		installWithPcApps := func(cfg *files.RootConfig, pcAppsVersion string) map[string]any {
+			GinkgoHelper()
+
+			csBom := bomWithCharts()
+			csBom.Components["pc-applications"] = bom.ComponentConfig{Files: map[string]bom.FileRef{
+				"chart": {OciRef: "ghcr.io/codesphere-cloud/charts/pc-applications:" + pcAppsVersion},
+			}}
+
+			kubeClient := newSyncedCluster()
+			Expect(install(kubeClient, cfg, csBom)).To(Succeed())
+
+			return parentValues(kubeClient)
+		}
+
+		prePullConfig := func() *files.RootConfig {
+			cfg := fullConfig("pr-1")
+			cfg.Codesphere.PrePullImages = nil
+
+			return cfg
+		}
+
+		It("pc-applications has the app -> turns off the pre-pull of the release", func() {
+			Expect(at(installWithPcApps(prePullConfig(), "0.442.0"), "global", "prePullImages")).To(BeFalse())
+		})
+
+		It("pc-applications is too old for the app -> keeps the pre-pull of the release", func() {
+			Expect(at(installWithPcApps(prePullConfig(), "0.441.0"), "global", "prePullImages")).To(BeTrue())
+		})
+
+		It("pcApps disables the app -> keeps the pre-pull of the release", func() {
+			cfg := prePullConfig()
+			cfg.PcApps = files.ChartValues{
+				"applications": files.ChartValues{"image-pre-pull": files.ChartValues{"enabled": false}},
+			}
+
+			Expect(at(installWithPcApps(cfg, "0.442.0"), "global", "prePullImages")).To(BeTrue())
+		})
+
+		It("config turns pre-pull off -> stays off", func() {
+			Expect(at(installWithPcApps(fullConfig("pr-1"), "0.442.0"), "global", "prePullImages")).To(BeFalse())
+		})
+	})
 })
