@@ -1,0 +1,269 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Bootstraps the latest official Codesphere release on fresh GCP infrastructure
+# with an OMS binary built from source. tag-release.yml runs this before every
+# release, so OMS regressions surface here instead of in the monorepo's OMS bump.
+# Mirrors codesphere-monorepo/.github/workflows/test-pc-installer-gcp.yml.
+name: Bootstrap GCP
+
+on:
+  # Test changes to this workflow before they can block a release.
+  pull_request:
+    paths:
+      - .github/workflows/bootstrap-gcp.yml
+  workflow_call:
+    inputs:
+      install_version:
+        description: Codesphere version to install (e.g. codesphere-v1.2.3). Defaults to the latest official release.
+        type: string
+        default: ""
+      prevent_destroy:
+        description: Keep the GCP project after the run for debugging.
+        type: boolean
+        default: false
+      ttl:
+        description: Project TTL; expired projects are deleted by the monorepo's cleanup cron.
+        type: string
+        default: 2h
+  workflow_dispatch:
+    inputs:
+      install_version:
+        description: Codesphere version to install (e.g. codesphere-v1.2.3). Defaults to the latest official release.
+        type: string
+        default: ""
+      prevent_destroy:
+        description: Keep the GCP project after the run for debugging.
+        type: boolean
+        default: false
+      ttl:
+        description: Project TTL; expired projects are deleted by the monorepo's cleanup cron.
+        type: string
+        default: 2h
+
+# Never cancel a running bootstrap: that would skip the cleanup and leave the project behind.
+concurrency:
+  group: oms-bootstrap-gcp
+  cancel-in-progress: false
+
+jobs:
+  bootstrap-gcp:
+    name: Bootstrap Codesphere on GCP
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_NAME: oms-main-${{ github.run_number }}
+      BASE_DOMAIN: oms-main-${{ github.run_number }}.oms-testing.codesphere-demo.com
+      DC_ID: "42"
+      DC_NAME: oms-main
+      DNS_PROJECT_ID: oms-testing-dns
+      K0S_VERSION: v1.35.8+k0s.0
+      OPENBAO_URI: https://openbao.dev-codesphere.com
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: 'go.mod'
+
+      # The runner is linux/amd64, so this binary is also copied to the jumpbox.
+      - name: Build CLI
+        run: |
+          make build-cli
+          ./oms version
+
+      - name: Setup SOPS and age
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y age
+          # sops is not packaged in Ubuntu's repos, so fetch the pinned release binary.
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o /tmp/sops \
+            https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.linux.amd64
+          sudo install -m 0755 /tmp/sops /usr/local/bin/sops
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ secrets.OMS_INFRA_WIF_PROVIDER }}
+          service_account: ${{ secrets.OMS_INFRA_WIF_SA }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      - name: Prepare SSH key pair
+        env:
+          SSH_KEY_PRIVATE: ${{ secrets.PC_INSTALLER_TEST_GCP_SSH_KEY_PRIVATE }}
+          SSH_KEY_PUBLIC: ${{ secrets.PC_INSTALLER_TEST_GCP_SSH_KEY_PUBLIC }}
+        run: |
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$SSH_KEY_PRIVATE" > "$HOME/.ssh/gha-pc-testing"
+          printf '%s\n' "$SSH_KEY_PUBLIC" > "$HOME/.ssh/gha-pc-testing.pub"
+          chmod 600 "$HOME/.ssh/gha-pc-testing"
+
+      - name: Resolve Codesphere version
+        id: version
+        env:
+          OMS_PORTAL_API_KEY: ${{ secrets.PC_INSTALLER_TEST_OMS_PORTAL_API_KEY }}
+          INSTALL_VERSION: ${{ inputs.install_version }}
+        run: |
+          set -euo pipefail
+          # Resolve against the OMS portal, where the bootstrap downloads the package from.
+          # Internal builds (master, branches) are hidden; only codesphere-vX.Y.Z releases match.
+          if [ -z "$INSTALL_VERSION" ]; then
+            PACKAGES=$(./oms list packages)
+            INSTALL_VERSION=$(grep -oE 'codesphere-v[0-9]+\.[0-9]+\.[0-9]+' <<< "$PACKAGES" | sort -V | tail -n1 || true)
+          fi
+          if [ -z "$INSTALL_VERSION" ]; then
+            echo "::error::Could not resolve the latest official Codesphere release."
+            exit 1
+          fi
+          echo "Installing $INSTALL_VERSION"
+          echo "install_version=$INSTALL_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Generate install config
+        env:
+          OPENBAO_PASSWORD: ${{ secrets.PC_INSTALLER_TEST_GCP_OPENBAO_PASSWORD }}
+        run: |
+          set -euo pipefail
+          age-keygen -o age_key.txt
+          echo "SOPS_AGE_KEY_FILE=${GITHUB_WORKSPACE}/age_key.txt" >> "$GITHUB_ENV"
+          SOPS_AGE_KEY_FILE="${GITHUB_WORKSPACE}/age_key.txt" ./oms init install-config \
+            --interactive=false \
+            --profile minimal \
+            --config config.yaml \
+            --vault prod.vault.yaml \
+            --vault-type=plain \
+            --domain="$BASE_DOMAIN" \
+            --dc-id="$DC_ID" \
+            --dc-name="$DC_NAME" \
+            --openbao-uri="$OPENBAO_URI" \
+            --openbao-password="$OPENBAO_PASSWORD"
+
+      - name: Bootstrap GCP
+        id: bootstrap
+        shell: bash
+        env:
+          INSTALL_VERSION: ${{ steps.version.outputs.install_version }}
+          # pull_request runs have no inputs, so fall back to the default here.
+          PROJECT_TTL: ${{ inputs.ttl || '2h' }}
+          OMS_PORTAL_API_KEY: ${{ secrets.PC_INSTALLER_TEST_OMS_PORTAL_API_KEY }}
+          OMS_CS_TEST_USER_PASSWORD: ${{ secrets.OMS_CS_TEST_USER_PASSWORD }}
+          OMS_CS_TEST_USER_PASSWORD_HASHED: ${{ secrets.OMS_CS_TEST_USER_PASSWORD_HASHED }}
+          FOLDER_ID: ${{ secrets.PC_INSTALLER_TEST_GCP_FOLDER }}
+          BILLING_ACCOUNT: ${{ secrets.PC_INSTALLER_TEST_GCP_BILLING_ACCOUNT }}
+          GITHUB_APP_CLIENT_ID: ${{ secrets.PC_INSTALLER_TEST_GCP_GITHUB_APP_CLIENT_ID }}
+          GITHUB_APP_CLIENT_SECRET: ${{ secrets.PC_INSTALLER_TEST_GCP_GITHUB_APP_CLIENT_SECRET }}
+          GITHUB_APP_NAME: ${{ secrets.PC_INSTALLER_TEST_GCP_GITHUB_APP_NAME }}
+          GITLAB_APP_CLIENT_ID: ${{ secrets.PC_INSTALLER_TEST_GCP_GITLAB_APP_CLIENT_ID }}
+          GITLAB_APP_CLIENT_SECRET: ${{ secrets.PC_INSTALLER_TEST_GCP_GITLAB_APP_CLIENT_SECRET }}
+          BITBUCKET_APP_CLIENT_ID: ${{ secrets.PC_INSTALLER_TEST_GCP_BITBUCKET_APP_CLIENT_ID }}
+          BITBUCKET_APP_CLIENT_SECRET: ${{ secrets.PC_INSTALLER_TEST_GCP_BITBUCKET_APP_CLIENT_SECRET }}
+          AZURE_DEVOPS_APP_CLIENT_ID: ${{ secrets.PC_INSTALLER_TEST_GCP_AZURE_DEVOPS_APP_CLIENT_ID }}
+          AZURE_DEVOPS_APP_CLIENT_SECRET: ${{ secrets.PC_INSTALLER_TEST_GCP_AZURE_DEVOPS_APP_CLIENT_SECRET }}
+          REGISTRY_USER: ${{ secrets.PC_INSTALLER_TEST_GCP_REGISTRY_USER }}
+          REGISTRY_PAT: ${{ secrets.PC_INSTALLER_TEST_GCP_REGISTRY_PAT }}
+          OPENBAO_PASSWORD: ${{ secrets.PC_INSTALLER_TEST_GCP_OPENBAO_PASSWORD }}
+          CENTRAL_OTEL_USERNAME: ${{ secrets.CENTRAL_OTEL_USERNAME }}
+          CENTRAL_OTEL_PASSWORD: ${{ secrets.CENTRAL_OTEL_PASSWORD }}
+          OIDC_CLIENT_ID: ${{ secrets.PC_INSTALLER_TEST_GCP_OIDC_CLIENT_ID }}
+          OIDC_CLIENT_SECRET: ${{ secrets.PC_INSTALLER_TEST_GCP_OIDC_CLIENT_SECRET }}
+          EXTERNAL_LOKI_SECRET: ${{ secrets.PC_INSTALLER_TEST_GCP_EXTERNAL_LOKI_SECRET }}
+          PROMETHEUS_REMOTE_WRITE_USERNAME: ${{ secrets.PROMETHEUS_REMOTE_WRITE_USERNAME }}
+          PROMETHEUS_REMOTE_WRITE_PASSWORD: ${{ secrets.PROMETHEUS_REMOTE_WRITE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          eval "$(ssh-agent -s)"
+          ssh-add "$HOME/.ssh/gha-pc-testing"
+          ./oms beta bootstrap-gcp \
+            --install-version="$INSTALL_VERSION" \
+            --project-name="$PROJECT_NAME" \
+            --project-ttl="$PROJECT_TTL" \
+            --folder-id="$FOLDER_ID" \
+            --billing-account="$BILLING_ACCOUNT" \
+            --base-domain="$BASE_DOMAIN" \
+            --google-acme-issuer=true \
+            --dns-project-id="$DNS_PROJECT_ID" \
+            --ssh-public-key-path="$HOME/.ssh/gha-pc-testing.pub" \
+            --ssh-private-key-path="$HOME/.ssh/gha-pc-testing" \
+            --ssh-quiet=false \
+            --datacenter-id="$DC_ID" \
+            --datacenter-name="$DC_NAME" \
+            --github-app-client-id="$GITHUB_APP_CLIENT_ID" \
+            --github-app-client-secret="$GITHUB_APP_CLIENT_SECRET" \
+            --github-app-name="$GITHUB_APP_NAME" \
+            --gitlab-app-client-id="$GITLAB_APP_CLIENT_ID" \
+            --gitlab-app-client-secret="$GITLAB_APP_CLIENT_SECRET" \
+            --bitbucket-app-client-id="$BITBUCKET_APP_CLIENT_ID" \
+            --bitbucket-app-client-secret="$BITBUCKET_APP_CLIENT_SECRET" \
+            --azure-devops-app-client-id="$AZURE_DEVOPS_APP_CLIENT_ID" \
+            --azure-devops-app-client-secret="$AZURE_DEVOPS_APP_CLIENT_SECRET" \
+            --registry-user="$REGISTRY_USER" \
+            --github-pat="$REGISTRY_PAT" \
+            --openbao-uri="$OPENBAO_URI" \
+            --openbao-password="$OPENBAO_PASSWORD" \
+            --central-otel-username="$CENTRAL_OTEL_USERNAME" \
+            --central-otel-password="$CENTRAL_OTEL_PASSWORD" \
+            --central-otel-endpoint=https://otel.tools.dev-codesphere.com \
+            --central-otel-span-metrics=true \
+            --oidc-provider-name=CodesphereDev \
+            --oidc-issuer-url=https://dev-idp.7.dev-codesphere.com \
+            --oidc-client-id="$OIDC_CLIENT_ID" \
+            --oidc-client-secret="$OIDC_CLIENT_SECRET" \
+            --external-loki-endpoint=https://loki.dev-codesphere.com/loki/api/v1/push \
+            --external-loki-secret="$EXTERNAL_LOKI_SECRET" \
+            --external-loki-user=loki \
+            --prometheus-remote-write-url=https://ovh-thanos.dev-codesphere.com/api/v1/receive \
+            --prometheus-remote-write-user="$PROMETHEUS_REMOTE_WRITE_USERNAME" \
+            --prometheus-remote-write-password="$PROMETHEUS_REMOTE_WRITE_PASSWORD" \
+            --cluster-admin-email=int-fixture-cluster-admin@codesphere.com \
+            --remote-oms-binary="$GITHUB_WORKSPACE/oms" \
+            --k0s-version="$K0S_VERSION" \
+            --create-test-user \
+            --write-config \
+            2>&1 | tee "$RUNNER_TEMP/bootstrap-gcp.log"
+
+      - name: Wait for Codesphere to serve
+        env:
+          HEALTH_URL: https://cs.${{ env.BASE_DOMAIN }}/ide-service/healthz
+          # The installer returns once the charts are applied, before the new pods are rolled out.
+          TIMEOUT_SECONDS: 900
+          POLL_SECONDS: 10
+        run: |
+          # Logged per attempt, so a timeout tells DNS, TCP, TLS and HTTP failures apart.
+          host="${HEALTH_URL#https://}"
+          echo "DNS: $(getent hosts "${host%%/*}" || echo 'does not resolve')"
+          deadline=$((SECONDS + TIMEOUT_SECONDS))
+          while true; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' --max-time "$POLL_SECONDS" "$HEALTH_URL") && curl_exit=0 || curl_exit=$?
+            echo "$(date -u +%H:%M:%S) curl exit $curl_exit, HTTP $status"
+            if [ "$curl_exit" = 0 ] && [ "$status" = 200 ]; then
+              break
+            fi
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::$HEALTH_URL did not answer 200 within ${TIMEOUT_SECONDS}s (last: curl exit $curl_exit, HTTP $status)."
+              exit 1
+            fi
+            sleep "$POLL_SECONDS"
+          done
+
+      - name: Print config
+        if: always() && steps.bootstrap.outcome != 'skipped'
+        run: cat config.yaml
+
+      # A failed bootstrap still writes gcp-infra.json, so this also removes partially created projects.
+      - name: Delete GCP project
+        if: always() && !inputs.prevent_destroy && steps.bootstrap.outcome != 'skipped'
+        env:
+          FOLDER_ID: ${{ secrets.PC_INSTALLER_TEST_GCP_FOLDER }}
+        run: ./oms beta bootstrap-gcp cleanup --force
+
+      - name: Slack Notification on Failure
+        if: ${{ failure() && github.ref == 'refs/heads/main' }}
+        uses: ./.github/actions/slack-notify
+        with:
+          job-name: Bootstrap GCP (${{ steps.version.outputs.install_version }})
+          webhook: ${{ secrets.PACKAGE_JOB_SLACK_WEBHOOK }}
