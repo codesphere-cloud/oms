@@ -39,6 +39,10 @@ const (
 	// StorageEngineLocal uses PVC-backed local storage.
 	StorageEngineLocal    = "local"
 	localStorageClassName = "local-rwx"
+	// StorageEngineHostPath stores workspaces in host directories through the mounter and uses
+	// the hostPath provisioner of minikube and kind for all other PVCs.
+	StorageEngineHostPath    = "hostpath"
+	hostPathStorageClassName = "standard"
 )
 
 type retryableWaitError struct {
@@ -151,12 +155,15 @@ func (b *LocalBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to ensure namespaces: %w", err)
 	}
 
-	if b.Env.StorageEngine == StorageEngineLocal {
+	switch b.Env.StorageEngine {
+	case StorageEngineHostPath:
+		// The cluster brings its own hostPath provisioner.
+	case StorageEngineLocal:
 		err = b.stlog.Step("Install local CSI provisioner", b.InstallLocalCSIProvisioner)
 		if err != nil {
 			return fmt.Errorf("failed to install local CSI provisioner: %w", err)
 		}
-	} else {
+	default:
 		err = b.stlog.Step("Install Rook and test Ceph cluster", func() error {
 			err := b.stlog.Substep("Install Rook operator", b.InstallRookHelmChart)
 			if err != nil {
@@ -256,8 +263,11 @@ func (b *LocalBootstrapper) Bootstrap() error {
 }
 
 func (b *LocalBootstrapper) storageClassName() string {
-	if b.Env.StorageEngine == StorageEngineLocal {
+	switch b.Env.StorageEngine {
+	case StorageEngineLocal:
 		return localStorageClassName
+	case StorageEngineHostPath:
+		return hostPathStorageClassName
 	}
 
 	return cephStorageClassName
@@ -693,9 +703,9 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	setLocalClusterComponents(b.Env.InstallConfig)
 
 	b.Env.InstallConfig.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{
-		Enabled: b.Env.StorageEngine != StorageEngineLocal,
+		Enabled: b.Env.StorageEngine == StorageEngineRookCeph,
 	}
-	if b.Env.StorageEngine != StorageEngineLocal {
+	if b.Env.StorageEngine == StorageEngineRookCeph {
 		cephMonHosts, err := b.ReadCephMonHosts()
 		if err != nil {
 			return fmt.Errorf("failed to read Ceph monitor hosts: %w", err)
@@ -820,7 +830,7 @@ func (b *LocalBootstrapper) configureStorageValues() {
 			"rook-ceph": map[string]any{"enabled": false},
 		},
 	})
-	if b.Env.StorageEngine != StorageEngineLocal {
+	if b.Env.StorageEngine == StorageEngineRookCeph {
 		return
 	}
 
@@ -837,13 +847,17 @@ func (b *LocalBootstrapper) configureStorageValues() {
 	b.Env.InstallConfig.Codesphere.ManagedServices = slices.DeleteFunc(b.Env.InstallConfig.Codesphere.ManagedServices, func(service files.ManagedServiceConfig) bool {
 		return service.Name == "s3"
 	})
-	if !slices.Contains(b.Env.InstallConfig.Codesphere.Internal, files.WorkspacePVCStorageFlag) {
-		b.Env.InstallConfig.Codesphere.Internal = append(b.Env.InstallConfig.Codesphere.Internal, files.WorkspacePVCStorageFlag)
+	storageFlag := files.WorkspacePVCStorageFlag
+	if b.Env.StorageEngine == StorageEngineHostPath {
+		storageFlag = files.WorkspaceHostPathStorageFlag
+	}
+	if !slices.Contains(b.Env.InstallConfig.Codesphere.Internal, storageFlag) {
+		b.Env.InstallConfig.Codesphere.Internal = append(b.Env.InstallConfig.Codesphere.Internal, storageFlag)
 	}
 
 	b.Env.InstallConfig.Codesphere.Override = util.DeepMergeMaps(b.Env.InstallConfig.Codesphere.Override, map[string]any{
 		"global": map[string]any{
-			"ceph": map[string]any{"storageClass": localStorageClassName},
+			"ceph": map[string]any{"storageClass": b.storageClassName()},
 		},
 	})
 }

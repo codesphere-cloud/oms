@@ -103,7 +103,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.PreviewFlags, "preview-flags", gcp.DefaultPreviewFlags, "Preview flags to enable in Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.FeatureFlags, "feature-flags", gcp.DefaultFeatureFlags, "Feature flags to enable in Codesphere installation (optional)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.Profile, "profile", installer.PROFILE_DEV, "Profile to apply to the install config like resources (supported: dev, minimal, prod)")
-	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.StorageEngine, "storage-engine", local.StorageEngineRookCeph, "Storage engine (supported: rook-ceph, local)")
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.StorageEngine, "storage-engine", local.StorageEngineRookCeph, "Storage engine (supported: rook-ceph, local, hostpath)")
 	flags.BoolVar(&bootstrapLocalCmd.CodesphereEnv.K0s, "k0s", false, "Use k0s-specific configuration (required to deploy to k0s clusters)")
 	flags.BoolVar(&bootstrapLocalCmd.CodesphereEnv.ExposeShared, "expose-shared", false, "Expose both Envoy Gateways and the SSH workspace proxy through one edge Gateway (single-node k0s)")
 
@@ -196,10 +196,10 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 
 func validateLocalStorageEngine(engine string) error {
 	switch engine {
-	case local.StorageEngineRookCeph, local.StorageEngineLocal:
+	case local.StorageEngineRookCeph, local.StorageEngineLocal, local.StorageEngineHostPath:
 		return nil
 	default:
-		return fmt.Errorf("unsupported storage engine %q (supported: %s, %s)", engine, local.StorageEngineRookCeph, local.StorageEngineLocal)
+		return fmt.Errorf("unsupported storage engine %q (supported: %s, %s, %s)", engine, local.StorageEngineRookCeph, local.StorageEngineLocal, local.StorageEngineHostPath)
 	}
 }
 
@@ -230,7 +230,7 @@ func (c *BootstrapLocalCmd) resolveRegistryPassword(ctx context.Context) error {
 
 // ConfirmLocalBootstrapWarning asks the operator to confirm the local bootstrap, unless --yes is set.
 func (c *BootstrapLocalCmd) ConfirmLocalBootstrapWarning(ctx context.Context) error {
-	if c.CodesphereEnv.StorageEngine != local.StorageEngineLocal {
+	if c.CodesphereEnv.StorageEngine == local.StorageEngineRookCeph {
 		fmt.Println(csio.Long(`
 		############################################################
 		# Local Bootstrap Warning                                  #
@@ -253,7 +253,7 @@ func (c *BootstrapLocalCmd) ConfirmLocalBootstrapWarning(ctx context.Context) er
 		############################################################
 	`))
 	} else {
-		fmt.Println("Codesphere local bootstrap is for testing only. The local CSI provisioner stores workspace data on cluster nodes.")
+		fmt.Println("Codesphere local bootstrap is for testing only. Workspace data is stored on the cluster nodes.")
 	}
 
 	if c.Yes {
