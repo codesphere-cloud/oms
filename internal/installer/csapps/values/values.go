@@ -101,9 +101,10 @@ func globalValues(cfg *files.RootConfig, imgs images.Images) (global, error) {
 		return global{}, fmt.Errorf("failed to build the platform image values: %w", err)
 	}
 
-	pvcStorage := codesphere.EnabledFlags(cfg.Codesphere)[files.WorkspacePVCStorageFlag]
+	flags := codesphere.EnabledFlags(cfg.Codesphere)
+	withoutCeph := flags[files.WorkspacePVCStorageFlag] || flags[files.WorkspaceHostPathStorageFlag]
 
-	cephValues, err := ceph.Values(cfg.Ceph, pvcStorage)
+	cephValues, err := ceph.Values(cfg.Ceph, withoutCeph)
 	if err != nil {
 		return global{}, fmt.Errorf("failed to build the ceph values: %w", err)
 	}

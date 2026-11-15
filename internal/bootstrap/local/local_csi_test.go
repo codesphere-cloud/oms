@@ -99,6 +99,23 @@ var _ = Describe("local CSI storage", func() {
 		Expect(*restored.ManagedServiceBackends.S3.Enabled).To(BeFalse())
 	})
 
+	It("configures host path storage values", func() {
+		b := &LocalBootstrapper{Env: &CodesphereEnvironment{
+			StorageEngine: StorageEngineHostPath,
+			InternalFlags: []string{"existing"},
+			InstallConfig: &files.RootConfig{Codesphere: files.CodesphereConfig{
+				ManagedServices: []files.ManagedServiceConfig{{Name: "s3"}},
+			}},
+		}}
+		b.configureStorageValues()
+		Expect(b.storageClassName()).To(Equal(hostPathStorageClassName))
+		Expect(b.Env.InstallConfig.Codesphere.Internal).To(Equal([]string{"existing", "workspace-hostpath-storage"}))
+		ceph := b.Env.InstallConfig.Codesphere.Override["global"].(map[string]any)["ceph"].(map[string]any)
+		Expect(ceph).To(HaveKeyWithValue("storageClass", hostPathStorageClassName))
+		Expect(*b.Env.InstallConfig.ManagedServiceBackends.S3.Enabled).To(BeFalse())
+		Expect(b.Env.InstallConfig.Codesphere.ManagedServices).To(BeEmpty())
+	})
+
 	It("keeps S3 with Rook storage", func() {
 		config := &files.RootConfig{
 			Codesphere: files.CodesphereConfig{ManagedServices: []files.ManagedServiceConfig{{Name: "s3"}}},

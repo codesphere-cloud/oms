@@ -558,6 +558,10 @@ type MetalLBBGPConfig struct {
 // WorkspacePVCStorageFlag stores workspaces on PVCs instead of CephFS.
 const WorkspacePVCStorageFlag = "workspace-pvc-storage"
 
+// WorkspaceHostPathStorageFlag stores workspaces in host directories instead of CephFS.
+// Only for local single node clusters.
+const WorkspaceHostPathStorageFlag = "workspace-hostpath-storage"
+
 type CodesphereConfig struct {
 	Domain                     string                   `yaml:"domain"`
 	WorkspaceHostingBaseDomain string                   `yaml:"workspaceHostingBaseDomain"`
