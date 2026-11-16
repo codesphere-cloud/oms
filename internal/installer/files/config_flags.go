@@ -9,5 +9,11 @@ import "slices"
 // IsEnabled reports whether a flag is enabled as an internal, deprecated experiment, preview, or
 // feature flag.
 func (c CodesphereConfig) IsEnabled(flag string) bool {
-	return slices.Contains(c.Internal, flag) || slices.Contains(c.Experiments, flag) || c.Preview[flag] || c.Features[flag] //nolint:staticcheck
+	return slices.Contains(c.InternalFlags(), flag) || c.Preview[flag] || c.Features[flag]
+}
+
+// InternalFlags returns the internal flags and the deprecated experiments, which the installer
+// still reads as internal flags.
+func (c CodesphereConfig) InternalFlags() []string {
+	return slices.Concat(c.Experiments, c.Internal) //nolint:staticcheck
 }
