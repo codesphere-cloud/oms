@@ -74,6 +74,35 @@ var _ = Describe("Ceph", func() {
 		})
 	})
 
+	Describe("RGW user specs", func() {
+		It("creates the admin-ops user without the admin flag and never reconciles it", func() {
+			args := rgwUserCreateArgs(rgwAdminUserSpec)
+			Expect(args).To(ContainElements("user", "create", "--uid", rgwAdminUserName, "--caps", rgwAdminUserCaps))
+			Expect(args).NotTo(ContainElement("--admin"))
+			Expect(rgwAdminUserSpec.reconcile).To(BeFalse())
+		})
+
+		It("creates the backup user with buckets=read and the admin flag", func() {
+			args := rgwUserCreateArgs(rgwBackupUserSpec)
+			Expect(args[:2]).To(Equal([]string{"user", "create"}))
+			Expect(args).To(ContainElements("--uid", "sre-s3-backup", "--caps", "buckets=read", "--admin"))
+			Expect(args).To(ContainElements("--rgw-realm", rgwRealmName, "--rgw-zonegroup", rgwZoneGroupName, "--rgw-zone", rgwZoneName))
+			Expect(args[len(args)-2:]).To(Equal([]string{"--format", "json"}))
+		})
+
+		It("reconciles an existing backup user's caps and admin flag", func() {
+			calls := rgwUserReconcileArgs(rgwBackupUserSpec)
+			Expect(calls).To(HaveLen(2))
+			Expect(calls[0][:6]).To(Equal([]string{"caps", "add", "--uid", "sre-s3-backup", "--caps", "buckets=read"}))
+			Expect(calls[1][:5]).To(Equal([]string{"user", "modify", "--uid", "sre-s3-backup", "--admin"}))
+		})
+
+		It("never gives the backup user the admin-ops caps", func() {
+			Expect(rgwBackupUserCaps).NotTo(ContainSubstring("users="))
+			Expect(rgwBackupUserCaps).NotTo(ContainSubstring("buckets=*"))
+		})
+	})
+
 	Describe("rgwUserCredentialsFromAdminJSON", func() {
 		It("parses credentials from valid admin JSON", func() {
 			credentials, err := rgwUserCredentialsFromAdminJSON(`{"keys":[{"access_key":"access-key","secret_key":"secret-key"}]}`)
