@@ -309,15 +309,6 @@ If you change `registry.server` afterwards, update `pcApps.chartsRegistry` too.
 For older configs without this value, installation defaults child chart sources
 to Argo CD's configured OCI repository. `--pc-apps-values` can override it.
 
-Installation also points the `falco-deployment` application at the host of
-`registry.server` (`registry.name` in its values), because the Falco operator
-pulls its plugin OCI artifacts itself instead of through a Pod that the image
-registry policy rewrites. The operator matches pull credentials against that
-host, so a repository path in `registry.server` is not added. With a path such
-as `registry.example.com/team`, also set the `repository` of each plugin under
-`pcApps.applications.falco-deployment.valuesObject.plugins`. The `pcApps` block
-and `--pc-apps-values` override the generated value.
-
 As part of install-config generation, set the existing registry entries in `prod.vault.yaml` to the GHCR username and token supplied by Codesphere. The token is the registry password:
 
 ```yaml
