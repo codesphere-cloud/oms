@@ -56,8 +56,46 @@ var _ = Describe("OpenFgaPcAppsValues", func() {
 		return openfga["authn"].(files.ChartValues)
 	}
 
-	It("leaves the chart defaults alone when the config says nothing", func() {
-		Expect(pcapps.OpenFgaPcAppsValues(configWith(nil, ""), emptyVault())).To(BeNil())
+	// The postgres block of the openfga chart values, or nil if there is none.
+	postgresValues := func(values files.ChartValues) files.ChartValues {
+		if values == nil {
+			return nil
+		}
+
+		chartValues, ok := openfgaValues(values)["valuesObject"].(files.ChartValues)
+		if !ok {
+			return nil
+		}
+
+		postgres, ok := chartValues["postgres"].(files.ChartValues)
+		if !ok {
+			return nil
+		}
+
+		return postgres
+	}
+
+	It("sets only the retaining storage class when the config says nothing else", func() {
+		values := pcapps.OpenFgaPcAppsValues(configWith(nil, ""), emptyVault())
+
+		Expect(values).To(Equal(files.ChartValues{
+			"applications": files.ChartValues{
+				"openfga": files.ChartValues{
+					"valuesObject": files.ChartValues{
+						"postgres": files.ChartValues{
+							"storage": files.ChartValues{"storageClass": "codesphere-rbd-cnpg-clusters"},
+						},
+					},
+				},
+			},
+		}))
+	})
+
+	It("leaves the chart defaults alone when workspaces live on PVCs and the config says nothing else", func() {
+		config := configWith(nil, "")
+		config.Codesphere.Internal = []string{files.WorkspacePVCStorageFlag}
+
+		Expect(pcapps.OpenFgaPcAppsValues(config, emptyVault())).To(BeNil())
 	})
 
 	It("disables the application for a data center that uses a remote OpenFGA", func() {
@@ -70,7 +108,63 @@ var _ = Describe("OpenFgaPcAppsValues", func() {
 		fga := openfgaValues(values)
 		Expect(fga["enabled"]).To(BeFalse())
 		// Nothing to expose, so the gateway is not configured at all.
-		Expect(fga).NotTo(HaveKey("valuesObject"))
+		Expect(fga["valuesObject"]).NotTo(HaveKey("gateway"))
+	})
+
+	Context("storage class", func() {
+		storageClass := func(values files.ChartValues) any {
+			storage, ok := postgresValues(values)["storage"].(files.ChartValues)
+			if !ok {
+				return nil
+			}
+
+			return storage["storageClass"]
+		}
+
+		It("uses the retaining class when rook-external-cluster is enabled explicitly", func() {
+			config := configWith(nil, "")
+			config.Cluster.RookExternalCluster = &files.RookExternalClusterConfig{Enabled: true}
+
+			Expect(storageClass(pcapps.OpenFgaPcAppsValues(config, emptyVault()))).To(Equal("codesphere-rbd-cnpg-clusters"))
+		})
+
+		It("keeps the cluster's default class when rook-external-cluster is disabled", func() {
+			config := configWith(nil, "")
+			config.Cluster.RookExternalCluster = &files.RookExternalClusterConfig{Enabled: false}
+
+			Expect(storageClass(pcapps.OpenFgaPcAppsValues(config, emptyVault()))).To(BeNil())
+		})
+
+		It("keeps the cluster's default class when workspace-pvc-storage is a feature", func() {
+			config := configWith(nil, "")
+			config.Codesphere.Features = map[string]bool{files.WorkspacePVCStorageFlag: true}
+
+			Expect(storageClass(pcapps.OpenFgaPcAppsValues(config, emptyVault()))).To(BeNil())
+		})
+
+		It("keeps the cluster's default class when workspace-pvc-storage is a deprecated experiment", func() {
+			config := configWith(nil, "")
+			config.Codesphere.Experiments = []string{files.WorkspacePVCStorageFlag} //nolint:staticcheck
+
+			Expect(storageClass(pcapps.OpenFgaPcAppsValues(config, emptyVault()))).To(BeNil())
+		})
+
+		It("uses the retaining class when workspace-pvc-storage is a disabled feature", func() {
+			config := configWith(nil, "")
+			config.Codesphere.Features = map[string]bool{files.WorkspacePVCStorageFlag: false}
+
+			Expect(storageClass(pcapps.OpenFgaPcAppsValues(config, emptyVault()))).To(Equal("codesphere-rbd-cnpg-clusters"))
+		})
+
+		It("keeps the backup next to the storage class", func() {
+			config := configWith(nil, "")
+			config.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{Enabled: false}
+
+			Expect(postgresValues(pcapps.OpenFgaPcAppsValues(config, emptyVault()))).To(Equal(files.ChartValues{
+				"backup":  files.ChartValues{"enabled": false},
+				"storage": files.ChartValues{"storageClass": "codesphere-rbd-cnpg-clusters"},
+			}))
+		})
 	})
 
 	It("defaults to deploying when only the exposure is configured", func() {
@@ -149,7 +243,7 @@ var _ = Describe("OpenFgaPcAppsValues", func() {
 			Fields: &files.SecretFields{Password: ""},
 		}}}
 
-		Expect(pcapps.OpenFgaPcAppsValues(configWith(nil, ""), vault)).To(BeNil())
+		Expect(authnValues(pcapps.OpenFgaPcAppsValues(configWith(nil, ""), vault))).To(BeNil())
 	})
 
 	Context("with openfgaBackups", func() {
@@ -161,9 +255,7 @@ var _ = Describe("OpenFgaPcAppsValues", func() {
 		}
 
 		backupValues := func(values files.ChartValues) files.ChartValues {
-			postgres := openfgaValues(values)["valuesObject"].(files.ChartValues)["postgres"].(files.ChartValues)
-
-			return postgres["backup"].(files.ChartValues)
+			return postgresValues(values)["backup"].(files.ChartValues)
 		}
 
 		It("configures the database backup from a hand-written block", func() {
