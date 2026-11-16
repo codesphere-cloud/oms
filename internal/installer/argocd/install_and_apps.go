@@ -315,7 +315,7 @@ func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config)
 	return nil
 }
 
-// getPcAppsValues collects the base values for some apps from the config (OpenFGA, Rook) and merges these with
+// getPcAppsValues collects the base values for some apps from the config (OpenFGA, Rook, Falco) and merges these with
 // explicit pcApps block in the config.yaml.
 // The pcApps block in the config.yaml and --pc-apps-values always win over derived values from the config.yaml.
 // Returns a ChartValues map
@@ -325,11 +325,17 @@ func (i *AppInstaller) getPcAppsValues() (files.ChartValues, error) {
 		return nil, fmt.Errorf("configuring cluster-config application: %w", err)
 	}
 
+	falcoValues, err := pcapps.FalcoPcAppsValues(&i.cfg.Config)
+	if err != nil {
+		return nil, fmt.Errorf("configuring falco-deployment application: %w", err)
+	}
+
 	openFGAppValues := pcapps.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault)
 	rookCephAppValues := pcapps.RookCephPcAppsValues(&i.cfg.Config)
 
 	values := util.DeepMergeMaps(openFGAppValues, rookCephAppValues)
 	values = util.DeepMergeMaps(values, clusterConfigValues)
+	values = util.DeepMergeMaps(values, falcoValues)
 	values = util.DeepMergeMaps(values, i.cfg.Config.PcApps)
 
 	return values, nil

@@ -140,6 +140,7 @@ Commands that run on the jumpbox download further artifacts:
 | `lvm2`, `container-selinux` (RHEL only) | Installed by `oms beta bootstrap-gcp`. | OS package repositories |
 | k0s | `k0sctl` uploads the cached `k0s` binary to every node. With `--airgapped`, it also uploads the k0s airgap image bundle to the worker nodes, which provides the k0s system images. | Jumpbox cache |
 | Codesphere images and charts | Pulled by the nodes from the configured registry. With `--airgapped` this is the registry on the jumpbox. | Configured registry |
+| Falco plugin artifacts | Pulled by the Falco operator from the host of the configured registry, which OMS sets as the `falco-deployment` registry. | Configured registry |
 
 The GCP-only k0s configuration script also applies the GCP cloud controller manager manifest from `raw.githubusercontent.com/kubernetes/cloud-provider-gcp`. In an air-gapped bootstrap the control plane node must therefore reach that host, or the script must be changed to apply a mirrored copy.
 
