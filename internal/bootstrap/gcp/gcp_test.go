@@ -2579,6 +2579,19 @@ var _ = Describe("GCP Bootstrapper", func() {
 		Entry("config-selected version", "master", "", false),
 	)
 
+	It("codesphere-via-argocd set -> install command passes it on", func() {
+		csEnv.CodesphereViaArgoCD = true
+		dc := gcp.BuildDataCenters(csEnv)[0]
+
+		Expect(bs.InstallCommand(dc, "example-installer.tar.gz")).To(HaveSuffix(" --codesphere-via-argocd"))
+	})
+
+	It("codesphere-via-argocd not set -> install command leaves it out", func() {
+		dc := gcp.BuildDataCenters(csEnv)[0]
+
+		Expect(bs.InstallCommand(dc, "example-installer.tar.gz")).NotTo(ContainSubstring("--codesphere-via-argocd"))
+	})
+
 	Describe("InstallCodesphere", func() {
 		BeforeEach(func() {
 			csEnv.InstallVersion = "v1.2.3"

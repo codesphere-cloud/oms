@@ -288,6 +288,16 @@ var _ = Describe("Single VM configuration", func() {
 		Expect(b.installSingleVMCodesphere("user", "local", false)).To(Succeed())
 	})
 
+	It("codesphere-via-argocd set -> passes it to the local bootstrap", func() {
+		b.Env.CodesphereViaArgoCD = true
+
+		nodeClient.EXPECT().RunCommand(n, "root", "test -n \"$OMS_REGISTRY_PASSWORD\"").Return(nil).Once()
+		nodeClient.EXPECT().RunCommand(n, "root", mock.MatchedBy(func(command string) bool {
+			return strings.HasSuffix(command, " --codesphere-via-argocd")
+		})).Return(nil).Once()
+		Expect(b.installSingleVMCodesphere("user", "local", false)).To(Succeed())
+	})
+
 	It("configures unprivileged gateway ports before installation", func() {
 		nodeClient.EXPECT().RunCommand(n, "root", "sudo grep -E '^fs.inotify.max_user_watches=1048576' /etc/sysctl.conf >/dev/null 2>&1").Return(nil).Once()
 		nodeClient.EXPECT().RunCommand(n, "root", "sudo sysctl -n fs.inotify.max_user_watches | grep -q '^1048576$'").Return(nil).Once()

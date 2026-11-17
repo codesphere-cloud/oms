@@ -176,6 +176,7 @@ type CodesphereEnvironment struct {
 	InstallHash                   string       `json:"install_hash"`
 	InstallSkipSteps              []string     `json:"install_skip_steps"`
 	InstallCodesphereOnly         bool         `json:"-"`
+	CodesphereViaArgoCD           bool         `json:"-"`
 	Preemptible                   bool         `json:"preemptible"`
 	SpotVMs                       bool         `json:"spot_vms"`
 	SpotOnly                      bool         `json:"spot_only,omitempty"`
@@ -1400,9 +1401,14 @@ func (b *GCPBootstrapper) InstallCommand(dc *datacenter.DataCenter, packageFilen
 		codesphereOnlyArg = " --codesphere-only"
 	}
 
-	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s%s%s%s%s%s",
+	viaArgoCDArg := ""
+	if b.Env.CodesphereViaArgoCD {
+		viaArgoCDArg = " --codesphere-via-argocd"
+	}
+
+	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s%s%s%s%s%s%s",
 		dc.RemoteConfigPath, dc.RemoteAgeKeyPath(), dc.RemoteVaultPath(), packageArg,
-		b.generateRegistryTrustArg(), b.generatePCAppsValuesArg(), b.generateSkipStepsArg(), codesphereOnlyArg)
+		b.generateRegistryTrustArg(), b.generatePCAppsValuesArg(), b.generateSkipStepsArg(), codesphereOnlyArg, viaArgoCDArg)
 }
 
 // remotePCAppsValuesPath is where the i-th pc-apps values file is stored on the jumpbox. The index

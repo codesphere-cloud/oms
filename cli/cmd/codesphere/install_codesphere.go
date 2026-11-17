@@ -65,7 +65,8 @@ type InstallCodesphereOpts struct {
 	ArgoCDValues         []string
 	PCAppsValues         []string
 	// Name of the k8s secret containing the entire vault; source for ESO.
-	VaultSecretName string
+	VaultSecretName     string
+	CodesphereViaArgoCD bool
 }
 
 // Run installs all Codesphere phases selected by the options; cancelling ctx stops the installation.
@@ -175,6 +176,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.ArgoCDValues, "argo-values", nil, "ArgoCD values YAML file; packaged chart settings go under argo-cd (repeatable)")
 	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.PCAppsValues, "pc-apps-values", nil, "pc-apps values YAML file (can be specified multiple times)")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.VaultSecretName, "vault-secret-name", vault.VaultSecretName, "Secret in the codesphere namespace the vault is written to (as source for ESO).")
+	addCodesphereViaArgoCDFlag(codesphere.cmd, codesphere.Opts)
 
 	util.MarkPersistentFlagRequired(codesphere.cmd, "config")
 

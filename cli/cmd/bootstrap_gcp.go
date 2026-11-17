@@ -108,6 +108,7 @@ func (c *BootstrapGcpCmd) addSharedBootstrapFlags() {
 	flags.StringVar(&c.CodesphereEnv.Zone, "zone", "europe-west4-a", "GCP Zone (default: europe-west4-a)")
 	flags.StringVar(&c.CodesphereEnv.InstallLocal, "install-local", "", "Install Codesphere from local package (default: none)")
 	flags.StringVar(&c.CodesphereEnv.InstallVersion, "install-version", "", "Codesphere version to install (default: none)")
+	flags.BoolVar(&c.CodesphereEnv.CodesphereViaArgoCD, "codesphere-via-argocd", false, "Deploy Codesphere through the cs-applications ArgoCD app of apps instead of Helm. Passes --codesphere-via-argocd to the Codesphere installation (default: false)")
 	flags.StringVar(&c.CodesphereEnv.InstallHash, "install-hash", "", "Codesphere package hash to install (default: none)")
 	flags.StringVar(&c.CodesphereEnv.RemoteOmsBinaryPath, "remote-oms-binary", "", "Path to a local Linux amd64 OMS binary to copy to and use on the remote host instead of downloading a release (optional)")
 

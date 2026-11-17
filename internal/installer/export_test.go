@@ -3,4 +3,8 @@
 
 package installer
 
+func (ci *CodesphereInstaller) ArgoCDHandoverArgs() []string {
+	return ci.argoCDHandoverArgs()
+}
+
 var OrphanCodesphereExternalSecretsWithClient = orphanCodesphereExternalSecrets
