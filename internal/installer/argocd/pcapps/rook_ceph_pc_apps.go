@@ -21,8 +21,10 @@ func RookCephPcAppsValues(config *files.RootConfig) files.ChartValues {
 	return files.ChartValues{
 		"applications": files.ChartValues{
 			"rook-ceph": files.ChartValues{
-				"csi": files.ChartValues{
-					"kubeletDirPath": config.Ceph.CsiKubeletDir,
+				"valuesObject": files.ChartValues{
+					"rook-ceph": files.ChartValues{
+						"csi": files.ChartValues{"kubeletDirPath": config.Ceph.CsiKubeletDir},
+					},
 				},
 			},
 		},

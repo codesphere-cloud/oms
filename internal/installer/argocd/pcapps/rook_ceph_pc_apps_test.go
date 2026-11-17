@@ -21,7 +21,13 @@ var _ = Describe("RookCephPcAppsValues", func() {
 		rookCeph, ok := apps["rook-ceph"].(files.ChartValues)
 		Expect(ok).To(BeTrue(), "expected a rook-ceph application")
 
-		csi, ok := rookCeph["csi"].(files.ChartValues)
+		valuesObject, ok := rookCeph["valuesObject"].(files.ChartValues)
+		Expect(ok).To(BeTrue(), "expected Helm valuesObject")
+
+		chartValues, ok := valuesObject["rook-ceph"].(files.ChartValues)
+		Expect(ok).To(BeTrue(), "expected nested rook-ceph chart values")
+
+		csi, ok := chartValues["csi"].(files.ChartValues)
 		Expect(ok).To(BeTrue(), "expected a csi block")
 
 		return csi
@@ -67,7 +73,7 @@ var _ = Describe("RookCephPcAppsValues", func() {
 				PcApps: files.ChartValues{
 					"applications": files.ChartValues{
 						"rook-ceph": files.ChartValues{
-							"csi": files.ChartValues{"kubeletDirPath": "/custom/kubelet"},
+							"valuesObject": files.ChartValues{"rook-ceph": files.ChartValues{"csi": files.ChartValues{"kubeletDirPath": "/custom/kubelet"}}},
 						},
 					},
 				},
@@ -83,7 +89,7 @@ var _ = Describe("RookCephPcAppsValues", func() {
 				PcApps: files.ChartValues{
 					"applications": files.ChartValues{
 						"rook-ceph": files.ChartValues{
-							"csi": files.ChartValues{"kubeletDirPath": "/custom/kubelet"},
+							"valuesObject": files.ChartValues{"rook-ceph": files.ChartValues{"csi": files.ChartValues{"kubeletDirPath": "/custom/kubelet"}}},
 						},
 					},
 				},
