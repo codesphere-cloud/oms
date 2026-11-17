@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"filippo.io/age"
+
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -61,6 +63,46 @@ var _ = ginkgo.Describe("Auto vault", func() {
 			loaded, err := store.Load()
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(loaded.GetSecret("token").Fields.Password).To(gomega.Equal("s3cret"))
+		})
+
+		ginkgo.It("reads and keeps an encrypted vault encrypted when the age key is given", func() {
+			if !sopsAndAgeAvailable() {
+				ginkgo.Skip("sops or age-keygen not available")
+			}
+
+			identity, err := age.GenerateX25519Identity()
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+			keyPath := filepath.Join(tmpDir, "age_key.txt")
+			gomega.Expect(os.WriteFile(keyPath, []byte(identity.String()+"\n"), 0600)).To(gomega.Succeed())
+
+			encrypted, err := vault.New(vault.TypeSOPS, vault.Options{Path: vaultPath, AgeKey: keyPath, FileIO: fw})
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(encrypted.Save(&files.InstallVault{Secrets: []files.SecretEntry{
+				{Name: "token", Fields: &files.SecretFields{Password: "s3cret"}},
+			}})).To(gomega.Succeed())
+
+			store, err := vault.New(vault.TypeAuto, vault.Options{Path: vaultPath, AgeKey: keyPath, FileIO: fw})
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+			loaded, err := store.Load()
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(loaded.GetSecret("token").Fields.Password).To(gomega.Equal("s3cret"))
+
+			loaded.SetSecret(files.SecretEntry{Name: "other", Fields: &files.SecretFields{Password: "added"}})
+			gomega.Expect(store.Save(loaded)).To(gomega.Succeed())
+
+			stillEncrypted, err := vault.IsEncryptedFile(fw, vaultPath)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(stillEncrypted).To(gomega.BeTrue())
+
+			raw, err := os.ReadFile(vaultPath)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(string(raw)).NotTo(gomega.ContainSubstring("added"))
+
+			reloaded, err := store.Load()
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(reloaded.GetSecret("other").Fields.Password).To(gomega.Equal("added"))
 		})
 
 		ginkgo.It("fails on an encrypted vault when no age key is available", func() {

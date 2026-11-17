@@ -1179,6 +1179,16 @@ func (b *GCPBootstrapper) decryptVault(dc *datacenter.DataCenter, dst string) er
 	return nil
 }
 
+// WritePrimaryDataCenterConfig writes the primary data center's install config and vault and
+// places them, with the vault encrypted, on the jumpbox.
+func (b *GCPBootstrapper) WritePrimaryDataCenterConfig() error {
+	if err := b.ensureDataCenters(); err != nil {
+		return err
+	}
+
+	return b.writeDataCenterConfig(b.primaryDC())
+}
+
 // writeDataCenterConfig writes the data center's install config and vault, then places the
 // encrypted vault and its age identity on the jumpbox. The plaintext transfer copy is removed
 // last, so a failed removal never keeps the jumpbox vault in plaintext.

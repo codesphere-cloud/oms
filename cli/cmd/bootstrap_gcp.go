@@ -149,9 +149,9 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 
 	fw := intutil.NewFilesystemWriter()
 
-	ageKey, err := resolveVaultAccess(fw, c.CodesphereEnv.SecretsFilePath, c.CodesphereEnv.AgeKey, c.CodesphereEnv.RecoverConfig)
+	ageKey, err := util.ResolveVaultAgeKey(fw, c.CodesphereEnv.SecretsFilePath, c.CodesphereEnv.AgeKey, c.CodesphereEnv.RecoverConfig)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open vault %s: %w", c.CodesphereEnv.SecretsFilePath, err)
 	}
 
 	icg, err := installer.NewAutoInstallConfigManager(ageKey)

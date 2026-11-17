@@ -523,7 +523,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 							return nil
 						})
 
-					err := bs.WriteAndEncryptVault()
+					err := bs.WritePrimaryDataCenterConfig()
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to remove unencrypted vault transfer file"))
 					Expect(commands).To(ContainElement(ContainSubstring("sops --encrypt")))

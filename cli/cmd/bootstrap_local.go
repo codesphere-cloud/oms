@@ -173,9 +173,9 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 
 	var err error
 
-	c.CodesphereEnv.AgeKey, err = resolveVaultAccess(fw, c.CodesphereEnv.SecretsFilePath, c.CodesphereEnv.AgeKey, false)
+	c.CodesphereEnv.AgeKey, err = util.ResolveVaultAgeKey(fw, c.CodesphereEnv.SecretsFilePath, c.CodesphereEnv.AgeKey, false)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open vault %s: %w", c.CodesphereEnv.SecretsFilePath, err)
 	}
 
 	icg, err := installer.NewAutoInstallConfigManager(c.CodesphereEnv.AgeKey)

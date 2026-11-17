@@ -431,7 +431,7 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	}
 
 	if b.Env.WriteConfig {
-		err = b.writeDataCenterConfig(b.primaryDC())
+		err = b.WritePrimaryDataCenterConfig()
 		if err != nil {
 			return err
 		}
