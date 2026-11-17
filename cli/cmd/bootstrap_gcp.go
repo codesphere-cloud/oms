@@ -40,7 +40,7 @@ type BootstrapGcpCmd struct {
 }
 
 // RunE is the starting point for the bootstrap command that executes the bootstrap logic.
-func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, args []string) error {
+func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, _ []string) error {
 	err := c.BootstrapGcp()
 	if err != nil {
 		return fmt.Errorf("failed to bootstrap: %w", err)
@@ -154,14 +154,14 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 
 	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 	fw := intutil.NewFilesystemWriter()
-	portalClient := portal.NewPortalClient()
+	portalClient := portal.NewPortalClient(ctx)
 
 	githubClient, err := github.NewGitHubClient(ctx, c.CodesphereEnv.GitHubPAT)
 	if err != nil {
 		return fmt.Errorf("failed to create github client: %w", err)
 	}
 
-	sshClient := node.NewSSHNodeClient(c.SSHQuiet)
+	sshClient := node.NewSSHNodeClient(ctx, c.SSHQuiet)
 	if c.CodesphereEnv.SingleVM {
 		sshClient.RegistryPassword = c.CodesphereEnv.GitHubPAT
 	}

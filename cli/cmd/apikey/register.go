@@ -35,7 +35,7 @@ type RegisterOpts struct {
 }
 
 func (c *RegisterCmd) RunE(_ *cobra.Command, args []string) error {
-	p := portal.NewPortalClient()
+	p := portal.NewPortalClient(c.cmd.Context())
 
 	newKey, err := c.Register(p)
 	if err != nil {

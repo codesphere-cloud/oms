@@ -13,6 +13,7 @@ type UpgradeCmd struct {
 	cmd *cobra.Command
 }
 
+// AddUpgradeCmd registers the upgrade command and its subcommands on the root command.
 func AddUpgradeCmd(rootCmd *cobra.Command) {
 	upgrade := UpgradeCmd{
 		cmd: &cobra.Command{

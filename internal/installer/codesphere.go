@@ -32,9 +32,9 @@ var KnownInstallerSteps = []string{
 	"postgres",
 	"ceph",
 	"kubernetes",
-	"set-up-cluster",
+	SetUpClusterStep,
 	CodesphereStep,
-	"ms-backends",
+	MsBackendsStep,
 }
 
 // ArgoCDStep is the skip-step name for the dependency-phase ArgoCD pre-step.
@@ -42,6 +42,12 @@ const ArgoCDStep = "argocd"
 
 // CodesphereStep is the skip-step name for deploying the Codesphere release.
 const CodesphereStep = "codesphere"
+
+// SetUpClusterStep is the skip-step name for setting up the cluster components.
+const SetUpClusterStep = "set-up-cluster"
+
+// MsBackendsStep is the skip-step name for installing the managed service backends.
+const MsBackendsStep = "ms-backends"
 
 // InfraSteps are run in Phase 1 (before ArgoCD) when --argocd is active.
 var InfraSteps = []string{
@@ -56,7 +62,7 @@ var InfraSteps = []string{
 }
 
 // DependenciesSteps run in Phase 2 after infrastructure is ready.
-var DependenciesSteps = []string{"copy-dependencies", "extract-dependencies", "set-up-cluster", "ms-backends"}
+var DependenciesSteps = []string{"copy-dependencies", "extract-dependencies", SetUpClusterStep, MsBackendsStep}
 
 // PlatformSteps run in Phase 3 and install the Codesphere platform only.
 var PlatformSteps = []string{"copy-dependencies", "extract-dependencies", CodesphereStep}
@@ -393,7 +399,7 @@ func (ci *CodesphereInstaller) runInstaller(ctx context.Context, pm PackageManag
 	log.Printf("Using Node.js executable: %s", nodePath)
 	log.Println("Starting private cloud installer script...")
 
-	cmdArgs, err := ci.installerCommandArgs(pm, config)
+	cmdArgs, err := ci.installerCommandArgs(ctx, pm, config)
 	if err != nil {
 		return err
 	}
@@ -451,10 +457,10 @@ func (ci *CodesphereInstaller) runLocalComponents(ctx context.Context, pm Packag
 		return fmt.Errorf("failed to resolve private key path: %w", err)
 	}
 
-	components := map[string]string{"set-up-cluster": "setUpCluster", "codesphere": "codesphere", "ms-backends": "msBackends"}
+	components := map[string]string{SetUpClusterStep: "setUpCluster", CodesphereStep: "codesphere", MsBackendsStep: "msBackends"}
 
 	selected := ci.executableInstallerSteps(config)
-	for _, step := range []string{"set-up-cluster", "codesphere", "ms-backends"} {
+	for _, step := range []string{SetUpClusterStep, CodesphereStep, MsBackendsStep} {
 		if !selected[step] {
 			continue
 		}
@@ -475,7 +481,7 @@ func (ci *CodesphereInstaller) runLocalComponents(ctx context.Context, pm Packag
 	return nil
 }
 
-func (ci *CodesphereInstaller) installerCommandArgs(pm PackageManager, config files.RootConfig) ([]string, error) {
+func (ci *CodesphereInstaller) installerCommandArgs(ctx context.Context, pm PackageManager, config files.RootConfig) ([]string, error) {
 	installerPath := filepath.Join(pm.GetWorkDir(), "private-cloud-installer.js")
 	archivePath := filepath.Join(pm.GetWorkDir(), "deps.tar.gz")
 	cmdArgs := []string{installerPath, "--archive", archivePath, "--config", ci.ConfigPath, "--privKey", ci.PrivKey}
@@ -500,7 +506,7 @@ func (ci *CodesphereInstaller) installerCommandArgs(pm PackageManager, config fi
 
 	sort.Strings(executedSteps)
 
-	prompter := prompt.NewPrompter(!ci.AutoApprove)
+	prompter := prompt.NewPrompter(ctx, !ci.AutoApprove)
 
 	msg := fmt.Sprintf("The following steps will be executed: %s. Type \"yes\" to continue.", strings.Join(executedSteps, ", "))
 	if prompter.String(msg, "yes") != "yes" {

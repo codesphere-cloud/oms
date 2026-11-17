@@ -17,9 +17,18 @@ jobs:
     uses: ./.github/workflows/integration-test.yml
     secrets: inherit
 
+  # Bootstraps the latest official Codesphere release on GCP with this commit's OMS build,
+  # so a broken bootstrap blocks the release instead of surfacing in the monorepo.
+  bootstrap-gcp:
+    uses: ./.github/workflows/bootstrap-gcp.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+
   tag:
     runs-on: ubuntu-latest
-    needs: integration-tests
+    needs: [integration-tests, bootstrap-gcp]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -27,7 +36,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
         with:
           go-version-file: 'go.mod'
 

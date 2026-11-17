@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// UpdateInstallConfigCmd implements the update install-config command.
 type UpdateInstallConfigCmd struct {
 	cmd        *cobra.Command
 	Opts       *UpdateInstallConfigOpts
@@ -29,6 +30,7 @@ type UpdateInstallConfigCmd struct {
 	Prompter prompt.Prompter
 }
 
+// UpdateInstallConfigOpts holds the flags of the update install-config command.
 type UpdateInstallConfigOpts struct {
 	*util.GlobalOptions
 
@@ -77,15 +79,21 @@ type UpdateInstallConfigOpts struct {
 	CodesphereDNSServers                   []string
 }
 
-func (c *UpdateInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE updates the install config with the real config manager and a stdin prompter.
+func (c *UpdateInstallConfigCmd) RunE(cmd *cobra.Command, _ []string) error {
 	icg, err := installer.NewInstallConfigManager(c.Opts.VaultType, c.Opts.AgeKey)
 	if err != nil {
 		return fmt.Errorf("failed to initialize config manager: %w", err)
 	}
 
+	// One prompter for the whole command: it buffers stdin, so a fresh one per
+	// question could drop what the operator already typed.
+	c.Prompter = prompt.NewPrompter(cmd.Context(), true)
+
 	return c.UpdateInstallConfig(icg)
 }
 
+// AddUpdateInstallConfigCmd registers the install-config command on the update command.
 func AddUpdateInstallConfigCmd(update *cobra.Command, opts *util.GlobalOptions) {
 	c := UpdateInstallConfigCmd{
 		cmd: &cobra.Command{
@@ -110,9 +118,6 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *util.GlobalOptions) 
 		},
 		Opts:       &UpdateInstallConfigOpts{GlobalOptions: opts},
 		FileWriter: intutil.NewFilesystemWriter(),
-		// One prompter for the whole command: it buffers stdin, so a fresh one per
-		// question could drop what the operator already typed.
-		Prompter: prompt.NewPrompter(true),
 	}
 
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Path to existing config.yaml file")
@@ -172,6 +177,7 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *util.GlobalOptions) 
 	util.AddCmd(update, c.cmd)
 }
 
+// UpdateInstallConfig loads the existing config and vault, applies the requested changes and regenerates dependent secrets.
 func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfigManager) error {
 	log.Printf("Loading existing configuration from: %s\n", c.Opts.ConfigFile)
 
@@ -632,36 +638,44 @@ func (c *UpdateInstallConfigCmd) printSuccessMessage(tracker *SecretDependencyTr
 	log.Println()
 }
 
+// SecretDependencyTracker records which secrets must be regenerated because of config changes.
 type SecretDependencyTracker struct {
 	postgresPrimaryCertNeedsRegen bool
 	postgresReplicaCertNeedsRegen bool
 	acmeConfigChanged             bool
 }
 
+// NewSecretDependencyTracker returns a tracker without any recorded changes.
 func NewSecretDependencyTracker() *SecretDependencyTracker {
 	return &SecretDependencyTracker{}
 }
 
+// MarkPostgresPrimaryCertNeedsRegen records that the PostgreSQL primary certificate must be regenerated.
 func (t *SecretDependencyTracker) MarkPostgresPrimaryCertNeedsRegen() {
 	t.postgresPrimaryCertNeedsRegen = true
 }
 
+// MarkPostgresReplicaCertNeedsRegen records that the PostgreSQL replica certificate must be regenerated.
 func (t *SecretDependencyTracker) MarkPostgresReplicaCertNeedsRegen() {
 	t.postgresReplicaCertNeedsRegen = true
 }
 
+// MarkACMEConfigChanged records that the ACME configuration changed.
 func (t *SecretDependencyTracker) MarkACMEConfigChanged() {
 	t.acmeConfigChanged = true
 }
 
+// NeedsPostgresPrimaryCertRegen reports whether the PostgreSQL primary certificate must be regenerated.
 func (t *SecretDependencyTracker) NeedsPostgresPrimaryCertRegen() bool {
 	return t.postgresPrimaryCertNeedsRegen
 }
 
+// NeedsPostgresReplicaCertRegen reports whether the PostgreSQL replica certificate must be regenerated.
 func (t *SecretDependencyTracker) NeedsPostgresReplicaCertRegen() bool {
 	return t.postgresReplicaCertNeedsRegen
 }
 
+// ACMEConfigChanged reports whether the ACME configuration changed.
 func (t *SecretDependencyTracker) ACMEConfigChanged() bool {
 	return t.acmeConfigChanged
 }
@@ -686,6 +700,7 @@ func (t *SecretDependencyTracker) Regenerates() []string {
 	return changes
 }
 
+// HasChanges reports whether any secret must be regenerated.
 func (t *SecretDependencyTracker) HasChanges() bool {
 	return t.postgresPrimaryCertNeedsRegen || t.postgresReplicaCertNeedsRegen || t.acmeConfigChanged
 }

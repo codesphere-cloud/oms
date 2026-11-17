@@ -9,6 +9,8 @@ import (
 	"log"
 	"strconv"
 	"time"
+
+	cserrors "github.com/codesphere-cloud/cs-go/api/errors"
 )
 
 const (
@@ -28,6 +30,10 @@ const (
 	pipelineStateFailure   = "failure"
 	pipelineStateAborted   = "aborted"
 	pipelineStatePollDelay = 5 * time.Second
+
+	createWorkspaceAttempts   = 5
+	createWorkspaceRetryDelay = 5 * time.Second
+	workspaceStatusPollDelay  = 5 * time.Second
 
 	ciYmlContent = `schemaVersion: v0.2
 prepare:
@@ -126,17 +132,76 @@ func (s *CreateWorkspaceStep) Run(ctx context.Context, c *SmoketestCodesphereOpt
 
 	c.logStep(fmt.Sprintf("Creating empty workspace '%s'", workspaceName))
 
-	id, err := c.Client.CreateWorkspace(teamID, planID, workspaceName, nil)
+	id, err := createWorkspace(ctx, c, teamID, planID, workspaceName)
 	if err != nil {
 		c.logFailure()
 		return fmt.Errorf("failed to create workspace: %w", err)
 	}
 
+	// Record the workspace before waiting, so it is deleted even if it never becomes ready.
 	*workspaceID = id
+
+	if err := waitForWorkspaceRunning(ctx, c, id); err != nil {
+		c.logFailure()
+		return err
+	}
 
 	c.logSuccess()
 
 	return nil
+}
+
+// createWorkspace retries server errors like cs-go's DeployWorkspace does, but stops waiting
+// between attempts once ctx is cancelled.
+func createWorkspace(ctx context.Context, c *SmoketestCodesphereOpts, teamID, planID int, name string) (int, error) {
+	for attempt := 1; ; attempt++ {
+		id, err := c.Client.CreateWorkspace(teamID, planID, name, nil)
+		if err == nil {
+			return id, nil
+		}
+
+		if attempt == createWorkspaceAttempts || !cserrors.IsRetryable(err) {
+			return 0, fmt.Errorf("attempt %d of %d: %w", attempt, createWorkspaceAttempts, err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return 0, fmt.Errorf("%w; last error: %w", ctx.Err(), err)
+		case <-time.After(time.Duration(attempt) * createWorkspaceRetryDelay):
+		}
+	}
+}
+
+// waitForWorkspaceRunning polls the workspace status until it is running or ctx is done.
+// Status errors are retried, as a workspace that is starting up may not report one yet.
+func waitForWorkspaceRunning(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID int) error {
+	var lastErr error
+
+	for {
+		running, err := c.Client.WorkspaceRunning(workspaceID)
+		if err == nil && running {
+			return nil
+		}
+
+		if err != nil {
+			lastErr = err
+			log.Printf("failed to get workspace status, retrying: %s", err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return workspaceNotRunningError(ctx.Err(), workspaceID, lastErr)
+		case <-time.After(workspaceStatusPollDelay):
+		}
+	}
+}
+
+func workspaceNotRunningError(cause error, workspaceID int, lastErr error) error {
+	if lastErr != nil {
+		return fmt.Errorf("stopped waiting for workspace %d to be running: %w; last error: %w", workspaceID, cause, lastErr)
+	}
+
+	return fmt.Errorf("stopped waiting for workspace %d to be running: %w", workspaceID, cause)
 }
 
 type SetEnvVarStep struct{}

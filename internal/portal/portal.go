@@ -38,6 +38,8 @@ type Portal interface {
 type PortalClient struct {
 	Env        env.Env
 	HttpClient HttpClient
+	// ctx is the command context. Portal requests are cancelled with it.
+	ctx context.Context
 }
 
 //mockery:generate: true
@@ -45,11 +47,22 @@ type HttpClient interface {
 	Do(*http.Request) (*http.Response, error)
 }
 
-func NewPortalClient() *PortalClient {
+// NewPortalClient returns a portal client whose requests are cancelled with ctx.
+func NewPortalClient(ctx context.Context) *PortalClient {
 	return &PortalClient{
 		Env:        env.NewEnv(),
 		HttpClient: http.DefaultClient,
+		ctx:        ctx,
 	}
+}
+
+// context returns the client's context, or a background context for a client built without one.
+func (c *PortalClient) context() context.Context {
+	if c.ctx == nil {
+		return context.Background()
+	}
+
+	return c.ctx
 }
 
 type Product string
@@ -138,7 +151,7 @@ func (c *PortalClient) HttpRequest(method string, path string, body []byte) (*ht
 		return nil, fmt.Errorf("failed to get generate URL: %w", err)
 	}
 
-	req, err := http.NewRequest(method, url, requestBody)
+	req, err := http.NewRequestWithContext(c.context(), method, url, requestBody)
 	if err != nil {
 		log.Fatalf("failed to create request: %v", err)
 		return nil, err
@@ -191,7 +204,7 @@ func (c *PortalClient) ListBuilds(product Product, sort string) (Builds, error) 
 	u.RawQuery = q.Encode()
 	requestUrl = u.String()
 
-	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
+	req, err := http.NewRequestWithContext(c.context(), http.MethodGet, requestUrl, nil)
 	if err != nil {
 		return Builds{}, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -443,7 +456,7 @@ func (c *PortalClient) GetHealth() error {
 		return fmt.Errorf("failed to get generate health URL: %w", err)
 	}
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(c.context(), "GET", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create healthcheck request: %w", err)
 	}

@@ -181,16 +181,16 @@ func (_c *MockInstallConfigManager_ApplyProfile_Call) RunAndReturn(run func(prof
 }
 
 // CollectInteractively provides a mock function for the type MockInstallConfigManager
-func (_mock *MockInstallConfigManager) CollectInteractively() error {
-	ret := _mock.Called()
+func (_mock *MockInstallConfigManager) CollectInteractively(ctx context.Context) error {
+	ret := _mock.Called(ctx)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CollectInteractively")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func() error); ok {
-		r0 = returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(context.Context) error); ok {
+		r0 = returnFunc(ctx)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -203,13 +203,20 @@ type MockInstallConfigManager_CollectInteractively_Call struct {
 }
 
 // CollectInteractively is a helper method to define mock.On call
-func (_e *MockInstallConfigManager_Expecter) CollectInteractively() *MockInstallConfigManager_CollectInteractively_Call {
-	return &MockInstallConfigManager_CollectInteractively_Call{Call: _e.mock.On("CollectInteractively")}
+//   - ctx context.Context
+func (_e *MockInstallConfigManager_Expecter) CollectInteractively(ctx any) *MockInstallConfigManager_CollectInteractively_Call {
+	return &MockInstallConfigManager_CollectInteractively_Call{Call: _e.mock.On("CollectInteractively", ctx)}
 }
 
-func (_c *MockInstallConfigManager_CollectInteractively_Call) Run(run func()) *MockInstallConfigManager_CollectInteractively_Call {
+func (_c *MockInstallConfigManager_CollectInteractively_Call) Run(run func(ctx context.Context)) *MockInstallConfigManager_CollectInteractively_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run()
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -219,7 +226,7 @@ func (_c *MockInstallConfigManager_CollectInteractively_Call) Return(err error) 
 	return _c
 }
 
-func (_c *MockInstallConfigManager_CollectInteractively_Call) RunAndReturn(run func() error) *MockInstallConfigManager_CollectInteractively_Call {
+func (_c *MockInstallConfigManager_CollectInteractively_Call) RunAndReturn(run func(ctx context.Context) error) *MockInstallConfigManager_CollectInteractively_Call {
 	_c.Call.Return(run)
 	return _c
 }

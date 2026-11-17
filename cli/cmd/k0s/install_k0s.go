@@ -6,7 +6,9 @@ package k0s
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"os/exec"
@@ -24,6 +26,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/prompt"
+	"github.com/codesphere-cloud/oms/internal/system"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
@@ -51,7 +54,8 @@ type InstallK0sOpts struct {
 	Yes bool
 }
 
-func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE validates the options and installs k0s with the real package, k0s and k0sctl implementations.
+func (c *InstallK0sCmd) RunE(cmd *cobra.Command, _ []string) error {
 	if c.Opts.Single && (c.Opts.InstallConfig != "" || c.Opts.K0sctlConfig != "") {
 		return fmt.Errorf("--install-config and --config cannot be used with --single")
 	}
@@ -60,13 +64,15 @@ func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("--install-config or --config is required unless --single is set")
 	}
 
-	hw := portal.NewHttpWrapper()
+	ctx := cmd.Context()
+	hw := portal.NewHTTPWrapper(ctx)
 	env := c.Env
 	pm := installer.NewPackage(env.GetOmsWorkdir(), c.Opts.Package)
-	k0s := installer.NewK0s(hw, env, c.FileWriter)
-	k0sctl := installer.NewK0sctl(hw, env, c.FileWriter)
+	k0s := installer.NewK0s(ctx, hw, env, c.FileWriter)
+	k0sctl := installer.NewK0sctl(ctx, hw, env, c.FileWriter)
+	c.Prompter = prompt.NewPrompter(ctx, true)
 
-	return c.InstallK0s(pm, k0s, k0sctl)
+	return c.InstallK0s(ctx, pm, k0s, k0sctl)
 }
 
 func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
@@ -102,7 +108,6 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 		Opts:       InstallK0sOpts{GlobalOptions: opts},
 		Env:        env.NewEnv(),
 		FileWriter: intutil.NewFilesystemWriter(),
-		Prompter:   prompt.NewPrompter(true),
 	}
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", installer.DefaultK0sVersion, "Version of k0s to install")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.K0sctlVersion, "k0sctl-version", installer.DefaultK0sctlVersion, "Version of k0sctl to use")
@@ -136,13 +141,13 @@ const vaultSecretNameKubeconfig = "kubeConfig"
 
 // InstallK0s installs k0s with the given k0sctl config, or with one generated from the
 // command options.
-func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0sManager, k0sctl installer.K0sctlManager) error {
+func (c *InstallK0sCmd) InstallK0s(ctx context.Context, pm installer.PackageManager, k0s installer.K0sManager, k0sctl installer.K0sctlManager) error {
 	if err := c.FileWriter.MkdirAll(c.Env.GetOmsWorkdir(), 0755); err != nil {
 		return fmt.Errorf("failed to create oms workdir: %w", err)
 	}
 
 	if c.Opts.Single {
-		return c.installSingle(pm, k0s)
+		return c.installSingle(ctx, pm, k0s)
 	}
 
 	k0sctlConfigPath, err := c.getK0sctlConfigPath(pm, k0s)
@@ -270,7 +275,34 @@ func (c *InstallK0sCmd) vaultStore() (vault.Vault, error) {
 	return vault, nil
 }
 
-func (c *InstallK0sCmd) installSingle(pm installer.PackageManager, k0s installer.K0sManager) error {
+const k0sControllerUnitPath = "/etc/systemd/system/k0scontroller.service"
+
+// K0sControllerUnitInstalled reports whether `k0s install controller` already wrote the systemd unit
+// at unitPath. k0s creates the unit empty and fills it shortly after, so an interrupted install can
+// leave an empty or incomplete unit behind. A unit without an ExecStart= line is removed and reported
+// as missing so the install is retried.
+func (c *InstallK0sCmd) K0sControllerUnitInstalled(unitPath string) (bool, error) {
+	content, err := c.FileWriter.ReadFile(unitPath)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, fmt.Errorf("failed to inspect k0s service: %w", err)
+	}
+
+	if strings.Contains(string(content), "ExecStart=") {
+		return true, nil
+	}
+
+	if err := c.FileWriter.Remove(unitPath); err != nil {
+		return false, fmt.Errorf("failed to remove incomplete k0s service %s: %w", unitPath, err)
+	}
+
+	return false, nil
+}
+
+func (c *InstallK0sCmd) installSingle(ctx context.Context, pm installer.PackageManager, k0s installer.K0sManager) error {
 	if c.Opts.SSHKeyPath != "" || c.Opts.Vault != "" {
 		return fmt.Errorf("--ssh-key-path and --vault are not supported with --single")
 	}
@@ -292,7 +324,7 @@ func (c *InstallK0sCmd) installSingle(pm installer.PackageManager, k0s installer
 	const installedPath = "/usr/local/bin/k0s"
 	if path != "" && path != installedPath {
 		stagedPath := installedPath + ".new"
-		if out, err := exec.Command("install", "-m", "0755", path, stagedPath).CombinedOutput(); err != nil {
+		if out, err := exec.CommandContext(ctx, "install", "-m", "0755", path, stagedPath).CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to install k0s binary: %w: %s", err, strings.TrimSpace(string(out)))
 		}
 
@@ -305,21 +337,28 @@ func (c *InstallK0sCmd) installSingle(pm installer.PackageManager, k0s installer
 		return fmt.Errorf("k0s binary is unavailable at %s: %w", installedPath, err)
 	}
 
-	if _, err := os.Stat("/etc/systemd/system/k0scontroller.service"); os.IsNotExist(err) {
-		if out, err := exec.Command(installedPath, "install", "controller", "--single", "--enable-worker", "--no-taints=true").CombinedOutput(); err != nil {
-			return fmt.Errorf("failed to install k0s controller: %w: %s", err, strings.TrimSpace(string(out)))
-		}
-	} else if err != nil {
-		return fmt.Errorf("failed to inspect k0s service: %w", err)
+	unitInstalled, err := c.K0sControllerUnitInstalled(k0sControllerUnitPath)
+	if err != nil {
+		return err
 	}
 
-	if err := exec.Command("systemctl", "is-active", "--quiet", "k0scontroller").Run(); err != nil {
-		if out, err := exec.Command(installedPath, "start").CombinedOutput(); err != nil {
+	if !unitInstalled {
+		// Not cancelled with the command: k0s writes the unit in many small writes, and on a terminal
+		// Ctrl-C it already gets the terminal's SIGINT. A second one from the cancellation could stop
+		// it mid-write and leave an incomplete unit. The step only takes a moment.
+		installCtx := context.WithoutCancel(ctx)
+		if out, err := exec.CommandContext(installCtx, installedPath, "install", "controller", "--single", "--enable-worker", "--no-taints=true").CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to install k0s controller: %w: %s", err, strings.TrimSpace(string(out)))
+		}
+	}
+
+	if err := exec.CommandContext(ctx, "systemctl", "is-active", "--quiet", "k0scontroller").Run(); err != nil {
+		if out, err := system.CommandContext(ctx, installedPath, "start").CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to start k0s: %w: %s", err, strings.TrimSpace(string(out)))
 		}
 	}
 
-	statusCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	statusCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
 	readiness := installer.NewK0sReadinessClient(installedPath)
@@ -327,7 +366,7 @@ func (c *InstallK0sCmd) installSingle(pm installer.PackageManager, k0s installer
 		return fmt.Errorf("failed to wait for k0s installation: %w", err)
 	}
 
-	nodeCtx, cancelNodeWait := context.WithTimeout(context.Background(), 30*time.Minute)
+	nodeCtx, cancelNodeWait := context.WithTimeout(ctx, 30*time.Minute)
 	defer cancelNodeWait()
 
 	node, err := waitForK0sNode(nodeCtx, 2*time.Second, readiness)
@@ -339,7 +378,7 @@ func (c *InstallK0sCmd) installSingle(pm installer.PackageManager, k0s installer
 		return fmt.Errorf("failed to wait for k0s node: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 
-	kubeconfig, err := exec.Command(installedPath, "kubeconfig", "admin").Output()
+	kubeconfig, err := exec.CommandContext(ctx, installedPath, "kubeconfig", "admin").Output()
 	if err != nil {
 		return fmt.Errorf("failed to get k0s kubeconfig: %w", err)
 	}

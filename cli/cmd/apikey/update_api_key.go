@@ -35,7 +35,7 @@ func AddUpdateCmd(parentCmd *cobra.Command) {
 		Long:  `Updates the expiration date for a given API key using the --id and --valid-for flags.`,
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			p := portal.NewPortalClient()
+			p := portal.NewPortalClient(cmd.Context())
 			return cmdState.UpdateAPIKey(p)
 		},
 	}

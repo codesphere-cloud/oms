@@ -4,6 +4,7 @@
 package installer_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 
@@ -35,7 +36,7 @@ var _ = Describe("K0sctl", func() {
 		mockEnv.EXPECT().GetOmsCacheDir().Return(cacheDir, nil)
 		mockFileWriter.EXPECT().MkdirAll(cacheDir, os.FileMode(0755)).Return(nil)
 
-		k0sctl = installer.NewK0sctl(mockHTTP, mockEnv, mockFileWriter)
+		k0sctl = installer.NewK0sctl(context.Background(), mockHTTP, mockEnv, mockFileWriter)
 		k0sctl.Goos = "linux"
 		k0sctl.Goarch = "amd64"
 	})

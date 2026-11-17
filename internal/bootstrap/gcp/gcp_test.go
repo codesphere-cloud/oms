@@ -2605,6 +2605,21 @@ var _ = Describe("GCP Bootstrapper", func() {
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
 				})
+
+				Context("after the command was interrupted", func() {
+					BeforeEach(func() {
+						cancelled, cancel := context.WithCancel(context.Background())
+						cancel()
+
+						ctx = cancelled
+					})
+
+					It("does not start installing in a data center", func() {
+						err := bs.InstallCodesphere()
+						Expect(err).To(MatchError(context.Canceled))
+						Expect(err).To(MatchError(ContainSubstring("stopped before installing Codesphere in data center")))
+					})
+				})
 			})
 
 			Context("without explicit hash", func() {

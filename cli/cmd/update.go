@@ -10,10 +10,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// UpdateCmd groups the update subcommands.
 type UpdateCmd struct {
 	cmd *cobra.Command
 }
 
+// AddUpdateCmd registers the update command and its subcommands on the root command.
 func AddUpdateCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	updateCmd := UpdateCmd{
 		cmd: &cobra.Command{
