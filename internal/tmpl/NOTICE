@@ -185,9 +185,9 @@ License URL: https://github.com/asaskevich/govalidator/blob/a9d515a09cc2/LICENSE
  
 ----------
 Module: github.com/avast/retry-go/v5
-Version: v5.0.0
+Version: v5.1.1
 License: MIT
-License URL: https://github.com/avast/retry-go/blob/v5.0.0/LICENSE
+License URL: https://github.com/avast/retry-go/blob/v5.1.1/LICENSE
  
 ----------
 Module: github.com/beorn7/perks/quantile
@@ -275,27 +275,27 @@ License URL: https://github.com/cloudflare/circl/blob/v1.6.4/LICENSE
  
 ----------
 Module: github.com/cloudnative-pg/barman-cloud/pkg/api
-Version: v0.5.1
+Version: v0.7.0
 License: Apache-2.0
-License URL: https://github.com/cloudnative-pg/barman-cloud/blob/v0.5.1/LICENSE
+License URL: https://github.com/cloudnative-pg/barman-cloud/blob/v0.7.0/LICENSE
  
 ----------
 Module: github.com/cloudnative-pg/cloudnative-pg
-Version: v1.30.0
+Version: v1.30.2
 License: Apache-2.0
-License URL: https://github.com/cloudnative-pg/cloudnative-pg/blob/v1.30.0/LICENSE
+License URL: https://github.com/cloudnative-pg/cloudnative-pg/blob/v1.30.2/LICENSE
  
 ----------
 Module: github.com/cloudnative-pg/cnpg-i/pkg/identity
-Version: v0.5.0
+Version: v0.6.0
 License: Apache-2.0
-License URL: https://github.com/cloudnative-pg/cnpg-i/blob/v0.5.0/LICENSE
+License URL: https://github.com/cloudnative-pg/cnpg-i/blob/v0.6.0/LICENSE
  
 ----------
 Module: github.com/cloudnative-pg/machinery/pkg
-Version: v0.5.0
+Version: v0.6.1
 License: Apache-2.0
-License URL: https://github.com/cloudnative-pg/machinery/blob/v0.5.0/LICENSE
+License URL: https://github.com/cloudnative-pg/machinery/blob/v0.6.1/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
@@ -929,9 +929,9 @@ License URL: https://github.com/kube-object-storage/lib-bucket-provisioner/blob/
  
 ----------
 Module: github.com/kubernetes-csi/external-snapshotter/client/v8/apis/volumesnapshot/v1
-Version: v8.6.0
+Version: v8.7.0
 License: Apache-2.0
-License URL: https://github.com/kubernetes-csi/external-snapshotter/blob/client/v8.6.0/client/LICENSE
+License URL: https://github.com/kubernetes-csi/external-snapshotter/blob/client/v8.7.0/client/LICENSE
  
 ----------
 Module: github.com/kylelemons/godebug
@@ -1127,9 +1127,9 @@ License URL: https://github.com/pmezard/go-difflib/blob/5d4384ee4fb2/LICENSE
  
 ----------
 Module: github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring
-Version: v0.92.0
+Version: v0.95.2
 License: Apache-2.0
-License URL: https://github.com/prometheus-operator/prometheus-operator/blob/pkg/apis/monitoring/v0.92.0/pkg/apis/monitoring/LICENSE
+License URL: https://github.com/prometheus-operator/prometheus-operator/blob/pkg/apis/monitoring/v0.95.2/pkg/apis/monitoring/LICENSE
  
 ----------
 Module: github.com/prometheus/client_golang/internal/github.com/golang/gddo/httputil
@@ -1433,9 +1433,9 @@ License URL: https://github.com/open-telemetry/opentelemetry-proto-go/blob/otlp/
  
 ----------
 Module: go.uber.org/atomic
-Version: v1.11.0
+Version: v1.12.0
 License: MIT
-License URL: https://github.com/uber-go/atomic/blob/v1.11.0/LICENSE.txt
+License URL: https://github.com/uber-go/atomic/blob/v1.12.0/LICENSE.txt
  
 ----------
 Module: go.uber.org/multierr
@@ -1751,9 +1751,9 @@ License URL: https://github.com/oras-project/oras-go/blob/v2.6.2/LICENSE
  
 ----------
 Module: sigs.k8s.io/controller-runtime
-Version: v0.24.1
+Version: v0.25.3
 License: Apache-2.0
-License URL: https://github.com/kubernetes-sigs/controller-runtime/blob/v0.24.1/LICENSE
+License URL: https://github.com/kubernetes-sigs/controller-runtime/blob/v0.25.3/LICENSE
  
 ----------
 Module: sigs.k8s.io/gateway-api/apis/v1
