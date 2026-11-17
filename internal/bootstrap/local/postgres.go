@@ -98,6 +98,7 @@ func (b *LocalBootstrapper) DeployPostgresDatabase() error {
 			},
 			EnableSuperuserAccess: ptr.To(true),
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -142,6 +143,7 @@ func (b *LocalBootstrapper) WaitForPostgresDatabaseReady() error {
 		}
 
 		cluster := &cnpgv1.Cluster{}
+
 		err := b.kubeClient.Get(ctx, clusterKey, cluster)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -210,6 +212,7 @@ func (b *LocalBootstrapper) ReadPostgresSuperuserPassword() (string, error) {
 	if !ok {
 		return "", fmt.Errorf("PostgreSQL superuser secret %q does not contain key %q", secretName, cnpgSecretPasswordKey)
 	}
+
 	if len(passwordBytes) == 0 {
 		return "", fmt.Errorf("PostgreSQL superuser secret %q contains an empty %q value", secretName, cnpgSecretPasswordKey)
 	}
@@ -233,6 +236,7 @@ func (b *LocalBootstrapper) ReadPostgresCA() (string, error) {
 	if !ok {
 		return "", fmt.Errorf("PostgreSQL CA secret %q does not contain key %q", secretName, "ca.crt")
 	}
+
 	if len(caCert) == 0 {
 		return "", fmt.Errorf("PostgreSQL CA secret %q contains an empty %q value", secretName, "ca.crt")
 	}

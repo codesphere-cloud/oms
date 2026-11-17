@@ -15,8 +15,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"golang.org/x/term"
-
 	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
@@ -24,7 +22,9 @@ import (
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/local"
+	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	rookcephv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
 	"github.com/spf13/cobra"
@@ -38,6 +38,7 @@ import (
 	gwalpha "sigs.k8s.io/gateway-api/apis/v1alpha2"
 )
 
+// BootstrapLocalCmd implements the bootstrap-local command.
 type BootstrapLocalCmd struct {
 	cmd           *cobra.Command
 	Opts          *util.GlobalOptions
@@ -49,9 +50,9 @@ type BootstrapLocalCmd struct {
 	experiments []string
 }
 
-func (c *BootstrapLocalCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE executes the bootstrap-local command.
+func (c *BootstrapLocalCmd) RunE(_ *cobra.Command, _ []string) error {
 	err := c.BootstrapLocal()
-
 	if err != nil {
 		return fmt.Errorf("failed to bootstrap: %w", err)
 	}
@@ -75,7 +76,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 				  OMS_GIT_PASSWORD       Optional Git password/token for ArgoCD repository access.
 				  OMS_PORTAL_API_KEY     OMS portal API key for installer downloads with --install-version.
 				  OMS_PORTAL_API         Portal API URL (default: https://oms-portal.codesphere.com/api).
-				  OMS_WORKDIR            Installer working directory (default: ./oms-workdir).
+				  OMS_WORKDIR            Installer working directory (default: ` + env.DefaultOmsWorkdir + `).
 				  KUBECONFIG             Kubeconfig file(s); uses the current context (default: ~/.kube/config).
 				  HELM_DRIVER            Helm release storage driver (default: secret).
 				  XDG_CONFIG_HOME       Overrides the config directory searched for sops/age/keys.txt.`),
@@ -124,16 +125,18 @@ func AddBootstrapLocalCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	util.AddCmd(parent, bootstrapLocalCmd.cmd)
 }
 
+// BootstrapLocal validates the input and prerequisites and bootstraps Codesphere on the current Kubernetes cluster.
 func (c *BootstrapLocalCmd) BootstrapLocal() error {
 	if err := validateLocalStorageEngine(c.CodesphereEnv.StorageEngine); err != nil {
 		return err
 	}
+
 	ctx := c.cmd.Context()
-	if err := c.ConfirmLocalBootstrapWarning(); err != nil {
+	if err := c.ConfirmLocalBootstrapWarning(ctx); err != nil {
 		return err
 	}
 
-	if err := c.resolveRegistryPassword(); err != nil {
+	if err := c.resolveRegistryPassword(ctx); err != nil {
 		return err
 	}
 
@@ -141,6 +144,7 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 	if c.CodesphereEnv.InstallConfigPath == "" {
 		c.CodesphereEnv.InstallConfigPath = filepath.Join(c.CodesphereEnv.InstallDir, "config.yaml")
 	}
+
 	if c.CodesphereEnv.SecretsFilePath == "" {
 		c.CodesphereEnv.SecretsFilePath = filepath.Join(c.CodesphereEnv.InstallDir, "prod.vault.yaml")
 	}
@@ -190,7 +194,12 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 	}
 
 	bs := local.NewLocalBootstrapper(ctx, stlog, kubeClient, restConfig, fw, icg, helmClient, c.CodesphereEnv, c.Opts.Verbose)
-	return bs.Bootstrap()
+
+	if err := bs.Bootstrap(); err != nil {
+		return fmt.Errorf("failed to bootstrap local cluster: %w", err)
+	}
+
+	return nil
 }
 
 func validateLocalStorageEngine(engine string) error {
@@ -202,25 +211,33 @@ func validateLocalStorageEngine(engine string) error {
 	}
 }
 
-func (c *BootstrapLocalCmd) resolveRegistryPassword() error {
+func (c *BootstrapLocalCmd) resolveRegistryPassword(ctx context.Context) error {
 	if pw := os.Getenv("OMS_REGISTRY_PASSWORD"); len(pw) != 0 {
 		c.CodesphereEnv.RegistryPassword = pw
 		return nil
 	}
+
 	fmt.Print("Registry password: ")
-	pw, err := term.ReadPassword(int(os.Stdin.Fd()))
+
+	pw, err := prompt.ReadPassword(ctx, prompt.OSTerminal{}, int(os.Stdin.Fd()))
+
 	fmt.Println()
+
 	if err != nil {
 		return fmt.Errorf("failed to read registry password: %w", err)
 	}
+
 	if len(pw) == 0 {
 		return fmt.Errorf("registry password is required; set OMS_REGISTRY_PASSWORD or enter it when prompted")
 	}
+
 	c.CodesphereEnv.RegistryPassword = string(pw)
+
 	return nil
 }
 
-func (c *BootstrapLocalCmd) ConfirmLocalBootstrapWarning() error {
+// ConfirmLocalBootstrapWarning asks the operator to confirm the local bootstrap, unless --yes is set.
+func (c *BootstrapLocalCmd) ConfirmLocalBootstrapWarning(ctx context.Context) error {
 	if c.CodesphereEnv.StorageEngine != local.StorageEngineLocal {
 		fmt.Println(csio.Long(`
 		############################################################
@@ -252,7 +269,9 @@ func (c *BootstrapLocalCmd) ConfirmLocalBootstrapWarning() error {
 	}
 
 	fmt.Print("\nType 'yes' to continue: ")
-	reader := bufio.NewReader(os.Stdin)
+
+	reader := bufio.NewReader(prompt.NewContextReader(ctx, os.Stdin))
+
 	input, err := reader.ReadString('\n')
 	if err != nil && !errors.Is(err, stdio.EOF) {
 		return fmt.Errorf("failed to read confirmation: %w", err)
@@ -265,7 +284,8 @@ func (c *BootstrapLocalCmd) ConfirmLocalBootstrapWarning() error {
 	return nil
 }
 
-func (c *BootstrapLocalCmd) GetKubeClient(ctx context.Context) (ctrlclient.Client, *rest.Config, error) {
+// GetKubeClient creates a controller-runtime client and REST config for the current Kubernetes context.
+func (c *BootstrapLocalCmd) GetKubeClient(_ context.Context) (ctrlclient.Client, *rest.Config, error) {
 	kubeConfig, err := ctrlconfig.GetConfig()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to load Kubernetes config: %w", err)
@@ -300,9 +320,11 @@ func (c *BootstrapLocalCmd) GetKubeClient(ctx context.Context) (ctrlclient.Clien
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to initialize Kubernetes client: %w", err)
 	}
+
 	return kubeClient, kubeConfig, nil
 }
 
+// ValidatePrerequisites checks that the Kubernetes cluster and the required encryption tools are available.
 func (c *BootstrapLocalCmd) ValidatePrerequisites(ctx context.Context) error {
 	if err := c.ValidateKubernetesCluster(ctx); err != nil {
 		return err
@@ -315,6 +337,7 @@ func (c *BootstrapLocalCmd) ValidatePrerequisites(ctx context.Context) error {
 	return nil
 }
 
+// ValidateKubernetesCluster checks that the current Kubernetes cluster is reachable and has nodes.
 func (c *BootstrapLocalCmd) ValidateKubernetesCluster(ctx context.Context) error {
 	kubeClient, _, err := c.GetKubeClient(ctx)
 	if err != nil {
@@ -333,6 +356,7 @@ func (c *BootstrapLocalCmd) ValidateKubernetesCluster(ctx context.Context) error
 	return nil
 }
 
+// ValidateEncryptionTools checks that sops and age are installed.
 func (c *BootstrapLocalCmd) ValidateEncryptionTools() error {
 	if _, err := exec.LookPath("sops"); err != nil {
 		return fmt.Errorf("sops binary not found in PATH; install it with: brew install sops")

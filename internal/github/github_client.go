@@ -59,6 +59,7 @@ type RealGitHubClient struct {
 // NewGitHubClient creates a new RealGitHubClient with the provided OAuth token.
 func NewGitHubClient(ctx context.Context, token string) (*RealGitHubClient, error) {
 	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
+
 	return &RealGitHubClient{
 		httpClient: oauth2.NewClient(ctx, ts),
 		endpoint:   githubGraphQLEndpoint,
@@ -96,8 +97,10 @@ type graphQLResponse struct {
 // GetTeamMemberSSHKeys fetches all members of the team and their public SSH keys via the GitHub
 // GraphQL API, following member pagination until every member has been retrieved.
 func (c *RealGitHubClient) GetTeamMemberSSHKeys(ctx context.Context, org, teamSlug string) ([]TeamMemberKeys, error) {
-	var members []TeamMemberKeys
-	var after *string
+	var (
+		members []TeamMemberKeys
+		after   *string
+	)
 
 	for {
 		resp, err := c.queryTeamMembers(ctx, org, teamSlug, after)
@@ -111,16 +114,19 @@ func (c *RealGitHubClient) GetTeamMemberSSHKeys(ctx context.Context, org, teamSl
 				fmt.Printf("User %s has %d public keys but only the first %d were fetched\n",
 					node.Login, node.PublicKeys.TotalCount, publicKeysPageSize)
 			}
+
 			keys := make([]string, 0, len(node.PublicKeys.Nodes))
 			for _, k := range node.PublicKeys.Nodes {
 				keys = append(keys, k.Key)
 			}
+
 			members = append(members, TeamMemberKeys{Login: node.Login, Keys: keys})
 		}
 
 		if !team.Members.PageInfo.HasNextPage {
 			break
 		}
+
 		cursor := team.Members.PageInfo.EndCursor
 		after = &cursor
 	}
@@ -144,6 +150,7 @@ func (c *RealGitHubClient) queryTeamMembers(ctx context.Context, org, teamSlug s
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GraphQL request: %w", err)
 	}
+
 	req.Header.Set("Content-Type", "application/json")
 
 	httpResp, err := c.httpClient.Do(req)
@@ -165,11 +172,13 @@ func (c *RealGitHubClient) queryTeamMembers(ctx context.Context, org, teamSlug s
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal GraphQL response: %w", err)
 	}
+
 	if len(result.Errors) > 0 {
 		msgs := make([]string, len(result.Errors))
 		for i, e := range result.Errors {
 			msgs[i] = e.Message
 		}
+
 		return nil, fmt.Errorf("GraphQL query returned errors: %s", strings.Join(msgs, "; "))
 	}
 

@@ -39,7 +39,7 @@ $ oms template config --config config.yaml --vault prod.vault.yaml --age-key age
 ```
   -k, --age-key string      Path to the age key file (required for sops unless an age key environment variable is set)
   -c, --config string       Path to the config.yaml template to render (required)
-  -h, --help                help for config
+  -h, --help[=true|false]   help for config
   -v, --vault string        Path to the prod.vault.yaml file (required)
       --vault-type string   Vault storage type (sops or plain) (default "sops")
 ```
@@ -47,7 +47,7 @@ $ oms template config --config config.yaml --vault prod.vault.yaml --age-key age
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

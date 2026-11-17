@@ -9,13 +9,13 @@ Updates resources, e.g. OMS or OMS API keys.
 ### Options
 
 ```
-  -h, --help   help for update
+  -h, --help[=true|false]   help for update
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

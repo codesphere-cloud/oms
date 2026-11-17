@@ -13,14 +13,14 @@ oms list packages [flags]
 ### Options
 
 ```
-  -h, --help          help for packages
-  -s, --sort string   Sort order: 'semver' (by semantic version) or 'date' (by build date) (default "semver")
+  -h, --help[=true|false]   help for packages
+  -s, --sort string         Sort order: 'semver' (by semantic version) or 'date' (by build date) (default "semver")
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

@@ -31,7 +31,7 @@ $ oms add-cluster-admin --email admin@codesphere.com --namespace kube-system --s
 
 ```
       --email string         Email address of the cluster admin (required)
-  -h, --help                 help for add-cluster-admin
+  -h, --help[=true|false]    help for add-cluster-admin
       --namespace string     Kubernetes namespace where the secret is stored (default "codesphere")
       --secret-name string   Name of the Kubernetes secret holding the cluster admin email (default "cluster-admin-email")
 ```
@@ -39,7 +39,7 @@ $ oms add-cluster-admin --email admin@codesphere.com --namespace kube-system --s
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

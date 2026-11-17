@@ -17,13 +17,13 @@ import (
 )
 
 var _ = Describe("ListPackages", func() {
-
 	var (
 		mockTableWriter *util.MockTableWriter
 		c               cmd.ListBuildsCmd
 		internal        bool
 		buildDate       time.Time
 	)
+
 	JustBeforeEach(func() {
 		mockTableWriter = util.NewMockTableWriter(GinkgoT())
 		c = cmd.ListBuildsCmd{
@@ -65,7 +65,6 @@ var _ = Describe("ListPackages", func() {
 					},
 				})
 		})
-
 	})
 	Context("Internal packages are included", func() {
 		BeforeEach(func() {

@@ -31,18 +31,18 @@ $ oms download package --version codesphere-v1.55.0 --file installer-lite.tar.gz
 ### Options
 
 ```
-  -f, --file string      Specify artifact to download (default "installer-lite.tar.gz")
-  -H, --hash string      Hash of the version to download if multiple builds exist for the same version
-  -h, --help             help for package
-      --no-progress      Suppress progress output during download
-  -q, --quiet            Suppress progress output during download
-  -V, --version string   Codesphere version to download
+  -f, --file string                Specify artifact to download (default "installer-lite.tar.gz")
+  -H, --hash string                Hash of the version to download if multiple builds exist for the same version
+  -h, --help[=true|false]          help for package
+      --no-progress[=true|false]   Suppress progress output during download
+  -q, --quiet[=true|false]         Suppress progress output during download
+  -V, --version string             Codesphere version to download
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

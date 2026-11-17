@@ -14,8 +14,10 @@ import (
 
 var _ = Describe("CreateTestUser", func() {
 	Context("AddCreateTestUserCmd", func() {
-		var createCmd cobra.Command
-		var opts *util.GlobalOptions
+		var (
+			createCmd cobra.Command
+			opts      *util.GlobalOptions
+		)
 
 		BeforeEach(func() {
 			createCmd = cobra.Command{}
@@ -31,7 +33,7 @@ var _ = Describe("CreateTestUser", func() {
 
 			cmd.AddCreateTestUserCmd(&createCmd, opts)
 
-			createCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+			createCmd.Commands()[0].RunE = func(_ *cobra.Command, _ []string) error {
 				return nil
 			}
 
@@ -47,7 +49,7 @@ var _ = Describe("CreateTestUser", func() {
 
 			cmd.AddCreateTestUserCmd(&createCmd, opts)
 
-			createCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+			createCmd.Commands()[0].RunE = func(_ *cobra.Command, _ []string) error {
 				return nil
 			}
 
@@ -64,7 +66,7 @@ var _ = Describe("CreateTestUser", func() {
 
 			cmd.AddCreateTestUserCmd(&createCmd, opts)
 
-			createCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+			createCmd.Commands()[0].RunE = func(_ *cobra.Command, _ []string) error {
 				return nil
 			}
 
@@ -86,7 +88,7 @@ var _ = Describe("CreateTestUser", func() {
 
 			cmd.AddCreateTestUserCmd(&createCmd, opts)
 
-			createCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+			createCmd.Commands()[0].RunE = func(_ *cobra.Command, _ []string) error {
 				return nil
 			}
 

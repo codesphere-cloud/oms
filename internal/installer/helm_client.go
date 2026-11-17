@@ -4,9 +4,11 @@
 package installer
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -81,6 +83,9 @@ type HelmClient interface {
 
 	// UpgradeChart upgrades an existing Helm release and returns an error on failure.
 	UpgradeChart(ctx context.Context, cfg ChartConfig, opts UpgradeChartOptions) error
+
+	// WaitForResources waits for named resources using Helm's status watcher.
+	WaitForResources(ctx context.Context, apiVersion, kind string, names []string, timeout time.Duration) error
 
 	// ConfigureRegistryCA adds a PEM certificate authority for login and chart downloads.
 	ConfigureRegistryCA(caPEM []byte) error
@@ -170,6 +175,7 @@ func (h *helmClient) LoginRegistry(_ context.Context, host, username, password s
 	if err := h.registryClient.Login(host, registry.LoginOptBasicAuth(username, password)); err != nil {
 		return fmt.Errorf("registry login to %q failed: %w", host, err)
 	}
+
 	return nil
 }
 
@@ -185,6 +191,7 @@ func (h *helmClient) newHelmEnv(namespace string) (*helmEnv, error) {
 	if namespace == "" {
 		namespace = h.defaultNamespace
 	}
+
 	if namespace == "" {
 		return nil, fmt.Errorf("helm namespace is required")
 	}
@@ -218,6 +225,7 @@ func (h *helmClient) newHelmEnv(namespace string) (*helmEnv, error) {
 		if err != nil {
 			return nil, fmt.Errorf("helm registry client init failed: %w", err)
 		}
+
 		actionConfig.RegistryClient = registryClient
 	}
 
@@ -251,6 +259,7 @@ func (g *restConfigGetter) ToDiscoveryClient() (discovery.CachedDiscoveryInterfa
 	if err != nil {
 		return nil, err
 	}
+
 	return memory.NewMemCacheClient(clientset.Discovery()), nil
 }
 
@@ -259,6 +268,7 @@ func (g *restConfigGetter) ToRESTMapper() (meta.RESTMapper, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return restmapper.NewDeferredDiscoveryRESTMapper(discoveryClient), nil
 }
 
@@ -272,6 +282,7 @@ func (g *restConfigGetter) ToRawKubeConfigLoader() clientcmd.ClientConfig {
 	}
 	config.Clusters["in-memory"] = &clientcmdapi.Cluster{Server: g.config.Host}
 	config.AuthInfos["in-memory"] = &clientcmdapi.AuthInfo{}
+
 	return clientcmd.NewDefaultClientConfig(*config, &clientcmd.ConfigOverrides{})
 }
 
@@ -279,6 +290,7 @@ func waitStrategy(s kube.WaitStrategy) kube.WaitStrategy {
 	if s == "" {
 		return kube.StatusWatcherStrategy
 	}
+
 	return s
 }
 
@@ -306,6 +318,7 @@ func (h *helmClient) FindRelease(namespace, releaseName string) (*ReleaseInfo, e
 		if err != nil {
 			continue
 		}
+
 		if acc.Name() != releaseName {
 			continue
 		}
@@ -314,6 +327,7 @@ func (h *helmClient) FindRelease(namespace, releaseName string) (*ReleaseInfo, e
 		if err != nil {
 			return nil, fmt.Errorf("failed to access chart metadata: %w", err)
 		}
+
 		metadata := chartAcc.MetadataAsMap()
 		chartName, _ := metadata["Name"].(string)
 		version, _ := metadata["Version"].(string)
@@ -369,6 +383,7 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 		if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
 			return err
 		}
+
 		if rel == nil {
 			return h.InstallChart(ctx, cfg, InstallChartOptions{ForceConflicts: opts.ForceConflicts})
 		}
@@ -402,6 +417,46 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 	_, err = upgradeClient.RunWithContext(ctx, cfg.ReleaseName, chartRequested, cfg.Values)
 	if err != nil {
 		return fmt.Errorf("upgrade failed: %w", err)
+	}
+
+	return nil
+}
+
+// WaitForResources delegates existence, readiness, retries, and timeout handling
+// to Helm's watcher. Resources may be created asynchronously by another controller.
+func (h *helmClient) WaitForResources(ctx context.Context, apiVersion, kind string, names []string, timeout time.Duration) error {
+	items := make([]map[string]any, 0, len(names))
+	for _, name := range names {
+		items = append(items, map[string]any{"apiVersion": apiVersion, "kind": kind, "metadata": map[string]any{"name": name}})
+	}
+
+	manifest, err := json.Marshal(map[string]any{"apiVersion": "v1", "kind": "List", "items": items})
+	if err != nil {
+		return fmt.Errorf("encoding resources to wait for: %w", err)
+	}
+
+	settings := cli.New()
+	settings.SetNamespace(h.defaultNamespace)
+
+	getter := settings.RESTClientGetter()
+	if h.restConfig != nil {
+		getter = newRESTConfigGetter(h.restConfig, h.defaultNamespace)
+	}
+
+	kubeClient := kube.New(getter)
+
+	resources, err := kubeClient.Build(bytes.NewReader(manifest), false)
+	if err != nil {
+		return fmt.Errorf("building resources to wait for: %w", err)
+	}
+
+	waiter, err := kubeClient.GetWaiterWithOptions(kube.StatusWatcherStrategy, kube.WithWaitContext(ctx))
+	if err != nil {
+		return fmt.Errorf("initializing Helm resource waiter: %w", err)
+	}
+
+	if err := waiter.Wait(resources, timeout); err != nil {
+		return fmt.Errorf("waiting for %s resources %v: %w", kind, names, err)
 	}
 
 	return nil

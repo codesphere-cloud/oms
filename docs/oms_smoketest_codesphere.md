@@ -38,20 +38,20 @@ $ oms smoketest codesphere --baseurl https://codesphere.example.com/api --token 
 ### Options
 
 ```
-      --baseurl string     Base URL of the Codesphere API
-  -h, --help               help for codesphere
-      --plan-id string     Plan ID for workspace creation
-      --profile string     CI profile to use for landscape and pipeline (default "ci.yml")
-      --steps strings      Comma-separated list of steps to run (createWorkspace,setEnvVar,createFiles,syncLandscape,executeRunStage,deleteWorkspace). If empty, all steps including deleteWorkspace are run. If specified without deleteWorkspace, the workspace will be kept for manual inspection.
-      --team-id string     Team ID for workspace creation
-      --timeout duration   Timeout for the entire smoke test (default 10m0s)
-      --token string       API token for authentication
+      --baseurl string      Base URL of the Codesphere API
+  -h, --help[=true|false]   help for codesphere
+      --plan-id string      Plan ID for workspace creation
+      --profile string      CI profile to use for landscape and pipeline (default "ci.yml")
+      --steps strings       Comma-separated list of steps to run (createWorkspace,setEnvVar,createFiles,syncLandscape,executeRunStage,deleteWorkspace). If empty, all steps including deleteWorkspace are run. If specified without deleteWorkspace, the workspace will be kept for manual inspection.
+      --team-id string      Team ID for workspace creation
+      --timeout duration    Timeout for the entire smoke test (default 10m0s)
+      --token string        API token for authentication
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

@@ -9,13 +9,13 @@ Extend Codesphere ressources such as base images to customize them for your need
 ### Options
 
 ```
-  -h, --help   help for extend
+  -h, --help[=true|false]   help for extend
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

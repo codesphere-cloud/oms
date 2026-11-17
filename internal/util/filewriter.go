@@ -50,6 +50,7 @@ func (fs *FilesystemWriter) CreateAndWrite(filePath string, data []byte, fileTyp
 	}
 
 	log.Printf("\n%s file created: %s", fileType, filePath)
+
 	return nil
 }
 
@@ -58,11 +59,13 @@ func (fs *FilesystemWriter) CreateTemp(dir, pattern string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	path := file.Name()
 	if err := file.Close(); err != nil {
 		_ = os.Remove(path)
 		return "", err
 	}
+
 	return path, nil
 }
 
@@ -84,6 +87,7 @@ func (fs *FilesystemWriter) Exists(path string) bool {
 		// stat failed, assume file doesn't exist
 		return false
 	}
+
 	return true
 }
 
@@ -92,6 +96,7 @@ func (fs *FilesystemWriter) IsDirectory(path string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
 	return fileInfo.IsDir(), err
 }
 

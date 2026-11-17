@@ -52,6 +52,7 @@ func AddClusterAdmin(ctx context.Context, clientset kubernetes.Interface, opts O
 	if strings.TrimSpace(opts.Namespace) == "" {
 		return fmt.Errorf("namespace must not be empty")
 	}
+
 	if strings.TrimSpace(opts.SecretName) == "" {
 		return fmt.Errorf("secret name must not be empty")
 	}
@@ -79,9 +80,12 @@ func AddClusterAdmin(ctx context.Context, clientset kubernetes.Interface, opts O
 		if _, err := secrets.Create(ctx, secret, metav1.CreateOptions{}); err != nil {
 			return fmt.Errorf("creating secret %s/%s: %w", opts.Namespace, opts.SecretName, err)
 		}
+
 		log.Printf("Created secret '%s' in namespace '%s' with cluster admin email '%s'", opts.SecretName, opts.Namespace, email)
+
 		return nil
 	}
+
 	if err != nil {
 		return fmt.Errorf("reading secret %s/%s: %w", opts.Namespace, opts.SecretName, err)
 	}
@@ -89,16 +93,20 @@ func AddClusterAdmin(ctx context.Context, clientset kubernetes.Interface, opts O
 	if existing.Data == nil {
 		existing.Data = map[string][]byte{}
 	}
+
 	if string(existing.Data[EmailKey]) == email {
 		log.Printf("Cluster admin email '%s' already set in secret '%s/%s', nothing to do", email, opts.Namespace, opts.SecretName)
 		return nil
 	}
+
 	existing.Data[EmailKey] = []byte(email)
 
 	if _, err := secrets.Update(ctx, existing, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("updating secret %s/%s: %w", opts.Namespace, opts.SecretName, err)
 	}
+
 	log.Printf("Set cluster admin email '%s' in secret '%s/%s'", email, opts.Namespace, opts.SecretName)
+
 	return nil
 }
 
@@ -110,6 +118,7 @@ func ensureNamespace(ctx context.Context, clientset kubernetes.Interface, namesp
 	if _, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
 		return fmt.Errorf("creating namespace %s: %w", namespace, err)
 	}
+
 	return nil
 }
 
@@ -119,9 +128,11 @@ func NormalizeEmail(raw string) (string, error) {
 	if trimmed == "" {
 		return "", fmt.Errorf("email must not be empty")
 	}
+
 	addr, err := mail.ParseAddress(trimmed)
 	if err != nil {
 		return "", fmt.Errorf("invalid email %q: %w", raw, err)
 	}
+
 	return strings.ToLower(addr.Address), nil
 }

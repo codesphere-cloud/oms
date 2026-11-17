@@ -57,7 +57,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 		It("fails when package is not set", func() {
 			c.Opts.Package = ""
 
-			err := c.RunE(nil, []string{})
+			err := c.RunE(newCommandWithContext(), []string{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("required option package not set"))
 		})
@@ -65,7 +65,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 		It("calls UpdateDockerfile and fails when package manager fails", func() {
 			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir")
 
-			err := c.RunE(nil, []string{})
+			err := c.RunE(newCommandWithContext(), []string{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to update dockerfile"))
 		})
@@ -75,7 +75,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 
 			// This will fail in real scenario because it tries to extract from real package
 			// But it should at least call the correct methods
-			err := c.RunE(nil, []string{})
+			err := c.RunE(newCommandWithContext(), []string{})
 			Expect(err).To(HaveOccurred())
 		})
 	})
@@ -147,6 +147,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 				_ = tempFile.Close()
 				_ = os.Remove(tempFile.Name())
 			})
+
 			_, err = tempFile.WriteString(sampleDockerfileContent)
 			Expect(err).To(BeNil())
 			// Reset file position to beginning
@@ -181,6 +182,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 				_ = tempFile.Close()
 				_ = os.Remove(tempFile.Name())
 			})
+
 			_, err = tempFile.WriteString(sampleDockerfileContent)
 			Expect(err).To(BeNil())
 			// Reset file position to beginning
@@ -214,6 +216,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 				_ = tempFile.Close()
 				_ = os.Remove(tempFile.Name())
 			})
+
 			_, err = tempFile.WriteString(sampleDockerfileContent)
 			Expect(err).To(BeNil())
 			// Reset file position to beginning
@@ -247,6 +250,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 				_ = tempFile.Close()
 				_ = os.Remove(tempFile.Name())
 			})
+
 			_, err = tempFile.WriteString(sampleDockerfileContent)
 			Expect(err).To(BeNil())
 			// Reset file position to beginning
@@ -285,6 +289,7 @@ var _ = Describe("AddUpdateDockerfileCmd", func() {
 		cmd.AddUpdateDockerfileCmd(parentCmd, globalOpts)
 
 		var dockerfileCmd *cobra.Command
+
 		for _, c := range parentCmd.Commands() {
 			if c.Use == "dockerfile" {
 				dockerfileCmd = c

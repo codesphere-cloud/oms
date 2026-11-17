@@ -32,29 +32,35 @@ func getCleanTargetPath(destDir string, header *tar.Header) (string, error) {
 	if err != nil || relPath == ".." || strings.HasPrefix(relPath, ".."+string(os.PathSeparator)) {
 		return "", fmt.Errorf("failed to extract %s: target directory outside destination directory %s", header.Name, destDir)
 	}
+
 	return targetPath, nil
 }
 
 // openTar opens a .tar file and returns a tar.Reader to read its contents.
 func openTar(filename string, fileIo FileIO, verbose bool) (*tar.Reader, error) {
 	csio.Verbosef(verbose, "Opening archive: %s", filename)
+
 	file, err := fileIo.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open archive: %w", err)
 	}
+
 	bufferedFile := bufio.NewReader(file)
 
 	tr := tar.NewReader(bufferedFile)
+
 	return tr, nil
 }
 
 // openTarGz opens a .tar.gz file and returns a tar.Reader to read its contents.
 func openTarGz(filename string, fileIo FileIO, verbose bool) (*tar.Reader, error) {
 	csio.Verbosef(verbose, "Opening archive: %s", filename)
+
 	file, err := fileIo.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open archive: %w", err)
 	}
+
 	bufferedFile := bufio.NewReader(file)
 
 	gzr, err := gzip.NewReader(bufferedFile)
@@ -63,6 +69,7 @@ func openTarGz(filename string, fileIo FileIO, verbose bool) (*tar.Reader, error
 	}
 
 	tr := tar.NewReader(gzr)
+
 	return tr, nil
 }
 
@@ -78,6 +85,7 @@ func extractEntry(header *tar.Header, targetPath string, fileIo FileIO, tr *tar.
 		if err := fileIo.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", targetPath, err)
 		}
+
 		outFile, err := fileIo.OpenFile(targetPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.FileMode(header.Mode))
 		if err != nil {
 			return fmt.Errorf("failed to create file %s: %w", targetPath, err)
@@ -102,6 +110,7 @@ func extractEntry(header *tar.Header, targetPath string, fileIo FileIO, tr *tar.
 	default:
 		csio.Verbosef(verbose, "Ignoring unsupported header type flag %c for %s", header.Typeflag, header.Name)
 	}
+
 	return nil
 }
 
@@ -140,6 +149,7 @@ func extractTarSingleFile(fileIo FileIO, tr *tar.Reader, fileToExtract, destDir 
 		if err == io.EOF {
 			break
 		}
+
 		if err != nil {
 			return fmt.Errorf("failed to read next tar entry: %w", err)
 		}
@@ -164,9 +174,11 @@ func extractTarSingleFile(fileIo FileIO, tr *tar.Reader, fileToExtract, destDir 
 			return nil
 		}
 	}
+
 	if fileToExtract != "" {
 		return fmt.Errorf("file %s not found in archive", fileToExtract)
 	}
+
 	return nil
 }
 
@@ -192,9 +204,11 @@ func streamFileFromArchive(tarReader *tar.Reader, filename string) (*tar.Reader,
 		if err == io.EOF {
 			return nil, fmt.Errorf("file %s not found in archive", filename)
 		}
+
 		if err != nil {
 			return nil, fmt.Errorf("failed reading tar archive: %w", err)
 		}
+
 		if header.FileInfo().Name() == filename {
 			return tarReader, nil
 		}

@@ -16,11 +16,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// BootstrapGcpRestartVMsCmd implements the bootstrap-gcp restart-vms command.
 type BootstrapGcpRestartVMsCmd struct {
 	cmd  *cobra.Command
 	Opts *BootstrapGcpRestartVMsOpts
 }
 
+// BootstrapGcpRestartVMsOpts holds the flags of the bootstrap-gcp restart-vms command.
 type BootstrapGcpRestartVMsOpts struct {
 	*util.GlobalOptions
 	ProjectID string
@@ -76,10 +78,13 @@ func (c *BootstrapGcpRestartVMsCmd) resolveEnvironment(fw intutil.FileIO) (*gcp.
 	}, nil
 }
 
+// RunE restarts the VMs of a GCP bootstrap environment.
 func (c *BootstrapGcpRestartVMsCmd) RunE(_ *cobra.Command, _ []string) error {
 	ctx := c.cmd.Context()
+
 	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.Opts.StepTimer))
 	defer stlog.PrintSummary()
+
 	fw := intutil.NewFilesystemWriter()
 
 	csEnv, err := c.resolveEnvironment(fw)
@@ -120,6 +125,7 @@ func (c *BootstrapGcpRestartVMsCmd) RunE(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
+// AddBootstrapGcpRestartVMsCmd registers the restart-vms command on the bootstrap-gcp command.
 func AddBootstrapGcpRestartVMsCmd(bootstrapGcp *cobra.Command, opts *util.GlobalOptions) {
 	restartVMs := BootstrapGcpRestartVMsCmd{
 		cmd: &cobra.Command{

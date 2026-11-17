@@ -53,7 +53,7 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
       --acme-eab-key-id string                     External Account Binding key ID (required by some ACME providers)
       --acme-eab-mac-key string                    External Account Binding MAC key (required by some ACME providers)
       --acme-email string                          Email address for ACME account registration
-      --acme-enabled                               Enable ACME certificate issuer
+      --acme-enabled[=true|false]                  Enable ACME certificate issuer
       --acme-issuer-name string                    Name for the ACME ClusterIssuer (default "acme-issuer")
       --acme-server string                         ACME server URL (default "https://acme-v02.api.letsencrypt.org/directory")
       --age-key string                             Path to the age private key for the sops vault (falls back to SOPS_AGE_KEY or SOPS_AGE_KEY_FILE; if none is set, a new key is generated and printed once)
@@ -68,11 +68,11 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
       --dc-id int                                  Datacenter ID
       --dc-name string                             Datacenter name
       --domain string                              Main Codesphere domain
-      --generate-keys                              Generate SSH keys and certificates (default true)
-  -h, --help                                       help for install-config
-      --interactive                                Enable interactive prompting (version and hash flags provide prompt defaults) (default true)
+      --generate-keys[=true|false]                 Generate SSH keys and certificates (default true)
+  -h, --help[=true|false]                          help for install-config
+      --interactive[=true|false]                   Enable interactive prompting (version and hash flags provide prompt defaults) (default true)
       --k8s-control-plane strings                  K8s control plane IPs (comma-separated)
-      --k8s-managed                                Use Codesphere-managed Kubernetes (default true)
+      --k8s-managed[=true|false]                   Use Codesphere-managed Kubernetes (default true)
       --k8s-pod-cidr string                        Pod CIDR (required when --k8s-managed=false)
       --k8s-service-cidr string                    Service CIDR (required when --k8s-managed=false)
       --openbao-engine string                      Engine for OpenBao (default "cs-secrets-engine")
@@ -81,7 +81,7 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
       --openbao-user string                        Username for OpenBao authentication (default "admin")
       --openfga-backups-access-key-id string       S3 access key ID for OpenFGA backups
       --openfga-backups-destination string         Backup destination (S3 URL, e.g. s3://backup-openfga)
-      --openfga-backups-enabled                    Enable OpenFGA database backups
+      --openfga-backups-enabled[=true|false]       Enable OpenFGA database backups
       --openfga-backups-endpoint string            S3-compatible endpoint URL (e.g. https://storage.googleapis.com)
       --openfga-backups-retention string           Retention policy (e.g. 7d, empty for chart default)
       --openfga-backups-schedule string            Backup schedule (6-field cron, empty for chart default)
@@ -92,16 +92,16 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
       --profile string                             Use a predefined configuration profile (dev, production, minimal)
       --registry-server string                     Server for container registry
       --secrets-dir string                         Secrets base directory (default "/root/secrets")
-      --validate                                   Validate existing config files instead of creating new ones
+      --validate[=true|false]                      Validate existing config files instead of creating new ones
       --vault string                               Output file path for prod.vault.yaml (default "prod.vault.yaml")
       --vault-type string                          Vault storage type (sops or plain) (default "sops")
-      --with-comments                              Add helpful comments to the generated YAML files
+      --with-comments[=true|false]                 Add helpful comments to the generated YAML files
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

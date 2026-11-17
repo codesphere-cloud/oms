@@ -28,7 +28,10 @@ type StepLogger struct {
 	currentStep string
 	timings     []stepTiming
 	depth       int
+	retryDelay  time.Duration
 }
+
+const defaultRetryDelay = 1000 * time.Millisecond
 
 type stepTiming struct {
 	name     string
@@ -59,13 +62,15 @@ func NewStepLogger(silent bool, options ...StepLoggerOption) *StepLogger {
 	for _, option := range options {
 		option(&config)
 	}
-	return &StepLogger{config: config}
+
+	return &StepLogger{config: config, retryDelay: defaultRetryDelay}
 }
 
 func (b *StepLogger) elapsed(start time.Time) string {
 	if !b.config.Timer {
 		return ""
 	}
+
 	return fmt.Sprintf(" (%s)", time.Since(start).Round(time.Millisecond))
 }
 
@@ -116,6 +121,8 @@ func (b *StepLogger) PrintSummary() {
 	_ = w.Flush()
 }
 
+// Step runs fn as a top-level step, printing its progress, result, and duration and recording its timing.
+// Returns an error if fn does.
 func (b *StepLogger) Step(name string, fn func() error) error {
 	if b.config.Silent {
 		return fn()
@@ -125,6 +132,7 @@ func (b *StepLogger) Step(name string, fn func() error) error {
 	b.currentStep = name
 
 	fmt.Printf("%s%s%s...", LINE_RESET, RESET_TEXT, name)
+
 	start := time.Now()
 
 	err := b.runTimed(name, fn)
@@ -134,11 +142,51 @@ func (b *StepLogger) Step(name string, fn func() error) error {
 		for i := 0; i < b.subSteps; i++ {
 			fmt.Printf("%s", MOVE_UP_CLEAR_LINE)
 		}
+
 		fmt.Printf("%s%s%s %s✓%s%s\n", LINE_RESET, RESET_TEXT, name, GREEN_TEXT, b.elapsed(start), RESET_TEXT)
 	}
+
 	return err
 }
 
+// StepWithRetry is calling Step up to maxRetries with a backoff of 1000ms.
+// Returns an error if all attempts failed.
+func (b *StepLogger) StepWithRetry(name string, fn func() error, maxRetries int) error {
+	var lastError error
+
+	for i := range maxRetries {
+		attemptID := i + 1
+
+		stepName := name
+		if attemptID != 1 {
+			stepName = fmt.Sprintf("%s (Retry %v/%v)", name, attemptID, maxRetries)
+		}
+
+		err := b.Step(stepName, fn)
+		if err == nil {
+			return nil
+		}
+
+		lastError = err
+
+		if !b.config.Silent {
+			fmt.Printf("'%s' failed on attempt %v/%v: %s", name, attemptID, maxRetries, err)
+		}
+
+		if attemptID < maxRetries {
+			time.Sleep(b.retryDelay * time.Duration(attemptID*attemptID))
+
+			if !b.config.Silent {
+				fmt.Printf("Retrying '%s'...", name)
+			}
+		}
+	}
+
+	return fmt.Errorf("'%s' failed after %v retries - last error: %w", name, maxRetries, lastError)
+}
+
+// Substep runs fn as an indented substep of the current step, printing its progress, result, and duration and recording its timing.
+// Returns an error if fn does.
 func (b *StepLogger) Substep(name string, fn func() error) error {
 	if b.config.Silent {
 		return fn()
@@ -148,6 +196,7 @@ func (b *StepLogger) Substep(name string, fn func() error) error {
 	b.currentStep = name
 
 	fmt.Printf("%s%s   %s...", LINE_RESET, RESET_TEXT, name)
+
 	start := time.Now()
 
 	err := b.runTimed(name, fn)
@@ -156,6 +205,7 @@ func (b *StepLogger) Substep(name string, fn func() error) error {
 	} else {
 		fmt.Printf("%s%s   %s %s✓%s%s\n", LINE_RESET, RESET_TEXT, name, GREEN_TEXT, b.elapsed(start), RESET_TEXT)
 	}
+
 	return err
 }
 
@@ -175,5 +225,6 @@ func (b *StepLogger) Logf(message string, args ...interface{}) {
 	}
 
 	b.subSteps += 1
+
 	fmt.Printf("%s%s      %s%s\n", LINE_RESET, RESET_TEXT, fmt.Sprintf(message, args...), RESET_TEXT)
 }

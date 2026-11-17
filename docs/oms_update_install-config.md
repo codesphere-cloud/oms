@@ -47,7 +47,7 @@ $ oms update install-config --k8s-api-server 10.0.0.10 --config config.yaml --va
       --acme-eab-key-id string                       External Account Binding key ID (required by some ACME providers)
       --acme-eab-mac-key string                      External Account Binding MAC key (required by some ACME providers)
       --acme-email string                            Email address for ACME account registration
-      --acme-enabled                                 Enable ACME certificate issuer
+      --acme-enabled[=true|false]                    Enable ACME certificate issuer
       --acme-issuer-name string                      Name for the ACME ClusterIssuer
       --acme-server string                           ACME server URL
       --age-key string                               Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)
@@ -60,7 +60,7 @@ $ oms update install-config --k8s-api-server 10.0.0.10 --config config.yaml --va
       --custom-domains-cname-base-domain string      Custom domains CNAME base domain
       --dns-servers strings                          DNS servers (comma-separated)
       --domain string                                Main Codesphere domain
-  -h, --help                                         help for install-config
+  -h, --help[=true|false]                            help for install-config
       --k8s-api-server string                        Kubernetes API server host
       --k8s-pod-cidr string                          Kubernetes Pod CIDR
       --k8s-service-cidr string                      Kubernetes Service CIDR
@@ -71,15 +71,15 @@ $ oms update install-config --k8s-api-server 10.0.0.10 --config config.yaml --va
       --public-ip string                             Codesphere public IP address
       --vault string                                 Path to existing prod.vault.yaml file (default "prod.vault.yaml")
       --vault-type string                            Vault storage type (sops or plain) (default "sops")
-      --with-comments                                Add helpful comments to the generated YAML files
+      --with-comments[=true|false]                   Add helpful comments to the generated YAML files
       --workspace-hosting-base-domain string         Workspace hosting base domain
-  -y, --yes                                          Auto-approve every change to the vault (regenerated certificates and missing secrets)
+  -y, --yes[=true|false]                             Auto-approve every change to the vault (regenerated certificates and missing secrets)
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

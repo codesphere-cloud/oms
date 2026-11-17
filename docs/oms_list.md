@@ -10,13 +10,13 @@ eg. available Codesphere packages
 ### Options
 
 ```
-  -h, --help   help for list
+  -h, --help[=true|false]   help for list
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

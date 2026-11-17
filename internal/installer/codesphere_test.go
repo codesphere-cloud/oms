@@ -4,6 +4,7 @@
 package installer_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 
@@ -50,10 +51,11 @@ var _ = Describe("Codesphere installer", func() {
 		}
 		configManager := installer.NewMockConfigManager(GinkgoT())
 		configManager.EXPECT().ParseConfigYaml("config.yaml").Return(config, nil)
+
 		packageManager := installer.NewMockPackageManager(GinkgoT())
 		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml"}
 
-		err := ci.Install(packageManager, configManager, nil, "linux", "amd64")
+		err := ci.Install(context.Background(), packageManager, configManager, nil, "linux", "amd64")
 
 		Expect(err).To(MatchError(ContainSubstring("postgres.serverAddress must not be set when postgres.mode is 'install'")))
 	})

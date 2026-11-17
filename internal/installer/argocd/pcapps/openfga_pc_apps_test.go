@@ -151,4 +151,97 @@ var _ = Describe("OpenFgaPcAppsValues", func() {
 
 		Expect(pcapps.OpenFgaPcAppsValues(configWith(nil, ""), vault)).To(BeNil())
 	})
+
+	Context("with openfgaBackups", func() {
+		configWithBackups := func(fga *files.OpenFgaConfig, backups *files.OpenfgaBackupsConfig) *files.RootConfig {
+			config := configWith(fga, "")
+			config.Codesphere.OpenfgaBackups = backups
+
+			return config
+		}
+
+		backupValues := func(values files.ChartValues) files.ChartValues {
+			postgres := openfgaValues(values)["valuesObject"].(files.ChartValues)["postgres"].(files.ChartValues)
+
+			return postgres["backup"].(files.ChartValues)
+		}
+
+		It("configures the database backup from a hand-written block", func() {
+			values := pcapps.OpenFgaPcAppsValues(configWithBackups(nil, &files.OpenfgaBackupsConfig{
+				Enabled:         true,
+				Schedule:        "0 */30 * * * *",
+				DestinationPath: "s3://backup-openfga-dev",
+				EndpointURL:     "https://s3.de.io.cloud.ovh.net",
+				RetentionPolicy: "14d",
+			}), emptyVault())
+
+			Expect(backupValues(values)).To(Equal(files.ChartValues{
+				"enabled":         true,
+				"schedule":        "0 */30 * * * *",
+				"destinationPath": "s3://backup-openfga-dev",
+				"endpointURL":     "https://s3.de.io.cloud.ovh.net",
+				"retentionPolicy": "14d",
+			}))
+		})
+
+		It("leaves schedule and retention to the chart when they are unset", func() {
+			values := pcapps.OpenFgaPcAppsValues(configWithBackups(nil, &files.OpenfgaBackupsConfig{
+				Enabled:         true,
+				DestinationPath: "s3://backup-openfga-dev",
+				EndpointURL:     "https://s3.de.io.cloud.ovh.net",
+			}), emptyVault())
+
+			Expect(backupValues(values)).To(Equal(files.ChartValues{
+				"enabled":         true,
+				"destinationPath": "s3://backup-openfga-dev",
+				"endpointURL":     "https://s3.de.io.cloud.ovh.net",
+			}))
+		})
+
+		It("turns backups off explicitly when the block disables them", func() {
+			values := pcapps.OpenFgaPcAppsValues(configWithBackups(nil, &files.OpenfgaBackupsConfig{
+				Enabled: false,
+			}), emptyVault())
+
+			Expect(backupValues(values)).To(Equal(files.ChartValues{"enabled": false}))
+		})
+
+		It("leaves enabling the application to the chart when only backups are configured", func() {
+			values := pcapps.OpenFgaPcAppsValues(configWithBackups(nil, &files.OpenfgaBackupsConfig{
+				Enabled:         true,
+				DestinationPath: "s3://backup-openfga-dev",
+				EndpointURL:     "https://s3.de.io.cloud.ovh.net",
+			}), emptyVault())
+
+			Expect(openfgaValues(values)).NotTo(HaveKey("enabled"))
+		})
+
+		It("keeps the application disabled for a data center that uses a remote OpenFGA", func() {
+			deploy := false
+			values := pcapps.OpenFgaPcAppsValues(configWithBackups(&files.OpenFgaConfig{
+				Deploy: &deploy,
+				APIURL: "https://openfga.1.cs.example.com",
+			}, &files.OpenfgaBackupsConfig{
+				Enabled:         true,
+				DestinationPath: "s3://backup-openfga-dev",
+				EndpointURL:     "https://s3.de.io.cloud.ovh.net",
+			}), emptyVault())
+
+			Expect(openfgaValues(values)["enabled"]).To(BeFalse())
+		})
+
+		It("keeps the gateway configuration next to the backup", func() {
+			values := pcapps.OpenFgaPcAppsValues(configWithBackups(&files.OpenFgaConfig{
+				Expose: &files.OpenFgaExposeConfig{Enabled: true, Host: "openfga.1.cs.example.com"},
+			}, &files.OpenfgaBackupsConfig{
+				Enabled:         true,
+				DestinationPath: "s3://backup-openfga-dev",
+				EndpointURL:     "https://s3.de.io.cloud.ovh.net",
+			}), emptyVault())
+
+			Expect(backupValues(values)["enabled"]).To(BeTrue())
+			gateway := openfgaValues(values)["valuesObject"].(files.ChartValues)["gateway"].(files.ChartValues)
+			Expect(gateway["host"]).To(Equal("openfga.1.cs.example.com"))
+		})
+	})
 })

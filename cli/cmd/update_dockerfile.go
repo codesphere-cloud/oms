@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -18,12 +17,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// UpdateDockerfileCmd implements the update dockerfile command.
 type UpdateDockerfileCmd struct {
 	cmd  *cobra.Command
 	Opts UpdateDockerfileOpts
 	Env  env.Env
 }
 
+// UpdateDockerfileOpts holds the flags of the update dockerfile command.
 type UpdateDockerfileOpts struct {
 	*util.GlobalOptions
 	Package    string
@@ -32,14 +33,15 @@ type UpdateDockerfileOpts struct {
 	Force      bool
 }
 
-func (c *UpdateDockerfileCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE updates the FROM statement of a Dockerfile to the base image of the package.
+func (c *UpdateDockerfileCmd) RunE(cmd *cobra.Command, args []string) error {
 	if c.Opts.Package == "" {
 		return errors.New("required option package not set")
 	}
 
 	workdir := c.Env.GetOmsWorkdir()
 	pm := installer.NewPackage(workdir, c.Opts.Package)
-	im := system.NewImage(context.Background())
+	im := system.NewImage(cmd.Context())
 
 	err := c.UpdateDockerfile(pm, im, args)
 	if err != nil {
@@ -49,6 +51,7 @@ func (c *UpdateDockerfileCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
+// AddUpdateDockerfileCmd registers the dockerfile command on the update command.
 func AddUpdateDockerfileCmd(parentCmd *cobra.Command, opts *util.GlobalOptions) {
 	dockerfileCmd := &UpdateDockerfileCmd{
 		cmd: &cobra.Command{
@@ -81,7 +84,8 @@ in the specified Dockerfile to use that base image. The base image is loaded int
 	dockerfileCmd.cmd.RunE = dockerfileCmd.RunE
 }
 
-func (c *UpdateDockerfileCmd) UpdateDockerfile(pm installer.PackageManager, im system.ImageManager, args []string) error {
+// UpdateDockerfile extracts the package and rewrites the FROM statement of the Dockerfile to use the selected base image.
+func (c *UpdateDockerfileCmd) UpdateDockerfile(pm installer.PackageManager, im system.ImageManager, _ []string) error {
 	err := pm.Extract(c.Opts.Force, c.Opts.Verbose)
 	if err != nil {
 		return fmt.Errorf("failed to extract package: %w", err)
@@ -113,6 +117,7 @@ func (c *UpdateDockerfileCmd) UpdateDockerfile(pm installer.PackageManager, im s
 	defer intutil.CloseFileIgnoreError(dockerfileFile)
 
 	dockerfileManager := intutil.NewDockerfileManager()
+
 	updatedContent, err := dockerfileManager.UpdateFromStatement(dockerfileFile, imageName)
 	if err != nil {
 		return fmt.Errorf("failed to update FROM statement: %w", err)

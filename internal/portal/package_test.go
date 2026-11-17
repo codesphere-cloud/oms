@@ -12,7 +12,6 @@ import (
 
 var _ = Describe("GetBuildForDownload", func() {
 	It("Extracts a build with a single matching artifact", func() {
-
 		build := portal.Build{
 			Artifacts: []portal.Artifact{
 				{Filename: "a.txt"},
@@ -31,7 +30,6 @@ var _ = Describe("GetBuildForDownload", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(Equal(expectedBuild))
 	})
-
 })
 
 var _ = Describe("BuildPackageFilename", func() {

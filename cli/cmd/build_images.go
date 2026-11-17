@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"log"
 
@@ -23,16 +22,18 @@ type BuildImagesCmd struct {
 	Env  env.Env
 }
 
+// BuildImagesOpts holds the flags of the build images command.
 type BuildImagesOpts struct {
 	*util.GlobalOptions
 	Config string
 	Force  bool
 }
 
-func (c *BuildImagesCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE builds and pushes the workspace images configured in the install config.
+func (c *BuildImagesCmd) RunE(cmd *cobra.Command, _ []string) error {
 	pm := installer.NewPackage(c.Env.GetOmsWorkdir(), c.Opts.Config)
 	cm := installer.NewConfig()
-	im := system.NewImage(context.Background())
+	im := system.NewImage(cmd.Context())
 
 	err := c.BuildAndPushImages(pm, cm, im)
 	if err != nil {
@@ -42,6 +43,7 @@ func (c *BuildImagesCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
+// AddBuildImagesCmd registers the images command on the build command.
 func AddBuildImagesCmd(build *cobra.Command, opts *util.GlobalOptions) {
 	buildImages := BuildImagesCmd{
 		cmd: &cobra.Command{
@@ -63,6 +65,7 @@ func AddBuildImagesCmd(build *cobra.Command, opts *util.GlobalOptions) {
 	buildImages.cmd.RunE = buildImages.RunE
 }
 
+// BuildAndPushImages builds all images defined in the config and pushes them to the configured registry.
 func (c *BuildImagesCmd) BuildAndPushImages(pm installer.PackageManager, cm installer.ConfigManager, im system.ImageManager) error {
 	config, err := cm.ParseConfigYaml(c.Opts.Config)
 	if err != nil {
@@ -72,6 +75,7 @@ func (c *BuildImagesCmd) BuildAndPushImages(pm installer.PackageManager, cm inst
 	if len(config.Codesphere.DeployConfig.Images) == 0 {
 		return fmt.Errorf("no images defined in the config")
 	}
+
 	if len(config.Registry.Server) == 0 {
 		return fmt.Errorf("registry server (property registry.server) not defined in the config, please specify a valid registry to which the image shall be pushed")
 	}
@@ -89,6 +93,7 @@ func (c *BuildImagesCmd) BuildAndPushImages(pm installer.PackageManager, cm inst
 	for imageName, imageConfig := range config.Codesphere.DeployConfig.Images {
 		for flavorName, flavorConfig := range imageConfig.Flavors {
 			log.Printf("Processing image '%s' with flavor '%s'", imageName, flavorName)
+
 			if flavorConfig.Image.Dockerfile == "" {
 				log.Printf("Skipping flavor '%s', no dockerfile defined", flavorName)
 				continue

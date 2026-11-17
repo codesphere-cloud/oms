@@ -5,6 +5,7 @@
 package portal
 
 import (
+	"context"
 	mock "github.com/stretchr/testify/mock"
 	"io"
 	"net/http"
@@ -265,16 +266,16 @@ func (_m *MockPortal) EXPECT() *MockPortal_Expecter {
 }
 
 // DownloadBuildArtifact provides a mock function for the type MockPortal
-func (_mock *MockPortal) DownloadBuildArtifact(product Product, build Build, file io.Writer, startByte int, quiet bool) error {
-	ret := _mock.Called(product, build, file, startByte, quiet)
+func (_mock *MockPortal) DownloadBuildArtifact(ctx context.Context, product Product, build Build, file io.Writer, startByte int, quiet bool) error {
+	ret := _mock.Called(ctx, product, build, file, startByte, quiet)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DownloadBuildArtifact")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(Product, Build, io.Writer, int, bool) error); ok {
-		r0 = returnFunc(product, build, file, startByte, quiet)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, Product, Build, io.Writer, int, bool) error); ok {
+		r0 = returnFunc(ctx, product, build, file, startByte, quiet)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -287,36 +288,41 @@ type MockPortal_DownloadBuildArtifact_Call struct {
 }
 
 // DownloadBuildArtifact is a helper method to define mock.On call
+//   - ctx context.Context
 //   - product Product
 //   - build Build
 //   - file io.Writer
 //   - startByte int
 //   - quiet bool
-func (_e *MockPortal_Expecter) DownloadBuildArtifact(product any, build any, file any, startByte any, quiet any) *MockPortal_DownloadBuildArtifact_Call {
-	return &MockPortal_DownloadBuildArtifact_Call{Call: _e.mock.On("DownloadBuildArtifact", product, build, file, startByte, quiet)}
+func (_e *MockPortal_Expecter) DownloadBuildArtifact(ctx any, product any, build any, file any, startByte any, quiet any) *MockPortal_DownloadBuildArtifact_Call {
+	return &MockPortal_DownloadBuildArtifact_Call{Call: _e.mock.On("DownloadBuildArtifact", ctx, product, build, file, startByte, quiet)}
 }
 
-func (_c *MockPortal_DownloadBuildArtifact_Call) Run(run func(product Product, build Build, file io.Writer, startByte int, quiet bool)) *MockPortal_DownloadBuildArtifact_Call {
+func (_c *MockPortal_DownloadBuildArtifact_Call) Run(run func(ctx context.Context, product Product, build Build, file io.Writer, startByte int, quiet bool)) *MockPortal_DownloadBuildArtifact_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 Product
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(Product)
+			arg0 = args[0].(context.Context)
 		}
-		var arg1 Build
+		var arg1 Product
 		if args[1] != nil {
-			arg1 = args[1].(Build)
+			arg1 = args[1].(Product)
 		}
-		var arg2 io.Writer
+		var arg2 Build
 		if args[2] != nil {
-			arg2 = args[2].(io.Writer)
+			arg2 = args[2].(Build)
 		}
-		var arg3 int
+		var arg3 io.Writer
 		if args[3] != nil {
-			arg3 = args[3].(int)
+			arg3 = args[3].(io.Writer)
 		}
-		var arg4 bool
+		var arg4 int
 		if args[4] != nil {
-			arg4 = args[4].(bool)
+			arg4 = args[4].(int)
+		}
+		var arg5 bool
+		if args[5] != nil {
+			arg5 = args[5].(bool)
 		}
 		run(
 			arg0,
@@ -324,6 +330,7 @@ func (_c *MockPortal_DownloadBuildArtifact_Call) Run(run func(product Product, b
 			arg2,
 			arg3,
 			arg4,
+			arg5,
 		)
 	})
 	return _c
@@ -334,7 +341,7 @@ func (_c *MockPortal_DownloadBuildArtifact_Call) Return(err error) *MockPortal_D
 	return _c
 }
 
-func (_c *MockPortal_DownloadBuildArtifact_Call) RunAndReturn(run func(product Product, build Build, file io.Writer, startByte int, quiet bool) error) *MockPortal_DownloadBuildArtifact_Call {
+func (_c *MockPortal_DownloadBuildArtifact_Call) RunAndReturn(run func(ctx context.Context, product Product, build Build, file io.Writer, startByte int, quiet bool) error) *MockPortal_DownloadBuildArtifact_Call {
 	_c.Call.Return(run)
 	return _c
 }

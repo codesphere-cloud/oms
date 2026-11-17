@@ -9,10 +9,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// BetaCmd groups commands that are still in beta.
 type BetaCmd struct {
 	cmd *cobra.Command
 }
 
+// AddBetaCmd registers the beta command and its subcommands on the root command.
 func AddBetaCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	beta := BetaCmd{
 		cmd: &cobra.Command{

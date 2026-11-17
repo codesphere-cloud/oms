@@ -178,7 +178,7 @@ var _ = Describe("ConfigManagerProfile", func() {
 
 					config := manager.GetInstallConfig()
 					Expect(config.Cluster.PgOperator.Enabled).To(BeTrue())
-					Expect(config.Cluster.BarmanCloudPlugin.Enabled).To(BeTrue())
+					Expect(config.ManagedServiceBackends.BarmanCloudPlugin.Enabled).To(BeTrue())
 					Expect(manager.ValidateInstallConfig()).NotTo(ContainElement(ContainSubstring("pgOperator")))
 				})
 			}

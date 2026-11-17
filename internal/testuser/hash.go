@@ -16,5 +16,6 @@ func HashAPIToken(apiToken string) string {
 func hashSecret(secret string) string {
 	hasher := sha256.New()
 	_, _ = hasher.Write([]byte(secret))
+
 	return hex.EncodeToString(hasher.Sum(nil))
 }

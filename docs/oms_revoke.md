@@ -10,13 +10,13 @@ eg. api keys.
 ### Options
 
 ```
-  -h, --help   help for revoke
+  -h, --help[=true|false]   help for revoke
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

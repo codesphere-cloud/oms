@@ -11,6 +11,7 @@ func AddCmd(parent *cobra.Command, cmd *cobra.Command) {
 	if cmd.Args == nil {
 		cmd.Args = parent.Args
 	}
+
 	parent.AddCommand(cmd)
 }
 

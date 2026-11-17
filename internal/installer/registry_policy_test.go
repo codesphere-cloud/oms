@@ -16,7 +16,9 @@ import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	versioninfo "k8s.io/apimachinery/pkg/version"
@@ -42,6 +44,52 @@ func admissionResourceVersion(kind, apiVersion string) any {
 
 func admissionResource(kind string) any {
 	return admissionResourceVersion(kind, admissionv1.SchemeGroupVersion.String())
+}
+
+const (
+	betaAdmissionAPI = "admissionregistration.k8s.io/v1beta1"
+	policyKind       = "MutatingAdmissionPolicy"
+	bindingKind      = "MutatingAdmissionPolicyBinding"
+)
+
+var v1AdmissionAPI = admissionv1.SchemeGroupVersion.String()
+
+func expectRegistryDelete(client *installer.MockRegistryPolicyClient, kind, apiVersion string, err error) *mock.Call {
+	deletes := mock.MatchedBy(func(obj ctrlclient.Object) bool {
+		gvk := obj.GetObjectKind().GroupVersionKind()
+
+		return gvk.Kind == kind && gvk.GroupVersion().String() == apiVersion && obj.GetName() == "codesphere-image-registry"
+	})
+
+	return client.EXPECT().Delete(mock.Anything, deletes).Return(err).Once()
+}
+
+// expectV1RegistryDelete expects a delete through the v1 API on a cluster that does not serve the beta API.
+func expectV1RegistryDelete(client *installer.MockRegistryPolicyClient, kind string, err error) *mock.Call {
+	call := expectRegistryDelete(client, kind, v1AdmissionAPI, err)
+	expectRegistryDelete(client, kind, betaAdmissionAPI, registryAPIUnavailable(kind, betaAdmissionAPI)).NotBefore(call)
+
+	return call
+}
+
+func expectNoRegistryPolicy(client *installer.MockRegistryPolicyClient) {
+	expectV1RegistryDelete(client, bindingKind, registryResourceNotFound("mutatingadmissionpolicybindings"))
+	expectV1RegistryDelete(client, policyKind, registryResourceNotFound("mutatingadmissionpolicies"))
+}
+
+func expectRegistryAPIUnavailable(client *installer.MockRegistryPolicyClient, kind string) {
+	expectRegistryDelete(client, kind, v1AdmissionAPI, registryAPIUnavailable(kind, v1AdmissionAPI))
+	expectRegistryDelete(client, kind, betaAdmissionAPI, registryAPIUnavailable(kind, betaAdmissionAPI))
+}
+
+func registryResourceNotFound(resource string) error {
+	return apierrors.NewNotFound(schema.GroupResource{Group: "admissionregistration.k8s.io", Resource: resource}, "codesphere-image-registry")
+}
+
+func registryAPIUnavailable(kind, apiVersion string) error {
+	gvk := schema.FromAPIVersionAndKind(apiVersion, kind)
+
+	return &meta.NoKindMatchError{GroupKind: gvk.GroupKind(), SearchedVersions: []string{gvk.Version}}
 }
 
 func supportedCluster() *installer.MockClusterVersionClient {
@@ -126,30 +174,38 @@ func installRegistryPolicy(base string) *admissionv1.MutatingAdmissionPolicy {
 }
 
 func mutateRegistryPod(policy *admissionv1.MutatingAdmissionPolicy, pod *corev1.Pod) *corev1.Pod {
-	expression := policy.Spec.Mutations[0].JSONPatch.Expression
-	for _, variable := range policy.Spec.Variables {
-		expression = strings.ReplaceAll(expression, "variables."+variable.Name, variable.Expression)
-	}
+	return mutateRegistryObject(policy, pod, corev1.SchemeGroupVersion.WithKind("Pod"), corev1.SchemeGroupVersion.WithResource("pods")).(*corev1.Pod)
+}
 
+func mutateRegistryObject(policy *admissionv1.MutatingAdmissionPolicy, obj runtime.Object, gvk schema.GroupVersionKind, gvr schema.GroupVersionResource) runtime.Object {
 	compiler, err := plugincel.NewCompositedCompiler(environment.MustBaseEnvSet(environment.DefaultCompatibilityVersion()))
 	Expect(err).NotTo(HaveOccurred())
 
-	evaluator := compiler.CompileMutatingEvaluator(&patch.JSONPatchCondition{Expression: expression},
-		plugincel.OptionalVariableDeclarations{HasPatchTypes: true}, environment.StoredExpressions)
 	scheme := runtime.NewScheme()
 	Expect(corev1.AddToScheme(scheme)).To(Succeed())
 
-	gvk := corev1.SchemeGroupVersion.WithKind("Pod")
-	gvr := corev1.SchemeGroupVersion.WithResource("pods")
-	attrs := admission.NewAttributesRecord(pod, nil, gvk, "default", "test", gvr, "", admission.Create, &metav1.CreateOptions{}, false, nil)
-	result, err := patch.NewJSONPatcher(evaluator).Patch(context.Background(), patch.Request{
-		MatchedResource:     gvr,
-		VersionedAttributes: &admission.VersionedAttributes{Attributes: attrs, VersionedKind: gvk, VersionedObject: pod},
-		ObjectInterfaces:    admission.NewObjectInterfacesFromScheme(scheme),
-	}, celconfig.RuntimeCELCostBudget)
-	Expect(err).NotTo(HaveOccurred())
+	if _, ok := obj.(*unstructured.Unstructured); ok {
+		scheme.AddKnownTypeWithName(gvk, &unstructured.Unstructured{})
+	}
 
-	return result.(*corev1.Pod)
+	for _, mutation := range policy.Spec.Mutations {
+		expression := mutation.JSONPatch.Expression
+		for _, variable := range policy.Spec.Variables {
+			expression = strings.ReplaceAll(expression, "variables."+variable.Name, variable.Expression)
+		}
+
+		evaluator := compiler.CompileMutatingEvaluator(&patch.JSONPatchCondition{Expression: expression},
+			plugincel.OptionalVariableDeclarations{HasPatchTypes: true}, environment.StoredExpressions)
+		attrs := admission.NewAttributesRecord(obj, nil, gvk, "default", "test", gvr, "", admission.Create, &metav1.CreateOptions{}, false, nil)
+		obj, err = patch.NewJSONPatcher(evaluator).Patch(context.Background(), patch.Request{
+			MatchedResource:     gvr,
+			VersionedAttributes: &admission.VersionedAttributes{Attributes: attrs, VersionedKind: gvk, VersionedObject: obj},
+			ObjectInterfaces:    admission.NewObjectInterfacesFromScheme(scheme),
+		}, celconfig.RuntimeCELCostBudget)
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	return obj
 }
 
 var _ = Describe("Registry admission policy", func() {
@@ -195,8 +251,8 @@ var _ = Describe("Registry admission policy", func() {
 		versions.EXPECT().ServerVersion().Return(&versioninfo.Info{GitVersion: "v1.34.0"}, nil).Once()
 
 		client := installer.NewMockRegistryPolicyClient(GinkgoT())
-		client.EXPECT().Apply(mock.Anything, admissionResourceVersion("MutatingAdmissionPolicy", "admissionregistration.k8s.io/v1beta1"), mock.Anything).Return(nil).Once()
-		client.EXPECT().Apply(mock.Anything, admissionResourceVersion("MutatingAdmissionPolicyBinding", "admissionregistration.k8s.io/v1beta1"), mock.Anything).Return(nil).Once()
+		client.EXPECT().Apply(mock.Anything, admissionResourceVersion("MutatingAdmissionPolicy", betaAdmissionAPI), mock.Anything).Return(nil).Once()
+		client.EXPECT().Apply(mock.Anything, admissionResourceVersion("MutatingAdmissionPolicyBinding", betaAdmissionAPI), mock.Anything).Return(nil).Once()
 		expectRegistryProbe(client, "registry.example.com")
 		Expect(installer.EnsureRegistryPolicy(context.Background(), client, "registry.example.com", versions)).To(Succeed())
 	})
@@ -205,8 +261,8 @@ var _ = Describe("Registry admission policy", func() {
 		versions.EXPECT().ServerVersion().Return(&versioninfo.Info{GitVersion: "v1.34.0-eks-example"}, nil).Once()
 
 		client := installer.NewMockRegistryPolicyClient(GinkgoT())
-		client.EXPECT().Apply(mock.Anything, admissionResourceVersion("MutatingAdmissionPolicy", "admissionregistration.k8s.io/v1beta1"), mock.Anything).Return(nil).Once()
-		client.EXPECT().Apply(mock.Anything, admissionResourceVersion("MutatingAdmissionPolicyBinding", "admissionregistration.k8s.io/v1beta1"), mock.Anything).Return(nil).Once()
+		client.EXPECT().Apply(mock.Anything, admissionResourceVersion("MutatingAdmissionPolicy", betaAdmissionAPI), mock.Anything).Return(nil).Once()
+		client.EXPECT().Apply(mock.Anything, admissionResourceVersion("MutatingAdmissionPolicyBinding", betaAdmissionAPI), mock.Anything).Return(nil).Once()
 		expectRegistryProbe(client, "registry.example.com")
 		Expect(installer.EnsureRegistryPolicy(context.Background(), client, "registry.example.com", versions)).To(Succeed())
 	})
@@ -221,11 +277,70 @@ var _ = Describe("Registry admission policy", func() {
 		Expect(installer.EnsureRegistryPolicy(context.Background(), installer.NewMockRegistryPolicyClient(GinkgoT()), "registry.example.com", versions)).To(MatchError(ContainSubstring("failed to parse Kubernetes server version")))
 	})
 
-	It("does not contact Kubernetes when the registry is unset", func() {
-		Expect(installer.EnsureRegistryPolicy(context.Background(), installer.NewMockRegistryPolicyClient(GinkgoT()), "", installer.NewMockClusterVersionClient(GinkgoT()))).To(Succeed())
+	It("changes nothing when the registry is unset and no policy exists", func() {
+		client := installer.NewMockRegistryPolicyClient(GinkgoT())
+		expectNoRegistryPolicy(client)
+		Expect(installer.EnsureRegistryPolicy(context.Background(), client, "", installer.NewMockClusterVersionClient(GinkgoT()))).To(Succeed())
 	})
-	It("does not contact Kubernetes for the default registry", func() {
-		Expect(installer.EnsureRegistryPolicy(context.Background(), installer.NewMockRegistryPolicyClient(GinkgoT()), "ghcr.io/", installer.NewMockClusterVersionClient(GinkgoT()))).To(Succeed())
+	It("changes nothing for the default registry when no policy exists", func() {
+		client := installer.NewMockRegistryPolicyClient(GinkgoT())
+		expectNoRegistryPolicy(client)
+		Expect(installer.EnsureRegistryPolicy(context.Background(), client, "ghcr.io/", installer.NewMockClusterVersionClient(GinkgoT()))).To(Succeed())
+	})
+	It("succeeds for the default registry on clusters without the policy API", func() {
+		client := installer.NewMockRegistryPolicyClient(GinkgoT())
+		expectRegistryAPIUnavailable(client, bindingKind)
+		expectRegistryAPIUnavailable(client, policyKind)
+		Expect(installer.EnsureRegistryPolicy(context.Background(), client, "ghcr.io", installer.NewMockClusterVersionClient(GinkgoT()))).To(Succeed())
+	})
+	It("removes the binding before the policy when reverting from a custom registry", func() {
+		client := installer.NewMockRegistryPolicyClient(GinkgoT())
+		client.EXPECT().Apply(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+		expectRegistryProbe(client, "old.example.com")
+		Expect(installer.EnsureRegistryPolicy(context.Background(), client, "old.example.com", supportedCluster())).To(Succeed())
+
+		binding := expectV1RegistryDelete(client, bindingKind, nil)
+		policy := expectV1RegistryDelete(client, policyKind, nil).NotBefore(binding)
+		expectRegistryProbe(client, "ghcr.io").NotBefore(policy)
+		Expect(installer.EnsureRegistryPolicy(context.Background(), client, "ghcr.io", installer.NewMockClusterVersionClient(GinkgoT()))).To(Succeed())
+	})
+	It("removes beta API resources when reverting to the default registry on Kubernetes 1.34", func() {
+		client := installer.NewMockRegistryPolicyClient(GinkgoT())
+		expectRegistryDelete(client, bindingKind, v1AdmissionAPI, registryAPIUnavailable(bindingKind, v1AdmissionAPI))
+		binding := expectRegistryDelete(client, bindingKind, betaAdmissionAPI, nil)
+		expectRegistryDelete(client, policyKind, v1AdmissionAPI, registryAPIUnavailable(policyKind, v1AdmissionAPI))
+		policy := expectRegistryDelete(client, policyKind, betaAdmissionAPI, nil).NotBefore(binding)
+		expectRegistryProbe(client, "ghcr.io").NotBefore(policy)
+		Expect(installer.EnsureRegistryPolicy(context.Background(), client, "ghcr.io", installer.NewMockClusterVersionClient(GinkgoT()))).To(Succeed())
+	})
+	It("keeps the policy when removing its binding fails", func() {
+		client := installer.NewMockRegistryPolicyClient(GinkgoT())
+		cause := apierrors.NewForbidden(schema.GroupResource{Group: "admissionregistration.k8s.io", Resource: "mutatingadmissionpolicybindings"}, "codesphere-image-registry", errors.New("denied"))
+		expectRegistryDelete(client, bindingKind, v1AdmissionAPI, cause)
+		err := installer.EnsureRegistryPolicy(context.Background(), client, "ghcr.io", installer.NewMockClusterVersionClient(GinkgoT()))
+		Expect(err).To(MatchError(ContainSubstring("failed to remove image registry policy: failed to delete admissionregistration.k8s.io/v1 MutatingAdmissionPolicyBinding")))
+		Expect(errors.Is(err, cause)).To(BeTrue())
+	})
+	It("reports policy removal failures after removing the binding", func() {
+		client := installer.NewMockRegistryPolicyClient(GinkgoT())
+		expectV1RegistryDelete(client, bindingKind, nil)
+
+		cause := apierrors.NewServiceUnavailable("API restarting")
+		expectRegistryDelete(client, policyKind, v1AdmissionAPI, cause)
+		err := installer.EnsureRegistryPolicy(context.Background(), client, "ghcr.io", installer.NewMockClusterVersionClient(GinkgoT()))
+		Expect(err).To(MatchError(ContainSubstring("failed to remove image registry policy: failed to delete admissionregistration.k8s.io/v1 MutatingAdmissionPolicy")))
+		Expect(errors.Is(err, cause)).To(BeTrue())
+	})
+	It("reports when dry-run admission fails after removing the policy", func() {
+		client := installer.NewMockRegistryPolicyClient(GinkgoT())
+		expectV1RegistryDelete(client, bindingKind, nil)
+		expectV1RegistryDelete(client, policyKind, registryResourceNotFound("mutatingadmissionpolicies"))
+
+		cause := apierrors.NewForbidden(schema.GroupResource{Resource: "pods"}, "probe", errors.New("probe forbidden"))
+		client.EXPECT().Create(mock.Anything, mock.Anything, mock.Anything).Return(cause).Once()
+		err := installer.EnsureRegistryPolicy(context.Background(), client, "ghcr.io", installer.NewMockClusterVersionClient(GinkgoT()))
+		Expect(err).To(MatchError(ContainSubstring("policy removal")))
+		Expect(errors.Is(err, cause)).To(BeTrue())
 	})
 	It("rewrites only Codesphere container and init container images, preserving tags and digests", func() {
 		policy := installRegistryPolicy("registry.example.com:5000/team//mirror/")
@@ -338,5 +453,42 @@ var _ = Describe("Registry admission policy", func() {
 			}).Return(nil).Once()
 		err := installer.EnsureRegistryPolicy(ctx, client, "registry.example.com", supportedCluster())
 		Expect(errors.Is(err, context.Canceled)).To(BeTrue())
+	})
+})
+
+func mutateRegistryCR(policy *admissionv1.MutatingAdmissionPolicy, obj *unstructured.Unstructured, resource string) *unstructured.Unstructured {
+	gvk := obj.GroupVersionKind()
+	return mutateRegistryObject(policy, obj, gvk, gvk.GroupVersion().WithResource(resource)).(*unstructured.Unstructured)
+}
+
+var _ = Describe("Registry admission for CNPG resources", func() {
+	It("rewrites CNPG desired images and preserves versions and other cluster settings", func() {
+		policy := installRegistryPolicy("registry.example.com/team")
+		Expect(policy.Spec.MatchConstraints.ResourceRules).To(HaveLen(2))
+		Expect(policy.Spec.Mutations).To(HaveLen(2))
+		rule := policy.Spec.MatchConstraints.ResourceRules[1]
+		Expect(rule.APIGroups).To(Equal([]string{"postgresql.cnpg.io"}))
+		Expect(rule.Resources).To(Equal([]string{"clusters"}))
+		Expect(rule.Operations).To(Equal([]admissionv1.OperationType{admissionv1.Create, admissionv1.Update}))
+
+		cluster := &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "postgresql.cnpg.io/v1", "kind": "Cluster",
+			"metadata": map[string]any{"name": "openfga-pg"},
+			"spec":     map[string]any{"imageName": "ghcr.io/codesphere-cloud/docker/postgresql:16@sha256:abc", "instances": int64(2)},
+		}}
+		result := mutateRegistryCR(policy, cluster, "clusters")
+		Expect(result.Object["spec"]).To(Equal(map[string]any{"imageName": "registry.example.com/team/codesphere-cloud/docker/postgresql:16@sha256:abc", "instances": int64(2)}))
+		Expect(mutateRegistryCR(policy, result, "clusters")).To(Equal(result))
+	})
+
+	It("leaves CNPG image defaults and unrelated registries unchanged", func() {
+		policy := installRegistryPolicy("registry.example.com")
+		cluster := &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "postgresql.cnpg.io/v1", "kind": "Cluster",
+			"spec": map[string]any{"instances": int64(2)},
+		}}
+		Expect(mutateRegistryCR(policy, cluster, "clusters")).To(Equal(cluster))
+		cluster.Object["spec"].(map[string]any)["imageName"] = "ghcr.io/other/postgresql:16"
+		Expect(mutateRegistryCR(policy, cluster, "clusters")).To(Equal(cluster))
 	})
 })

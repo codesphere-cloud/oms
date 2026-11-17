@@ -36,6 +36,10 @@ func OpenFgaPcAppsValues(config *files.RootConfig, vault *files.InstallVault) fi
 		chartValues["openfga"] = files.ChartValues{"authn": authn}
 	}
 
+	if backup := backupValues(config.Codesphere.OpenfgaBackups); backup != nil {
+		chartValues["postgres"] = files.ChartValues{"backup": backup}
+	}
+
 	if len(chartValues) > 0 {
 		application["valuesObject"] = chartValues
 	}
@@ -79,6 +83,34 @@ func authnValues(config *files.RootConfig, vault *files.InstallVault) files.Char
 			"keysSecret": openFgaPresharedKeysSecret,
 		},
 	}
+}
+
+// backupValues configures the CNPG backups of the OpenFGA database. Schedule and retention are
+// only set when configured, so the chart defaults apply otherwise. Returns nil when the config
+// has no openfgaBackups block, leaving the chart default (backups off) untouched.
+func backupValues(backups *files.OpenfgaBackupsConfig) files.ChartValues {
+	if backups == nil {
+		return nil
+	}
+
+	backup := files.ChartValues{"enabled": backups.Enabled}
+	if backups.Schedule != "" {
+		backup["schedule"] = backups.Schedule
+	}
+
+	if backups.DestinationPath != "" {
+		backup["destinationPath"] = backups.DestinationPath
+	}
+
+	if backups.EndpointURL != "" {
+		backup["endpointURL"] = backups.EndpointURL
+	}
+
+	if backups.RetentionPolicy != "" {
+		backup["retentionPolicy"] = backups.RetentionPolicy
+	}
+
+	return backup
 }
 
 // gatewayValues publishes a locally deployed OpenFGA through the Codesphere gateway, so the

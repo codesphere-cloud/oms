@@ -20,6 +20,7 @@ func (e *testEnv) GetOmsPortalApiKey() (string, error) {
 	if e.apiKey == "" {
 		return "", errors.New("OMS_PORTAL_API_KEY not set in test env")
 	}
+
 	return e.apiKey, nil
 }
 
@@ -27,6 +28,7 @@ func (e *testEnv) GetOmsPortalApi() string {
 	if e.apiURL == "" {
 		return "https://oms-portal.codesphere.com/api"
 	}
+
 	return e.apiURL
 }
 
@@ -34,6 +36,7 @@ func (e *testEnv) GetOmsWorkdir() string {
 	if e.workdir == "" {
 		return "./oms-workdir"
 	}
+
 	return e.workdir
 }
 

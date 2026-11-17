@@ -69,7 +69,7 @@ var _ = Describe("BuildImagesCmd", func() {
 
 			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir")
 
-			err := c.RunE(nil, []string{})
+			err := c.RunE(newCommandWithContext(), []string{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to build and push images"))
 		})
@@ -80,17 +80,19 @@ var _ = Describe("BuildImagesCmd", func() {
 
 			tempConfigFile, err := os.CreateTemp("", "test-config.yaml")
 			Expect(err).To(BeNil())
+
 			defer func() { _ = os.Remove(tempConfigFile.Name()) }()
 
 			_, err = tempConfigFile.WriteString(validConfigYaml)
 			Expect(err).To(BeNil())
+
 			_ = tempConfigFile.Close()
 
 			c.Opts.Config = tempConfigFile.Name()
 
 			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir")
 
-			err = c.RunE(nil, []string{})
+			err = c.RunE(newCommandWithContext(), []string{})
 			// This will fail because the dockerfile doesn't exist and build will fail
 			// But it should at least parse the config successfully
 			Expect(err).To(HaveOccurred())
@@ -105,6 +107,7 @@ var _ = Describe("BuildImagesCmd", func() {
 			mockImageManager := system.NewMockImageManager(GinkgoT())
 
 			c.Opts.Config = "non-existent-config.yaml"
+
 			mockConfigManager.EXPECT().ParseConfigYaml("non-existent-config.yaml").Return(files.RootConfig{}, errors.New("failed to parse config"))
 
 			err := c.BuildAndPushImages(mockPackageManager, mockConfigManager, mockImageManager)
@@ -407,6 +410,7 @@ var _ = Describe("AddBuildImagesCmd", func() {
 		cmd.AddBuildImagesCmd(parentCmd, globalOpts)
 
 		var imagesCmd *cobra.Command
+
 		for _, c := range parentCmd.Commands() {
 			if c.Use == "images" {
 				imagesCmd = c

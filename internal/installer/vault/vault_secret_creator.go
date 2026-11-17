@@ -90,6 +90,7 @@ func (v *VaultSecretCreator) CreateSecretFromVault(ctx context.Context, vault *f
 	_, err = controllerutil.CreateOrUpdate(ctx, v.client, secret, func() error {
 		secret.Type = corev1.SecretTypeOpaque
 		secret.Data = secretData
+
 		return nil
 	})
 	if err != nil {
@@ -97,6 +98,7 @@ func (v *VaultSecretCreator) CreateSecretFromVault(ctx context.Context, vault *f
 	}
 
 	log.Printf("Successfully created secret '%s' in namespace '%s' with %d entries", secretName, namespace, len(secretData))
+
 	return nil
 }
 
@@ -116,6 +118,7 @@ func (v *VaultSecretCreator) ensureNamespace(ctx context.Context, namespace stri
 // Field entries produce "entryName.password" and, when a username is present, "entryName.username".
 func vaultToSecretData(vault *files.InstallVault) (map[string][]byte, error) {
 	data := make(map[string][]byte)
+
 	for _, entry := range vault.Secrets {
 		if entry.File != nil {
 			data[entry.Name] = []byte(entry.File.Content)
@@ -126,9 +129,11 @@ func vaultToSecretData(vault *files.InstallVault) (map[string][]byte, error) {
 			}
 		}
 	}
+
 	if len(data) == 0 {
 		return nil, fmt.Errorf("no secrets found in vault file")
 	}
+
 	return data, nil
 }
 

@@ -4,6 +4,7 @@
 package argocd_test
 
 import (
+	"context"
 	"errors"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
@@ -37,7 +38,7 @@ var _ = Describe("ArgoCD chart from BOM", func() {
 		kube := NewMockClient(GinkgoT())
 		expectNewImagePullSecret(kube)
 		install := &argocd.Installer{InstallerConfig: cfg, Helm: helm, Client: kube}
-		Expect(install.Install()).To(Succeed())
+		Expect(install.Install(context.Background())).To(Succeed())
 	})
 
 	It("takes the repository and version from the BOM while preserving other settings", func() {
@@ -128,6 +129,6 @@ var _ = Describe("ArgoCD chart from BOM", func() {
 		loginErr := errors.New("invalid credentials")
 		helm.EXPECT().LoginRegistry(mock.Anything, "registry.example.com", "user", "token").Return(loginErr)
 		install := &argocd.Installer{InstallerConfig: cfg, Helm: helm}
-		Expect(install.Install()).To(MatchError(ContainSubstring("logging in to ArgoCD chart registry")))
+		Expect(install.Install(context.Background())).To(MatchError(ContainSubstring("logging in to ArgoCD chart registry")))
 	})
 })

@@ -34,6 +34,7 @@ var _ = Describe("AddClusterAdmin", func() {
 	getEmail := func() string {
 		secret, err := clientset.CoreV1().Secrets(opts.Namespace).Get(ctx, opts.SecretName, metav1.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
+
 		return string(secret.Data[clusteradmin.EmailKey])
 	}
 

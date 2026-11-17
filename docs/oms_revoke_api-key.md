@@ -13,14 +13,14 @@ oms revoke api-key [flags]
 ### Options
 
 ```
-  -h, --help        help for api-key
-  -i, --id string   API key id to revoke
+  -h, --help[=true|false]   help for api-key
+  -i, --id string           API key id to revoke
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

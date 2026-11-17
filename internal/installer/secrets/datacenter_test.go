@@ -107,6 +107,7 @@ var _ = Describe("DeriveDataCenterVault", func() {
 				if primary.GetSecret(name) == nil {
 					continue
 				}
+
 				Expect(derived.GetSecret(name)).To(Equal(primary.GetSecret(name)), "%s should be shared", name)
 			}
 		}

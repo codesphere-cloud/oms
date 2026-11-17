@@ -21,6 +21,7 @@ var _ = Describe("GenerateDockerfile", func() {
 
 	BeforeEach(func() {
 		var err error
+
 		tempDir, err = os.MkdirTemp("", "tmpl-test-*")
 		Expect(err).To(BeNil())
 
@@ -33,6 +34,7 @@ var _ = Describe("GenerateDockerfile", func() {
 				_ = os.RemoveAll(tempDir)
 			}()
 		}
+
 		if mockFileIO != nil {
 			mockFileIO.AssertExpectations(GinkgoT())
 		}

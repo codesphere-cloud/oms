@@ -46,11 +46,13 @@ func IsDataCenterScopedSecret(name string) bool {
 			return true
 		}
 	}
+
 	for _, prefix := range DataCenterScopedSecretPrefixes {
 		if strings.HasPrefix(name, prefix) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -71,8 +73,10 @@ func DeriveDataCenterVault(primary *files.InstallVault) *files.InstallVault {
 		if IsDataCenterScopedSecret(entry.Name) {
 			continue
 		}
+
 		kept = append(kept, entry)
 	}
+
 	derived.Secrets = kept
 
 	return derived
@@ -89,6 +93,7 @@ func DeriveDataCenterConfig(primary *files.RootConfig) (*files.RootConfig, error
 	if err != nil {
 		return nil, fmt.Errorf("clone primary data center config: %w", err)
 	}
+
 	clearDataCenterScopedConfig(derived)
 
 	return derived, nil

@@ -19,12 +19,13 @@ oms beta bootstrap-gcp single-node [flags]
 ```
       --base-domain string               Base domain for Codesphere (required)
       --billing-account string           GCP Billing Account ID (required)
+      --codesphere-registry string       Codesphere registry server written to the "codesphere" entry of additionalRegistries in the install config; override only for development. Its password is read from OMS_PORTAL_API_KEY (default "registry.codesphere.com")
       --config stringArray               Local config.yaml file; repeat to merge in order before VM settings
       --dns-project-id string            GCP Project ID for Cloud DNS (optional)
       --dns-zone-name string             Cloud DNS Zone Name (optional) (default "oms-testing")
       --folder-id string                 GCP Folder ID (optional)
       --github-pat string                GitHub Personal Access Token for pulling Codesphere images from ghcr.io (defaults to OMS_REGISTRY_PASSWORD). Required scope: read:packages.
-  -h, --help                             help for single-node
+  -h, --help[=true|false]                help for single-node
       --install-config-template string   Initial config.yaml template, applied before --config files
       --install-hash string              Codesphere package hash to install (default: none)
       --install-local string             Install Codesphere from local package (default: none)
@@ -38,12 +39,12 @@ oms beta bootstrap-gcp single-node [flags]
       --registry-user string             Registry username for pulling Codesphere images from ghcr.io (required)
       --remote-oms-binary string         Path to a local Linux amd64 OMS binary to copy to and use on the remote host instead of downloading a release (optional)
       --root-disk-size int               Instance root disk size in GB (default: 50) (default 50)
-      --spot-vms                         Use Spot VMs for Codesphere infrastructure. Falls back to standard VMs if spot capacity unavailable. (default: false)
+      --spot-vms[=true|false]            Use Spot VMs for Codesphere infrastructure. Falls back to standard VMs if spot capacity unavailable. (default: false)
       --ssh-private-key-path string      SSH Private Key Path (default: ~/.ssh/id_rsa) (default "~/.ssh/id_rsa")
       --ssh-public-key-path string       SSH Public Key Path (default: ~/.ssh/id_rsa.pub) (default "~/.ssh/id_rsa.pub")
-      --ssh-quiet                        Suppress SSH command output (default: false)
+      --ssh-quiet[=true|false]           Suppress SSH command output (default: false)
       --storage-engine string            Storage engine (rook-ceph or local) (default "rook-ceph")
-      --timer                            Show how long each step took and a final timing summary table
+      --timer[=true|false]               Show how long each step took and a final timing summary table
       --vault string                     SOPS vault for config templating and initial install secrets
       --zone string                      GCP Zone (default: europe-west4-a) (default "europe-west4-a")
 ```
@@ -51,7 +52,7 @@ oms beta bootstrap-gcp single-node [flags]
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

@@ -113,6 +113,7 @@ func (b *LocalBootstrapper) DeployCephFilesystem() error {
 				Resources:     corev1.ResourceRequirements{},
 			},
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -135,6 +136,7 @@ func (b *LocalBootstrapper) DeployCephFilesystemSubVolumeGroup() error {
 		svg.Spec = rookcephv1.CephFilesystemSubVolumeGroupSpec{
 			FilesystemName: cephFilesystemName,
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -184,6 +186,7 @@ func (b *LocalBootstrapper) EnsureCephUsers() (*CephCredentials, error) {
 			cc.Spec = rookcephv1.ClientSpec{
 				Caps: def.caps,
 			}
+
 			return nil
 		})
 		if err != nil {
@@ -193,22 +196,26 @@ func (b *LocalBootstrapper) EnsureCephUsers() (*CephCredentials, error) {
 		if err := b.waitForCephClientReady(def.name); err != nil {
 			return nil, err
 		}
+
 		b.stlog.Logf("CephClient %q is ready", def.name)
 	}
 
 	b.stlog.Logf("Reading Ceph cluster FSID")
+
 	fsid, err := b.readCephFSID()
 	if err != nil {
 		return nil, err
 	}
 
 	b.stlog.Logf("Ensuring RGW admin user %q", rgwAdminUserName)
+
 	rgwAdmin, err := b.EnsureRGWAdminUser()
 	if err != nil {
 		return nil, err
 	}
 
 	b.stlog.Logf("Reading Ceph client secrets")
+
 	cephfsAdmin, err := b.readCephClientSecret("cephfs-admin-blue")
 	if err != nil {
 		return nil, err
@@ -220,6 +227,7 @@ func (b *LocalBootstrapper) EnsureCephUsers() (*CephCredentials, error) {
 	}
 
 	b.stlog.Logf("Reading Rook CSI secrets")
+
 	csiRBDNode, err := b.readCSISecret("rook-csi-rbd-node", "userID", "userKey")
 	if err != nil {
 		return nil, err
@@ -241,6 +249,7 @@ func (b *LocalBootstrapper) EnsureCephUsers() (*CephCredentials, error) {
 	}
 
 	b.stlog.Logf("Ceph users and credentials are ready")
+
 	return &CephCredentials{
 		FSID:                  fsid,
 		CephfsAdmin:           *cephfsAdmin,
@@ -257,6 +266,7 @@ func (b *LocalBootstrapper) EnsureCephUsers() (*CephCredentials, error) {
 // insecure RGW endpoints into Ceph hosts for the internal install config.
 func (b *LocalBootstrapper) ReadCephMonHosts() ([]files.CephHost, error) {
 	store := &rookcephv1.CephObjectStore{}
+
 	key := client.ObjectKey{Name: rgwObjectStoreName, Namespace: rookNamespace}
 	if err := b.kubeClient.Get(b.ctx, key, store); err != nil {
 		return nil, fmt.Errorf("failed to get CephObjectStore %q: %w", key.Name, err)
@@ -315,12 +325,15 @@ func (b *LocalBootstrapper) DeployRGWGateway() error {
 	if err := b.deployRGWRealm(); err != nil {
 		return err
 	}
+
 	if err := b.deployRGWZoneGroup(); err != nil {
 		return err
 	}
+
 	if err := b.deployRGWZone(); err != nil {
 		return err
 	}
+
 	return b.deployRGWObjectStore()
 }
 
@@ -336,11 +349,13 @@ func (b *LocalBootstrapper) deployRGWRealm() error {
 		realm.Spec = rookcephv1.ObjectRealmSpec{
 			DefaultRealm: true,
 		}
+
 		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create or update CephObjectRealm %q: %w", rgwRealmName, err)
 	}
+
 	return nil
 }
 
@@ -356,11 +371,13 @@ func (b *LocalBootstrapper) deployRGWZoneGroup() error {
 		zoneGroup.Spec = rookcephv1.ObjectZoneGroupSpec{
 			Realm: rgwRealmName,
 		}
+
 		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create or update CephObjectZoneGroup %q: %w", rgwZoneGroupName, err)
 	}
+
 	return nil
 }
 
@@ -391,11 +408,13 @@ func (b *LocalBootstrapper) deployRGWZone() error {
 			},
 			PreservePoolsOnDelete: true,
 		}
+
 		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create or update CephObjectZone %q: %w", rgwZoneName, err)
 	}
+
 	return nil
 }
 
@@ -432,6 +451,7 @@ func (b *LocalBootstrapper) deployRGWObjectStore() error {
 				Name: rgwZoneName,
 			},
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -463,22 +483,26 @@ func (b *LocalBootstrapper) EnsureRGWAdminUser() (*RGWUserCredentials, error) {
 		"--rgw-zone", rgwZoneName,
 		"--format", "json",
 	}
+
 	createArgs, err := b.appendCephMonitorArgs(createArgs)
 	if err != nil {
 		return nil, err
 	}
+
 	stdout, stderr, err := b.execRadosGWAdmin(createArgs)
 	if err != nil {
 		errorText := strings.ToLower(stderr + "\n" + err.Error())
 		if !strings.Contains(errorText, "exist") {
 			return nil, fmt.Errorf("failed to create RGW admin user %q: %w: %s", rgwAdminUserName, err, strings.TrimSpace(stderr))
 		}
+
 		b.stlog.Logf("RGW admin user %q already exists, reading credentials", rgwAdminUserName)
 	} else {
 		creds, parseErr := rgwUserCredentialsFromAdminJSON(stdout)
 		if parseErr == nil {
 			return creds, nil
 		}
+
 		b.stlog.Logf("Failed to parse RGW admin create output for %q, falling back to user info: %v", rgwAdminUserName, parseErr)
 	}
 
@@ -490,10 +514,12 @@ func (b *LocalBootstrapper) EnsureRGWAdminUser() (*RGWUserCredentials, error) {
 		"--rgw-zone", rgwZoneName,
 		"--format", "json",
 	}
+
 	infoArgs, err = b.appendCephMonitorArgs(infoArgs)
 	if err != nil {
 		return nil, err
 	}
+
 	stdout, stderr, err = b.execRadosGWAdmin(infoArgs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read RGW admin user %q: %w: %s", rgwAdminUserName, err, strings.TrimSpace(stderr))
@@ -503,6 +529,7 @@ func (b *LocalBootstrapper) EnsureRGWAdminUser() (*RGWUserCredentials, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse RGW admin user %q info output: %w", rgwAdminUserName, err)
 	}
+
 	return creds, nil
 }
 
@@ -511,10 +538,12 @@ func (b *LocalBootstrapper) appendCephMonitorArgs(args []string) ([]string, erro
 	if err != nil {
 		return nil, err
 	}
+
 	adminUser, adminSecret, err := b.readCephAdminAuth()
 	if err != nil {
 		return nil, err
 	}
+
 	return append([]string{
 		"--mon-host", monHosts,
 		"--no-mon-config",
@@ -525,6 +554,7 @@ func (b *LocalBootstrapper) appendCephMonitorArgs(args []string) ([]string, erro
 
 func (b *LocalBootstrapper) readCephMonitorHosts() (string, error) {
 	cm := &corev1.ConfigMap{}
+
 	key := client.ObjectKey{Name: cephMonEndpointsConfigMap, Namespace: rookNamespace}
 	if err := b.kubeClient.Get(b.ctx, key, cm); err != nil {
 		return "", fmt.Errorf("failed to get Ceph monitor endpoints ConfigMap %q: %w", cephMonEndpointsConfigMap, err)
@@ -536,16 +566,20 @@ func (b *LocalBootstrapper) readCephMonitorHosts() (string, error) {
 	}
 
 	var monHosts []string
+
 	seen := map[string]struct{}{}
+
 	for _, entry := range util.SplitMonitorEndpointEntries(rawEndpoints) {
 		monHost, err := util.ParseMonitorEndpointHost(entry)
 		if err != nil {
 			b.stlog.Logf("Skipping invalid Ceph monitor endpoint entry %q: %v", entry, err)
 			continue
 		}
+
 		if _, ok := seen[monHost]; ok {
 			continue
 		}
+
 		seen[monHost] = struct{}{}
 		monHosts = append(monHosts, monHost)
 	}
@@ -559,6 +593,7 @@ func (b *LocalBootstrapper) readCephMonitorHosts() (string, error) {
 
 func (b *LocalBootstrapper) readCephAdminAuth() (string, string, error) {
 	secret := &corev1.Secret{}
+
 	key := client.ObjectKey{Name: cephMonSecretName, Namespace: rookNamespace}
 	if err := b.kubeClient.Get(b.ctx, key, secret); err != nil {
 		return "", "", fmt.Errorf("failed to get Ceph monitor secret %q: %w", cephMonSecretName, err)
@@ -601,6 +636,7 @@ func (b *LocalBootstrapper) retryWithBackoff(timeout time.Duration, timeoutMsg s
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+
 		return fn(ctx)
 	})
 	if err == nil {
@@ -625,9 +661,12 @@ func (b *LocalBootstrapper) waitForRGWPod() (*corev1.Pod, error) {
 				if isRetryableWaitError(err) {
 					return err
 				}
+
 				return &retryableWaitError{err: err}
 			}
+
 			pod = currentPod
+
 			return nil
 		},
 	)
@@ -640,11 +679,13 @@ func (b *LocalBootstrapper) waitForRGWPod() (*corev1.Pod, error) {
 
 func (b *LocalBootstrapper) getRGWPod() (*corev1.Pod, error) {
 	serviceName := "rook-ceph-rgw-" + rgwObjectStoreName
+
 	service := &corev1.Service{}
 	if err := b.kubeClient.Get(b.ctx, client.ObjectKey{Name: serviceName, Namespace: rookNamespace}, service); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, &retryableWaitError{err: fmt.Errorf("RGW service %q not found yet", serviceName)}
 		}
+
 		return nil, fmt.Errorf("failed to get RGW service %q: %w", serviceName, err)
 	}
 
@@ -662,9 +703,11 @@ func (b *LocalBootstrapper) getRGWPod() (*corev1.Pod, error) {
 		if pod.Status.Phase != corev1.PodRunning {
 			continue
 		}
+
 		if len(pod.Spec.Containers) == 0 {
 			continue
 		}
+
 		return pod, nil
 	}
 
@@ -678,6 +721,7 @@ func (b *LocalBootstrapper) execRadosGWAdmin(args []string) (string, string, err
 	}
 
 	command := append([]string{"radosgw-admin"}, args...)
+
 	return b.execInPod(pod.Namespace, pod.Name, pod.Spec.Containers[0].Name, command)
 }
 
@@ -706,10 +750,12 @@ func (b *LocalBootstrapper) execInPod(namespace, podName, containerName string, 
 	}
 
 	var stdout, stderr bytes.Buffer
+
 	err = executor.StreamWithContext(b.ctx, remotecommand.StreamOptions{
 		Stdout: &stdout,
 		Stderr: &stderr,
 	})
+
 	return stdout.String(), stderr.String(), err
 }
 
@@ -718,6 +764,7 @@ func rgwUserCredentialsFromAdminJSON(raw string) (*RGWUserCredentials, error) {
 		AccessKey string `json:"access_key"`
 		SecretKey string `json:"secret_key"`
 	}
+
 	type rgwAdminUserInfo struct {
 		Keys []rgwAdminKey `json:"keys"`
 	}
@@ -726,9 +773,11 @@ func rgwUserCredentialsFromAdminJSON(raw string) (*RGWUserCredentials, error) {
 	if err := json.Unmarshal([]byte(raw), &info); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal RGW admin JSON: %w", err)
 	}
+
 	if len(info.Keys) == 0 {
 		return nil, fmt.Errorf("RGW admin JSON does not contain any keys")
 	}
+
 	if info.Keys[0].AccessKey == "" || info.Keys[0].SecretKey == "" {
 		return nil, fmt.Errorf("RGW admin JSON does not contain a complete access/secret key pair")
 	}
@@ -778,6 +827,7 @@ func (b *LocalBootstrapper) waitForCephObjectStoreReady(name string) error {
 				if apierrors.IsNotFound(err) {
 					return &retryableWaitError{err: fmt.Errorf("CephObjectStore %q not found yet", name)}
 				}
+
 				return err
 			}
 
@@ -796,6 +846,7 @@ func (b *LocalBootstrapper) waitForCephObjectStoreReady(name string) error {
 // readCephFSID reads the Ceph FSID from the CephCluster status.
 func (b *LocalBootstrapper) readCephFSID() (string, error) {
 	cluster := &rookcephv1.CephCluster{}
+
 	key := client.ObjectKey{Name: rookClusterName, Namespace: rookNamespace}
 	if err := b.kubeClient.Get(b.ctx, key, cluster); err != nil {
 		return "", fmt.Errorf("failed to get CephCluster %q: %w", rookClusterName, err)
@@ -813,6 +864,7 @@ func (b *LocalBootstrapper) readCephFSID() (string, error) {
 func (b *LocalBootstrapper) readCephClientSecret(name string) (*CephUserCredentials, error) {
 	secretName := "rook-ceph-client-" + name
 	secret := &corev1.Secret{}
+
 	key := client.ObjectKey{Name: secretName, Namespace: rookNamespace}
 	if err := b.kubeClient.Get(b.ctx, key, secret); err != nil {
 		return nil, fmt.Errorf("failed to get CephClient secret %q: %w", secretName, err)
@@ -832,6 +884,7 @@ func (b *LocalBootstrapper) readCephClientSecret(name string) (*CephUserCredenti
 // readCSISecret reads a Rook-managed CSI secret from the rook-ceph namespace.
 func (b *LocalBootstrapper) readCSISecret(secretName, idKey, keyKey string) (*CephUserCredentials, error) {
 	secret := &corev1.Secret{}
+
 	key := client.ObjectKey{Name: secretName, Namespace: rookNamespace}
 	if err := b.kubeClient.Get(b.ctx, key, secret); err != nil {
 		return nil, fmt.Errorf("failed to get CSI secret %q: %w", secretName, err)
@@ -866,6 +919,7 @@ func (b *LocalBootstrapper) waitForCephFilesystemReady() error {
 				if apierrors.IsNotFound(err) {
 					return &retryableWaitError{err: fmt.Errorf("CephFilesystem %q not found yet", cephFilesystemName)}
 				}
+
 				return err
 			}
 
@@ -897,6 +951,7 @@ func (b *LocalBootstrapper) waitForCephClientReady(name string) error {
 				if apierrors.IsNotFound(err) {
 					return &retryableWaitError{err: fmt.Errorf("CephClient %q not found yet", name)}
 				}
+
 				return err
 			}
 

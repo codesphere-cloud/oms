@@ -9,13 +9,13 @@ Initialize configuration files for Codesphere installation and other components.
 ### Options
 
 ```
-  -h, --help   help for init
+  -h, --help[=true|false]   help for init
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

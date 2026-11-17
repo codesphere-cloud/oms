@@ -44,7 +44,8 @@ var _ = Describe("Update", func() {
 		mockVersion.EXPECT().Version().Return(v)
 
 		mockGit.On("Update", mock.Anything, v, selfupdate.ParseSlug(cmd.GitHubRepo)).Return(v, "", nil)
-		err := c.SelfUpdate()
+
+		err := c.SelfUpdate(context.Background())
 		Expect(err).NotTo(HaveOccurred())
 		mockGit.AssertExpectations(GinkgoT())
 	})
@@ -52,9 +53,11 @@ var _ = Describe("Update", func() {
 	It("Updates when a newer version exists", func() {
 		current := "0.0.0"
 		latest := "0.0.42"
+
 		mockVersion.EXPECT().Version().Return(current)
 		mockGit.On("Update", mock.Anything, current, selfupdate.ParseSlug(cmd.GitHubRepo)).Return(latest, "notes", nil)
-		err := c.SelfUpdate()
+
+		err := c.SelfUpdate(context.Background())
 		Expect(err).NotTo(HaveOccurred())
 		mockGit.AssertExpectations(GinkgoT())
 	})

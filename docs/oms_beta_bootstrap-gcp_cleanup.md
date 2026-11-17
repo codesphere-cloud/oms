@@ -33,20 +33,20 @@ $ oms beta bootstrap-gcp cleanup --project-id my-project --base-domain example.c
 ### Options
 
 ```
-      --base-domain string      Base domain for DNS cleanup (optional, will use infra file if not provided)
-      --dns-project-id string   GCP Project ID for DNS zone (optional, will use infra file if not provided)
-      --dns-zone-name string    DNS zone name for DNS cleanup (optional, will use infra file if not provided)
-      --force                   Skip confirmation prompt and OMS-managed check
-  -h, --help                    help for cleanup
-      --project-id string       GCP Project ID to delete (optional, will use infra file if not provided)
-      --skip-dns-cleanup        Skip cleaning up DNS records
-      --timer                   Show how long each step took and a final timing summary table
+      --base-domain string              Base domain for DNS cleanup (optional, will use infra file if not provided)
+      --dns-project-id string           GCP Project ID for DNS zone (optional, will use infra file if not provided)
+      --dns-zone-name string            DNS zone name for DNS cleanup (optional, will use infra file if not provided)
+      --force[=true|false]              Skip confirmation prompt and OMS-managed check
+  -h, --help[=true|false]               help for cleanup
+      --project-id string               GCP Project ID to delete (optional, will use infra file if not provided)
+      --skip-dns-cleanup[=true|false]   Skip cleaning up DNS records
+      --timer[=true|false]              Show how long each step took and a final timing summary table
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

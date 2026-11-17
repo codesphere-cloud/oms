@@ -5,6 +5,7 @@ package gcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -55,6 +56,7 @@ type GCPClientManager interface {
 	AssignIAMRole(projectID, saEmail string, saProjectID string, roles []string) error
 	RemoveIAMRoleBinding(projectID, saName string, saProjectID string, roles []string) error
 	CreateVPC(projectID, region, networkName, subnetName, routerName, natName string) error
+	EnsurePrivateGoogleAccess(projectID, region, networkName, subnetName string) error
 	CreateFirewallRule(projectID string, rule *computepb.Firewall) error
 	DeleteFirewallRule(projectID, ruleName string) error
 	CreateInstance(projectID, zone string, instance *computepb.Instance) error
@@ -235,14 +237,14 @@ func getBillingAccountResourceName(billingAccount string) string {
 
 // GetBillingInfo retrieves the billing information for the given project.
 func (c *GCPClient) GetBillingInfo(projectID string) (*cloudbilling.ProjectBillingInfo, error) {
-	billingService, err := cloudbilling.NewService(context.Background())
+	billingService, err := cloudbilling.NewService(c.ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	projectName := getProjectResourceName(projectID)
 
-	billingInfo, err := billingService.Projects.GetBillingInfo(projectName).Do()
+	billingInfo, err := billingService.Projects.GetBillingInfo(projectName).Context(c.ctx).Do()
 	if err != nil {
 		return nil, err
 	}
@@ -1018,3 +1020,60 @@ func protoString(s string) *string { return &s }
 func protoBool(b bool) *bool       { return &b }
 func protoInt32(i int32) *int32    { return &i }
 func protoInt64(i int64) *int64    { return &i }
+
+// EnsurePrivateGoogleAccess enables private Google API access for an existing
+// subnet and maps Google API names to the private VIP inside this VPC only.
+func (c *GCPClient) EnsurePrivateGoogleAccess(projectID, region, networkName, subnetName string) error {
+	client, err := compute.NewSubnetworksRESTClient(c.ctx)
+	if err != nil {
+		return fmt.Errorf("creating subnet client: %w", err)
+	}
+	defer util.IgnoreError(client.Close)
+
+	op, err := client.SetPrivateIpGoogleAccess(c.ctx, &computepb.SetPrivateIpGoogleAccessSubnetworkRequest{
+		Project: projectID, Region: region, Subnetwork: subnetName,
+		SubnetworksSetPrivateIpGoogleAccessRequestResource: &computepb.SubnetworksSetPrivateIpGoogleAccessRequest{PrivateIpGoogleAccess: protoBool(true)},
+	})
+	if err != nil {
+		return fmt.Errorf("enabling private Google access: %w", err)
+	}
+
+	if err := op.Wait(c.ctx); err != nil {
+		return fmt.Errorf("waiting for private Google access: %w", err)
+	}
+
+	service, err := dns.NewService(c.ctx)
+	if err != nil {
+		return fmt.Errorf("creating DNS service: %w", err)
+	}
+
+	const zoneName = "oms-private-googleapis"
+
+	_, err = service.ManagedZones.Get(projectID, zoneName).Context(c.ctx).Do()
+	if err != nil && !isGoogleAPINotFound(err) {
+		return fmt.Errorf("reading private Google API DNS zone: %w", err)
+	}
+
+	if err != nil {
+		_, err = service.ManagedZones.Create(projectID, &dns.ManagedZone{
+			Name: zoneName, DnsName: "googleapis.com.", Description: "Google APIs for airgapped bootstrap nodes",
+			Visibility: "private",
+			PrivateVisibilityConfig: &dns.ManagedZonePrivateVisibilityConfig{Networks: []*dns.ManagedZonePrivateVisibilityConfigNetwork{{
+				NetworkUrl: fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/global/networks/%s", projectID, networkName),
+			}}},
+		}).Context(c.ctx).Do()
+		if err != nil {
+			return fmt.Errorf("creating private Google API DNS zone: %w", err)
+		}
+	}
+
+	return c.EnsureDNSRecordSets(projectID, zoneName, []*dns.ResourceRecordSet{
+		{Name: "private.googleapis.com.", Type: "A", Ttl: 300, Rrdatas: []string{"199.36.153.8", "199.36.153.9", "199.36.153.10", "199.36.153.11"}},
+		{Name: "*.googleapis.com.", Type: "CNAME", Ttl: 300, Rrdatas: []string{"private.googleapis.com."}},
+	})
+}
+
+func isGoogleAPINotFound(err error) bool {
+	var apiErr *googleapi.Error
+	return errors.As(err, &apiErr) && apiErr.Code == 404
+}

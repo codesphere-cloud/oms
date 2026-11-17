@@ -13,7 +13,7 @@ oms register [flags]
 ### Options
 
 ```
-  -h, --help                  help for register
+  -h, --help[=true|false]     help for register
   -g, --organization string   Organization of the new API key
   -o, --owner string          Owner of the new API key (must be a valid email address)
   -r, --role string           Role of the new API key. Available roles: Admin, Dev, Ext (default "Ext")
@@ -23,7 +23,7 @@ oms register [flags]
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

@@ -12,5 +12,6 @@ func (g *InstallConfig) GenerateSecrets() error {
 	if g.Vault == nil {
 		g.Vault = &files.InstallVault{}
 	}
+
 	return secrets.EnsureSecrets(g.Vault, g.Config)
 }

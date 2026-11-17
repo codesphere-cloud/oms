@@ -11,11 +11,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// VersionCmd implements the version command.
 type VersionCmd struct {
 	cmd *cobra.Command
 }
 
-func (c *VersionCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE prints the version information of the OMS CLI.
+func (c *VersionCmd) RunE(_ *cobra.Command, _ []string) error {
 	version := v.Build{}
 	log.Printf("OMS CLI version: %s\n", version.Version())
 	log.Printf("Commit: %s\n", version.Commit())
@@ -26,6 +28,7 @@ func (c *VersionCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
+// AddVersionCmd registers the version command on the root command.
 func AddVersionCmd(rootCmd *cobra.Command) {
 	version := VersionCmd{
 		cmd: &cobra.Command{

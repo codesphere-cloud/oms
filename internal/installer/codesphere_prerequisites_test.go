@@ -80,6 +80,7 @@ var _ = Describe("EnsureCodespherePrerequisites", func() {
 				if _, isNamespace := obj.(*corev1.Namespace); isNamespace {
 					return fmt.Errorf("kubectl error")
 				}
+
 				return client.Create(ctx, obj, opts...)
 			},
 		})
@@ -93,6 +94,7 @@ var _ = Describe("EnsureCodespherePrerequisites", func() {
 				if _, isService := obj.(*corev1.Service); isService {
 					return fmt.Errorf("kubectl error")
 				}
+
 				return client.Create(ctx, obj, opts...)
 			},
 		})

@@ -48,15 +48,16 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 	Context("RunE method", func() {
 		It("fails when package is empty", func() {
 			c.Opts.Package = ""
-			err := c.RunE(nil, []string{})
+			err := c.RunE(newCommandWithContext(), []string{})
 			Expect(err).To(MatchError("required option package not set"))
 		})
 
 		It("calls GetOmsWorkdir and fails on package operations", func() {
 			c.Opts.Package = "non-existent-package.tar.gz"
+
 			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir")
 
-			err := c.RunE(nil, []string{})
+			err := c.RunE(newCommandWithContext(), []string{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to extend baseimage"))
 		})
@@ -107,6 +108,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			// Create a temporary file for the Dockerfile generation to work with
 			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
 			Expect(err).To(BeNil())
+
 			defer func() { _ = os.Remove(tempFile.Name()) }()
 			defer func() { _ = tempFile.Close() }()
 
@@ -144,6 +146,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			// Create a temporary file for the Dockerfile generation to work with
 			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
 			Expect(err).To(BeNil())
+
 			defer func() { _ = os.Remove(tempFile.Name()) }()
 			defer func() { _ = tempFile.Close() }()
 
@@ -175,6 +178,7 @@ var _ = Describe("AddExtendBaseimageCmd", func() {
 		cmd.AddExtendBaseimageCmd(parentCmd, globalOpts)
 
 		var baseimagCmd *cobra.Command
+
 		for _, c := range parentCmd.Commands() {
 			if c.Use == "baseimage" {
 				baseimagCmd = c

@@ -9,6 +9,8 @@ import (
 	"log"
 	"strconv"
 	"time"
+
+	cserrors "github.com/codesphere-cloud/cs-go/api/errors"
 )
 
 const (
@@ -28,6 +30,10 @@ const (
 	pipelineStateFailure   = "failure"
 	pipelineStateAborted   = "aborted"
 	pipelineStatePollDelay = 5 * time.Second
+
+	createWorkspaceAttempts   = 5
+	createWorkspaceRetryDelay = 5 * time.Second
+	workspaceStatusPollDelay  = 5 * time.Second
 
 	ciYmlContent = `schemaVersion: v0.2
 prepare:
@@ -69,18 +75,22 @@ func getTeamID(c *SmoketestCodesphereOpts) (int, error) {
 	if c.TeamID != "" {
 		return strconv.Atoi(c.TeamID)
 	}
+
 	teams, err := c.Client.ListTeams("")
 	if err != nil {
 		return 0, fmt.Errorf("failed to get teams: %w", err)
 	}
+
 	if len(teams) == 0 {
 		return 0, fmt.Errorf("no teams available")
 	}
+
 	for _, team := range teams {
 		if team.IsFirst != nil && *team.IsFirst {
 			return team.Id, nil
 		}
 	}
+
 	return teams[0].Id, nil
 }
 
@@ -90,13 +100,16 @@ func getPlanID(c *SmoketestCodesphereOpts) (int, error) {
 	if c.PlanID != "" {
 		return strconv.Atoi(c.PlanID)
 	}
+
 	plans, err := c.Client.ListWorkspacePlans()
 	if err != nil {
 		return 0, fmt.Errorf("failed to get plans: %w", err)
 	}
+
 	if len(plans) == 0 {
 		return 0, fmt.Errorf("no workspace plans available")
 	}
+
 	return plans[0].Id, nil
 }
 
@@ -109,21 +122,86 @@ func (s *CreateWorkspaceStep) Run(ctx context.Context, c *SmoketestCodesphereOpt
 	if parseErr != nil {
 		return fmt.Errorf("failed to determine team-id: %w", parseErr)
 	}
+
 	planID, parseErr := getPlanID(c)
 	if parseErr != nil {
 		return fmt.Errorf("failed to determine plan-id: %w", parseErr)
 	}
+
 	workspaceName := fmt.Sprintf("smoketest-%s", time.Now().Format("20060102-150405"))
 
 	c.logStep(fmt.Sprintf("Creating empty workspace '%s'", workspaceName))
-	id, err := c.Client.CreateWorkspace(teamID, planID, workspaceName, nil)
+
+	id, err := createWorkspace(ctx, c, teamID, planID, workspaceName)
 	if err != nil {
 		c.logFailure()
 		return fmt.Errorf("failed to create workspace: %w", err)
 	}
+
+	// Record the workspace before waiting, so it is deleted even if it never becomes ready.
 	*workspaceID = id
+
+	if err := waitForWorkspaceRunning(ctx, c, id); err != nil {
+		c.logFailure()
+		return err
+	}
+
 	c.logSuccess()
+
 	return nil
+}
+
+// createWorkspace retries server errors like cs-go's DeployWorkspace does, but stops waiting
+// between attempts once ctx is cancelled.
+func createWorkspace(ctx context.Context, c *SmoketestCodesphereOpts, teamID, planID int, name string) (int, error) {
+	for attempt := 1; ; attempt++ {
+		id, err := c.Client.CreateWorkspace(teamID, planID, name, nil)
+		if err == nil {
+			return id, nil
+		}
+
+		if attempt == createWorkspaceAttempts || !cserrors.IsRetryable(err) {
+			return 0, fmt.Errorf("attempt %d of %d: %w", attempt, createWorkspaceAttempts, err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return 0, fmt.Errorf("%w; last error: %w", ctx.Err(), err)
+		case <-time.After(time.Duration(attempt) * createWorkspaceRetryDelay):
+		}
+	}
+}
+
+// waitForWorkspaceRunning polls the workspace status until it is running or ctx is done.
+// Status errors are retried, as a workspace that is starting up may not report one yet.
+func waitForWorkspaceRunning(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID int) error {
+	var lastErr error
+
+	for {
+		running, err := c.Client.WorkspaceRunning(workspaceID)
+		if err == nil && running {
+			return nil
+		}
+
+		if err != nil {
+			lastErr = err
+			log.Printf("failed to get workspace status, retrying: %s", err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return workspaceNotRunningError(ctx.Err(), workspaceID, lastErr)
+		case <-time.After(workspaceStatusPollDelay):
+		}
+	}
+}
+
+func workspaceNotRunningError(cause error, workspaceID int, lastErr error) error {
+	if lastErr != nil {
+		return fmt.Errorf("stopped waiting for workspace %d to be running: %w; last error: %w", workspaceID, cause, lastErr)
+	}
+
+	return fmt.Errorf("stopped waiting for workspace %d to be running: %w", workspaceID, cause)
 }
 
 type SetEnvVarStep struct{}
@@ -132,11 +210,14 @@ func (s *SetEnvVarStep) Name() string { return stepNameSetEnvVar }
 
 func (s *SetEnvVarStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
 	c.logStep(fmt.Sprintf("Setting environment variable %s=%s", smoketestEnvVarKey, smoketestEnvVarValue))
+
 	if err := c.Client.SetEnvVar(*workspaceID, smoketestEnvVarKey, smoketestEnvVarValue); err != nil {
 		c.logFailure()
 		return fmt.Errorf("failed to set environment variable: %w", err)
 	}
+
 	c.logSuccess()
+
 	return nil
 }
 
@@ -146,22 +227,29 @@ func (s *CreateFilesStep) Name() string { return stepNameCreateFiles }
 
 func (s *CreateFilesStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
 	c.logStep("Creating ci.yml file")
+
 	ciYmlCmd := fmt.Sprintf(`echo '%s' > ci.yml`, ciYmlContent)
+
 	err := c.Client.ExecuteCommand(*workspaceID, ciYmlCmd)
 	if err != nil {
 		c.logFailure()
 		return fmt.Errorf("failed to create ci.yml: %w", err)
 	}
+
 	c.logSuccess()
 
 	c.logStep("Creating index.html file")
+
 	indexHtmlCmd := fmt.Sprintf(`echo '%s' > index.html`, indexHtmlContent)
+
 	err = c.Client.ExecuteCommand(*workspaceID, indexHtmlCmd)
 	if err != nil {
 		c.logFailure()
 		return fmt.Errorf("failed to create index.html: %w", err)
 	}
+
 	c.logSuccess()
+
 	return nil
 }
 
@@ -171,11 +259,14 @@ func (s *SyncLandscapeStep) Name() string { return stepNameSyncLandscape }
 
 func (s *SyncLandscapeStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
 	c.logStep(fmt.Sprintf("Syncing landscape with profile '%s'", c.Profile))
+
 	if err := c.Client.SyncLandscape(*workspaceID, c.Profile); err != nil {
 		c.logFailure()
 		return fmt.Errorf("failed to sync landscape: %w", err)
 	}
+
 	c.logSuccess()
+
 	return nil
 }
 
@@ -185,18 +276,23 @@ func (s *ExecuteRunStageStep) Name() string { return stepNameExecuteRunStage }
 
 func (s *ExecuteRunStageStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
 	c.logStep(fmt.Sprintf("Executing '%s' pipeline stage", smoketestPipelineStage))
+
 	if err := c.Client.StartPipeline(*workspaceID, c.Profile, smoketestPipelineStage); err != nil {
 		c.logFailure()
 		return fmt.Errorf("failed to start pipeline: %w", err)
 	}
+
 	var lastErr error
+
 	for {
 		select {
 		case <-ctx.Done():
 			c.logFailure()
+
 			if lastErr != nil {
 				return fmt.Errorf("timed out waiting for workspace to be running: %w", lastErr)
 			}
+
 			return fmt.Errorf("timed out waiting for workspace to be running")
 		default:
 		}
@@ -205,6 +301,7 @@ func (s *ExecuteRunStageStep) Run(ctx context.Context, c *SmoketestCodesphereOpt
 		if err != nil {
 			lastErr = err
 			log.Printf("failed to get pipeline state, retrying: %s", err)
+
 			select {
 			case <-ctx.Done():
 				c.logFailure()
@@ -223,16 +320,20 @@ func (s *ExecuteRunStageStep) Run(ctx context.Context, c *SmoketestCodesphereOpt
 
 		hasNonIdeServer := false
 		allNonIdeRunning := true
+
 		for _, st := range states {
 			if st.Server == ideServer {
 				continue
 			}
+
 			hasNonIdeServer = true
+
 			if st.State != pipelineStateRunning {
 				allNonIdeRunning = false
 				break
 			}
 		}
+
 		if hasNonIdeServer && allNonIdeRunning {
 			c.logSuccess()
 			return nil
@@ -253,11 +354,14 @@ func (s *DeleteWorkspaceStep) Name() string { return stepNameDeleteWorkspace }
 
 func (s *DeleteWorkspaceStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
 	c.logStep(fmt.Sprintf("\nDeleting workspace %d", *workspaceID))
+
 	deleteErr := c.Client.DeleteWorkspace(*workspaceID)
 	if deleteErr != nil {
 		c.logFailure()
 		return fmt.Errorf("failed to delete workspace: %w", deleteErr)
 	}
+
 	c.logSuccess()
+
 	return nil
 }

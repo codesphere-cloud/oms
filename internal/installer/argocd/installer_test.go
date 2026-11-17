@@ -87,7 +87,7 @@ var _ = Describe("Installer.Install", func() {
 					cfg.CreateNamespace
 			}), mock.Anything).Return(nil)
 
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -99,7 +99,7 @@ var _ = Describe("Installer.Install", func() {
 
 			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{Version: ""}, Helm: helmMock}
 
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -107,7 +107,7 @@ var _ = Describe("Installer.Install", func() {
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything, mock.Anything).
 				Return(errors.New("chart not found"))
 
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("chart not found"))
 		})
@@ -130,7 +130,7 @@ var _ = Describe("Installer.Install", func() {
 				return cfg.Version == "7.0.0"
 			}), installer.UpgradeChartOptions{InstallIfNotExist: false}).Return(nil)
 
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -141,7 +141,7 @@ var _ = Describe("Installer.Install", func() {
 
 			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{Version: "6.0.0"}, Helm: helmMock}
 
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -152,14 +152,14 @@ var _ = Describe("Installer.Install", func() {
 
 			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{Version: ""}, Helm: helmMock}
 
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("rejects a downgrade", func() {
 			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{Version: "5.0.0"}, Helm: helmMock}
 
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("downgrade is not allowed"))
 		})
@@ -168,14 +168,14 @@ var _ = Describe("Installer.Install", func() {
 			a.RepoURL = "oci://registry.example.com/charts"
 			a.Version = "5.0.0"
 
-			Expect(a.Install()).To(MatchError(ContainSubstring("downgrade is not allowed")))
+			Expect(a.Install(context.Background())).To(MatchError(ContainSubstring("downgrade is not allowed")))
 		})
 
 		It("rejects a downgrade before provisioning registry credentials", func() {
 			a.Version = "5.0.0"
 			a.OciPassword = "registry-token"
 
-			Expect(a.Install()).To(MatchError(ContainSubstring("downgrade is not allowed")))
+			Expect(a.Install(context.Background())).To(MatchError(ContainSubstring("downgrade is not allowed")))
 		})
 
 		It("allows a lower version when switching charts", func() {
@@ -187,7 +187,7 @@ var _ = Describe("Installer.Install", func() {
 				return cfg.ChartName == "oci://registry.example.com/charts/argocd" && cfg.Version == "1.0.0"
 			}), mock.Anything).Return(nil)
 
-			Expect(a.Install()).To(Succeed())
+			Expect(a.Install(context.Background())).To(Succeed())
 		})
 
 		It("does not parse the installed version when switching charts", func() {
@@ -196,7 +196,7 @@ var _ = Describe("Installer.Install", func() {
 
 			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
-			Expect(a.Install()).To(Succeed())
+			Expect(a.Install(context.Background())).To(Succeed())
 		})
 
 		It("returns an error when UpgradeChart fails", func() {
@@ -205,7 +205,7 @@ var _ = Describe("Installer.Install", func() {
 
 			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{Version: "7.0.0"}, Helm: helmMock}
 
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("timeout"))
 		})
@@ -218,7 +218,7 @@ var _ = Describe("Installer.Install", func() {
 
 			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{Version: "7.0.0"}, Helm: helmMock}
 
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("cluster unreachable"))
 		})
@@ -235,7 +235,7 @@ var _ = Describe("Installer.Install", func() {
 			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{Version: "7.0.0"}, Helm: helmMock}
 
 			a.RepoURL = "https://charts.example.com"
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -248,7 +248,7 @@ var _ = Describe("Installer.Install", func() {
 
 			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{Version: "7.0.0"}, Helm: helmMock}
 
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -280,7 +280,7 @@ var _ = Describe("Installer.Install", func() {
 				OciRegistryCAFile: authority,
 			}, Helm: helmMock}
 
-			Expect(a.Install()).To(Succeed())
+			Expect(a.Install(context.Background())).To(Succeed())
 		})
 
 		It("trusts the certificate authority under the host of a registry URL naming its scheme", func() {
@@ -311,7 +311,7 @@ var _ = Describe("Installer.Install", func() {
 				OciRegistryCAFile: authority,
 			}, Helm: helmMock}
 
-			Expect(a.Install()).To(Succeed())
+			Expect(a.Install(context.Background())).To(Succeed())
 		})
 
 		It("configures no certificate authority when none is given", func() {
@@ -326,7 +326,7 @@ var _ = Describe("Installer.Install", func() {
 				OciRegistryURL: "ghcr.io/codesphere-cloud/charts",
 			}, Helm: helmMock}
 
-			Expect(a.Install()).To(Succeed())
+			Expect(a.Install(context.Background())).To(Succeed())
 		})
 
 		It("fails when the certificate authority cannot be read", func() {
@@ -336,7 +336,7 @@ var _ = Describe("Installer.Install", func() {
 				OciRegistryCAFile: "/does/not/exist.crt",
 			}, Helm: helmMock}
 
-			Expect(a.Install()).To(MatchError(ContainSubstring("reading registry certificate authority")))
+			Expect(a.Install(context.Background())).To(MatchError(ContainSubstring("reading registry certificate authority")))
 		})
 	})
 
@@ -355,7 +355,7 @@ var _ = Describe("Installer.Install", func() {
 
 			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{Version: "7.0.0", ValueFiles: []string{valuesFile}}, Helm: helmMock}
 
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -375,7 +375,7 @@ var _ = Describe("Installer.Install", func() {
 
 			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{Version: "7.0.0", ValueFiles: []string{valuesFile}}, Helm: helmMock}
 
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -396,7 +396,7 @@ var _ = Describe("Installer.Install", func() {
 
 			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{Version: "7.0.0", ValueFiles: []string{first, second}}, Helm: helmMock}
 
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})
@@ -416,7 +416,7 @@ var _ = Describe("Installer.Install", func() {
 
 				return true
 			}), mock.Anything).Return(nil).NotBefore(provision)
-			Expect(a.Install()).To(Succeed())
+			Expect(a.Install(context.Background())).To(Succeed())
 		})
 
 		It("creates the namespace before provisioning credentials on a fresh installation", func() {
@@ -434,7 +434,7 @@ var _ = Describe("Installer.Install", func() {
 			).NotBefore(namespace.Call)
 			provision := kube.EXPECT().Create(mock.Anything, mock.AnythingOfType("*v1.Secret")).Return(nil).NotBefore(namespace.Call)
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything, mock.Anything).Return(nil).NotBefore(provision)
-			Expect(a.Install()).To(Succeed())
+			Expect(a.Install(context.Background())).To(Succeed())
 		})
 
 		It("refreshes existing mirror credentials and retires the Helm hook before upgrading", func() {
@@ -464,7 +464,7 @@ var _ = Describe("Installer.Install", func() {
 				Name: "argocd", ChartName: "argo-cd", InstalledVersion: "6.0.0",
 			}, nil)
 			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.Anything, mock.Anything).Return(nil).NotBefore(provision.Call)
-			Expect(a.Install()).To(Succeed())
+			Expect(a.Install(context.Background())).To(Succeed())
 		})
 
 		It("preserves user extra objects while provisioning credentials separately", func() {
@@ -480,7 +480,7 @@ var _ = Describe("Installer.Install", func() {
 
 				return true
 			}), mock.Anything).Return(nil).NotBefore(provision)
-			Expect(a.Install()).To(Succeed())
+			Expect(a.Install(context.Background())).To(Succeed())
 		})
 
 		It("stops before Helm when credential provisioning fails", func() {
@@ -490,7 +490,7 @@ var _ = Describe("Installer.Install", func() {
 			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			expectNewImagePullSecret(kube).Return(provisionErr)
 
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).To(MatchError(ContainSubstring("provisioning ArgoCD image pull secret")))
 			Expect(errors.Is(err, provisionErr)).To(BeTrue())
 		})
@@ -502,7 +502,7 @@ var _ = Describe("Installer.Install", func() {
 			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			kube.EXPECT().Get(mock.Anything, client.ObjectKey{Name: argocd.DefaultNamespace}, mock.AnythingOfType("*v1.Namespace")).Return(permissionErr)
 
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).To(MatchError(ContainSubstring("ensuring ArgoCD namespace")))
 			Expect(errors.Is(err, permissionErr)).To(BeTrue())
 		})
@@ -517,7 +517,7 @@ var _ = Describe("Installer.Install", func() {
 
 					return nil
 				})
-			Expect(a.Install()).To(Succeed())
+			Expect(a.Install(context.Background())).To(Succeed())
 		})
 	})
 
@@ -529,7 +529,7 @@ var _ = Describe("Installer.Install", func() {
 
 				a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{Version: "7.0.0", RepoURL: repoURL}, Helm: helmMock}
 
-				err := a.Install()
+				err := a.Install(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 			},
 			Entry("empty (uses default)", ""),
@@ -542,7 +542,7 @@ var _ = Describe("Installer.Install", func() {
 			func(repoURL string) {
 				a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{Version: "7.0.0", RepoURL: repoURL}, Helm: helmMock}
 
-				err := a.Install()
+				err := a.Install(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("must start with http://, https://, or oci://"))
 			},
@@ -563,14 +563,14 @@ var _ = Describe("Installer.Install", func() {
 
 			a.FullInstall = true
 
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("does not install extra ArgoCD resources when FullInstall option in false", func() {
 			a.FullInstall = false
 
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})
@@ -583,7 +583,7 @@ var _ = Describe("Installer.Install", func() {
 			})).Return(nil)
 
 			a.ForceConflicts = true
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -596,7 +596,7 @@ var _ = Describe("Installer.Install", func() {
 			})).Return(nil)
 
 			a.ForceConflicts = true
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})
@@ -610,7 +610,7 @@ var _ = Describe("Installer.Install", func() {
 			}), mock.Anything).Return(nil)
 
 			a.RepoURL = "oci://ghcr.io/argoproj/argo-helm"
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -622,7 +622,7 @@ var _ = Describe("Installer.Install", func() {
 			}), mock.Anything).Return(nil)
 
 			a.RepoURL = "oci://ghcr.io/argoproj/argo-helm/"
-			err := a.Install()
+			err := a.Install(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})

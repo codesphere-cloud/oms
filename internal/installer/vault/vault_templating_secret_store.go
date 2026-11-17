@@ -28,6 +28,7 @@ func NewVaultTemplatingSecretStore(vault *files.InstallVault) *VaultTemplatingSe
 // vault from vaultPath using ageKeyPath on the first secret lookup.
 func NewLazyVaultTemplatingSecretStore(vaultPath, ageKeyPath string) *VaultTemplatingSecretStore {
 	backend := sops.NewLazy(sops.Options{Path: vaultPath, AgeKey: ageKeyPath})
+
 	return &VaultTemplatingSecretStore{
 		backend: backend,
 	}
@@ -51,6 +52,7 @@ func NewVaultTemplatingSecretStoreFromFile(vaultPath, ageKeyPath string) (*Vault
 	if err != nil {
 		return nil, err
 	}
+
 	return NewVaultTemplatingSecretStore(vault), nil
 }
 
@@ -86,7 +88,9 @@ func (s *VaultTemplatingSecretStore) ensureVault() error {
 	if err != nil {
 		return err
 	}
+
 	s.vault = vault
+
 	return nil
 }
 
@@ -101,6 +105,7 @@ func selectVaultSecretValue(entry files.SecretEntry, selector ...string) (string
 		if entry.File != nil {
 			return entry.File.Content, nil
 		}
+
 		if entry.Fields != nil {
 			return entry.Fields.Password, nil
 		}

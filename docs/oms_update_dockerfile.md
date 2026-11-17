@@ -27,17 +27,17 @@ $ oms update dockerfile --dockerfile baseimage/Dockerfile --package codesphere-v
 ### Options
 
 ```
-  -b, --baseimage string    Name of the base image to use (default "workspace-agent-24.04")
-  -d, --dockerfile string   Path to the Dockerfile to update (required)
-  -f, --force               Force re-extraction of the package
-  -h, --help                help for dockerfile
-  -p, --package string      Path to the Codesphere package (required)
+  -b, --baseimage string     Name of the base image to use (default "workspace-agent-24.04")
+  -d, --dockerfile string    Path to the Dockerfile to update (required)
+  -f, --force[=true|false]   Force re-extraction of the package
+  -h, --help[=true|false]    help for dockerfile
+  -p, --package string       Path to the Codesphere package (required)
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO

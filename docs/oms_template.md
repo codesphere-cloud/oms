@@ -9,13 +9,13 @@ Render OMS configuration templates.
 ### Options
 
 ```
-  -h, --help   help for template
+  -h, --help[=true|false]   help for template
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --verbose   Enable verbose output
+      --verbose[=true|false]   Enable verbose output
 ```
 
 ### SEE ALSO
