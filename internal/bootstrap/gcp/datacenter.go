@@ -8,6 +8,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 )
 
 // BuildDataCenters derives the data center layout from the bootstrap environment: a single
@@ -60,7 +61,12 @@ func (b *GCPBootstrapper) ensureConfigManagers() error {
 			continue
 		}
 
-		manager, err := installer.NewAutoInstallConfigManager(b.Env.AgeKey)
+		ageKey, err := b.dataCenterAgeKey(dc)
+		if err != nil {
+			return fmt.Errorf("failed to resolve age key for data center %d: %w", dc.ID, err)
+		}
+
+		manager, err := installer.NewAutoInstallConfigManager(ageKey)
 		if err != nil {
 			return fmt.Errorf("failed to initialize config manager for data center %d: %w", dc.ID, err)
 		}
@@ -69,6 +75,23 @@ func (b *GCPBootstrapper) ensureConfigManagers() error {
 	}
 
 	return nil
+}
+
+// dataCenterAgeKey resolves the age key for the data center's own local vault, since its format
+// and key can differ from the primary's. Recovery replaces the vault with a plaintext copy from
+// the jumpbox, so a stale local vault is not inspected and the --age-key flag is kept for a
+// secondary data center that turns out not to exist on the jumpbox.
+func (b *GCPBootstrapper) dataCenterAgeKey(dc *datacenter.DataCenter) (string, error) {
+	if b.Env.RecoverConfig {
+		return b.Env.AgeKey, nil
+	}
+
+	ageKey, err := vault.ResolveExistingVaultAgeKey(b.fw, dc.SecretsFilePath, b.Env.AgeKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve age key of vault %s: %w", dc.SecretsFilePath, err)
+	}
+
+	return ageKey, nil
 }
 
 // adoptLegacyEnvFields moves state that reached the environment through the fields the primary

@@ -5,41 +5,24 @@ package cmd
 
 import (
 	"fmt"
-	"os/exec"
-	"path/filepath"
 
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
-	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
-// resolveVaultAccess resolves the age key needed to read the vault at secretsFilePath. An
-// encrypted vault requires an existing key; a freshly generated one cannot decrypt it.
+// resolveVaultAccess resolves the age key needed to read the vault at secretsFilePath.
 //
-// Recovery skips the preflight, since recoverVault replaces the local vault with a plaintext
-// copy from the jumpbox, so a stale SOPS vault whose key is gone must not block it.
-func resolveVaultAccess(fw intutil.FileIO, secretsFilePath, ageKeyFlag string, recoverConfig bool) (vault.Type, string, error) {
+// Recovery skips the preflight and keeps the flag, since recoverVault replaces the local vault
+// with a plaintext copy from the jumpbox, so a stale SOPS vault whose key is gone must not block it.
+func resolveVaultAccess(fw intutil.FileIO, secretsFilePath, ageKeyFlag string, recoverConfig bool) (string, error) {
 	if recoverConfig {
-		return vault.TypePlain, "", nil
+		return ageKeyFlag, nil
 	}
 
-	encrypted, err := vault.IsEncryptedFile(fw, secretsFilePath)
+	ageKey, err := vault.ResolveExistingVaultAgeKey(fw, secretsFilePath, ageKeyFlag)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to detect vault type of %s: %w", secretsFilePath, err)
+		return "", fmt.Errorf("failed to resolve vault access: %w", err)
 	}
 
-	if !encrypted {
-		return vault.TypePlain, ageKeyFlag, nil
-	}
-
-	if _, err := exec.LookPath("sops"); err != nil {
-		return "", "", fmt.Errorf("vault %s is SOPS-encrypted but the sops binary is not in PATH: %w", secretsFilePath, err)
-	}
-
-	ageKey, err := sops.ResolveExistingAgeKey(ageKeyFlag, filepath.Dir(secretsFilePath))
-	if err != nil {
-		return "", "", fmt.Errorf("vault %s is SOPS-encrypted, but no usable age key was found: %w", secretsFilePath, err)
-	}
-
-	return vault.TypeSOPS, ageKey, nil
+	return ageKey, nil
 }

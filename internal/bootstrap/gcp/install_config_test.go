@@ -7,7 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
+	"io/fs"
 
 	"cloud.google.com/go/resourcemanager/apiv3/resourcemanagerpb"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
@@ -18,7 +18,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
-	vaultpkg "github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
 	. "github.com/onsi/ginkgo/v2"
@@ -27,6 +26,28 @@ import (
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 )
+
+// encryptedLocalVault is a vault with SOPS metadata, which is all the format detection inspects.
+var encryptedLocalVault = []byte("secrets: []\nsops:\n    age: []\n")
+
+// expectLocalVaults serves reads of the local vault files listed in vaults, keyed by path. A path
+// listed without content reports a missing vault, which is treated like a plaintext one. Other
+// paths are left to the test's own ReadFile expectations.
+func expectLocalVaults(fw *util.MockFileIO, vaults map[string][]byte) {
+	isLocalVault := func(path string) bool {
+		_, ok := vaults[path]
+
+		return ok
+	}
+
+	fw.EXPECT().ReadFile(mock.MatchedBy(isLocalVault)).RunAndReturn(func(path string) ([]byte, error) {
+		if data := vaults[path]; data != nil {
+			return data, nil
+		}
+
+		return nil, fs.ErrNotExist
+	}).Maybe()
+}
 
 var _ = Describe("Installconfig & Secrets", func() {
 	var (
@@ -43,6 +64,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 		mockGitHubClient *github.MockGitHubClient
 
 		bs *gcp.GCPBootstrapper
+
+		localVaults map[string][]byte
 	)
 
 	JustBeforeEach(func() {
@@ -71,6 +94,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 		icg = installer.NewMockInstallConfigManager(GinkgoT())
 		gc = gcp.NewMockGCPClientManager(GinkgoT())
 		fw = util.NewMockFileIO(GinkgoT())
+		localVaults = map[string][]byte{"fake-secret": nil, "fake-secret-dc2": nil}
+		expectLocalVaults(fw, localVaults)
 		mockPortalClient = portal.NewMockPortal(GinkgoT())
 		mockGitHubClient = github.NewMockGitHubClient(GinkgoT())
 		stlog = bootstrap.NewStepLogger(false)
@@ -467,7 +492,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 			Context("with an encrypted local vault", func() {
 				BeforeEach(func() {
-					csEnv.VaultType = vaultpkg.TypeSOPS
+					localVaults["fake-secret"] = encryptedLocalVault
 
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
@@ -1518,15 +1543,16 @@ var _ = Describe("Installconfig & Secrets", func() {
 	})
 
 	Describe("EncryptVault", func() {
-		Describe("Valid EncryptVault", func() {
-			It("encrypts vault using sops", func() {
-				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
-					return strings.HasPrefix(cmd, "cp ")
-				})).Return(nil)
+		const (
+			encryptCommand         = "sops --encrypt --age $(age-keygen -y /etc/codesphere/secrets/age_key.txt) --output /etc/codesphere/secrets/prod.vault.yaml.enc /etc/codesphere/secrets/prod.vault.yaml && mv /etc/codesphere/secrets/prod.vault.yaml.enc /etc/codesphere/secrets/prod.vault.yaml"
+			removeBackupCommand    = "rm -f /etc/codesphere/secrets/prod.vault.yaml.bak"
+			removePlaintextCommand = "rm -f /etc/codesphere/secrets/prod.vault.yaml /etc/codesphere/secrets/prod.vault.yaml.enc"
+		)
 
-				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
-					return strings.Contains(cmd, "sops --encrypt")
-				})).Return(nil)
+		Describe("Valid EncryptVault", func() {
+			It("encrypts the vault without keeping a plaintext backup", func() {
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", encryptCommand).Return(nil)
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", removeBackupCommand).Return(nil)
 
 				err := bs.EncryptVault()
 				Expect(err).NotTo(HaveOccurred())
@@ -1534,28 +1560,32 @@ var _ = Describe("Installconfig & Secrets", func() {
 		})
 
 		Describe("Invalid cases", func() {
-			It("fails when backup vault command fails", func() {
-				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
-					return strings.HasPrefix(cmd, "cp ")
-				})).Return(fmt.Errorf("backup error"))
-
-				err := bs.EncryptVault()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed backup vault on jumpbox"))
-			})
-
-			It("fails when sops encrypt command fails", func() {
-				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
-					return strings.HasPrefix(cmd, "cp ")
-				})).Return(nil)
-
-				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
-					return strings.Contains(cmd, "sops --encrypt")
-				})).Return(fmt.Errorf("encrypt error"))
+			It("removes the plaintext vault when sops encrypt fails", func() {
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", encryptCommand).Return(fmt.Errorf("encrypt error"))
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", removePlaintextCommand).Return(nil)
 
 				err := bs.EncryptVault()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to encrypt vault on jumpbox"))
+			})
+
+			It("reports a plaintext vault that could not be removed after a failed encryption", func() {
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", encryptCommand).Return(fmt.Errorf("encrypt error"))
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", removePlaintextCommand).Return(fmt.Errorf("rm error"))
+
+				err := bs.EncryptVault()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to encrypt vault on jumpbox"))
+				Expect(err.Error()).To(ContainSubstring("failed to remove plaintext vault from jumpbox"))
+			})
+
+			It("keeps the encrypted vault when the old backup cannot be removed", func() {
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", encryptCommand).Return(nil)
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", removeBackupCommand).Return(fmt.Errorf("rm error"))
+
+				err := bs.EncryptVault()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to remove plaintext vault backup from jumpbox"))
 			})
 		})
 	})

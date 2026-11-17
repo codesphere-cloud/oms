@@ -91,6 +91,12 @@ var _ = Describe("Vault stores", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
+	It("rejects an auto vault without a file path", func() {
+		_, err := vault.New(vault.TypeAuto, vault.Options{})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("requires a file path"))
+	})
+
 	It("validates file paths in the file-backed implementations", func() {
 		_, err := plain.New(plain.Options{})
 		Expect(err).To(HaveOccurred())

@@ -99,6 +99,10 @@ func ValidateConfiguration(vaultType Type, ageKey string) error {
 func New(vaultType Type, opts Options) (Vault, error) {
 	switch vaultType {
 	case TypeAuto:
+		if opts.Path == "" {
+			return nil, errors.New("auto vault requires a file path")
+		}
+
 		return &autoVault{options: opts}, nil
 	case TypeSOPS:
 		backend, err := sops.New(sops.Options{

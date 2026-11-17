@@ -119,6 +119,7 @@ var _ = Describe("Multi-DC bootstrap", func() {
 		nodeClient = node.NewMockNodeClient(GinkgoT())
 		gc = gcp.NewMockGCPClientManager(GinkgoT())
 		fw = util.NewMockFileIO(GinkgoT())
+		expectLocalVaults(fw, map[string][]byte{"prod.vault.yaml": nil, "prod-dc2.vault.yaml": nil})
 		writes = map[string][]byte{}
 		primaryICG = realConfigManager(writes)
 

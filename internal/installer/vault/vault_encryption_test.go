@@ -221,6 +221,35 @@ var _ = Describe("VaultEncryption", func() {
 			Expect(keyPath).To(Equal(keyFile))
 		})
 
+		It("prefers the age_key.txt next to the vault over the user's default key", func() {
+			keyFile := ageKeyFile("age_key.txt")
+
+			defaultKeyDir := filepath.Join(tmpDir, "xdg", "sops", "age")
+			Expect(os.MkdirAll(defaultKeyDir, 0700)).To(Succeed())
+			out, err := exec.Command("age-keygen", "-o", filepath.Join(defaultKeyDir, "keys.txt")).CombinedOutput()
+			Expect(err).ToNot(HaveOccurred(), string(out))
+
+			keyPath, err := sops.ResolveExistingAgeKey("", tmpDir)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(keyPath).To(Equal(keyFile))
+		})
+
+		It("falls back to the user's default key when none is next to the vault", func() {
+			if !sopsAndAgeAvailable() {
+				Skip("age-keygen not available")
+			}
+
+			defaultKeyDir := filepath.Join(tmpDir, "xdg", "sops", "age")
+			Expect(os.MkdirAll(defaultKeyDir, 0700)).To(Succeed())
+			defaultKey := filepath.Join(defaultKeyDir, "keys.txt")
+			out, err := exec.Command("age-keygen", "-o", defaultKey).CombinedOutput()
+			Expect(err).ToNot(HaveOccurred(), string(out))
+
+			keyPath, err := sops.ResolveExistingAgeKey("", tmpDir)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(keyPath).To(Equal(defaultKey))
+		})
+
 		It("returns an empty path when the key comes from SOPS_AGE_KEY", func() {
 			identity, err := age.GenerateX25519Identity()
 			Expect(err).ToNot(HaveOccurred())

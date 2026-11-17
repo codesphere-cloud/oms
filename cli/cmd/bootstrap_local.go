@@ -173,7 +173,7 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 
 	var err error
 
-	_, c.CodesphereEnv.AgeKey, err = resolveVaultAccess(fw, c.CodesphereEnv.SecretsFilePath, c.CodesphereEnv.AgeKey, false)
+	c.CodesphereEnv.AgeKey, err = resolveVaultAccess(fw, c.CodesphereEnv.SecretsFilePath, c.CodesphereEnv.AgeKey, false)
 	if err != nil {
 		return err
 	}

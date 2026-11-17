@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
@@ -591,9 +592,15 @@ func (b *GCPBootstrapper) copyConfigAndVaultToJumpbox(dc *datacenter.DataCenter)
 
 // vaultTransferPath returns the local vault file to upload to the jumpbox. An encrypted vault is
 // uploaded as a plaintext copy, which the jumpbox re-encrypts with its own key; the copy is
-// recorded for removeVaultTransferCopy.
+// recorded for removeVaultTransferCopy. The format is detected per data center, since a primary
+// and a secondary vault may differ.
 func (b *GCPBootstrapper) vaultTransferPath(dc *datacenter.DataCenter) (string, error) {
-	if b.Env.VaultType != vault.TypeSOPS {
+	encrypted, err := vault.IsEncryptedFile(b.fw, dc.SecretsFilePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to detect vault type of data center %d: %w", dc.ID, err)
+	}
+
+	if !encrypted {
 		return dc.SecretsFilePath, nil
 	}
 
@@ -1117,18 +1124,38 @@ func (b *GCPBootstrapper) EncryptVault() error {
 	return b.encryptVault(b.primaryDC())
 }
 
+// encryptVault encrypts the uploaded plaintext vault on the jumpbox. The ciphertext is written to
+// a temporary file and swapped in, so no plaintext copy is kept: a backup left by earlier OMS
+// versions is removed, and on failure the plaintext vault is removed too. The local vault stays
+// authoritative and is uploaded again on the next run.
 func (b *GCPBootstrapper) encryptVault(dc *datacenter.DataCenter) error {
-	err := b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("cp %s{,.bak}", dc.RemoteVaultPath()))
+	vaultPath := dc.RemoteVaultPath()
+	encryptedPath := vaultPath + ".enc"
+
+	err := b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf(
+		"sops --encrypt --age $(age-keygen -y %s) --output %s %s && mv %s %s",
+		dc.RemoteAgeKeyPath(), encryptedPath, vaultPath, encryptedPath, vaultPath))
 	if err != nil {
-		return fmt.Errorf("failed backup vault on jumpbox: %w", err)
+		return b.removePlaintextVault(fmt.Errorf("failed to encrypt vault on jumpbox: %w", err), vaultPath, encryptedPath)
 	}
 
-	err = b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("sops --encrypt --in-place --age $(age-keygen -y %s) %s", dc.RemoteAgeKeyPath(), dc.RemoteVaultPath()))
+	err = b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("rm -f %s.bak", vaultPath))
 	if err != nil {
-		return fmt.Errorf("failed to encrypt vault on jumpbox: %w", err)
+		return fmt.Errorf("failed to remove plaintext vault backup from jumpbox: %w", err)
 	}
 
 	return nil
+}
+
+// removePlaintextVault removes the vault files left on the jumpbox after a failed encryption,
+// so the secrets are not kept there in plaintext.
+func (b *GCPBootstrapper) removePlaintextVault(encryptErr error, paths ...string) error {
+	err := b.Env.Jumpbox.RunSSHCommand("root", "rm -f "+strings.Join(paths, " "))
+	if err != nil {
+		return errors.Join(encryptErr, fmt.Errorf("failed to remove plaintext vault from jumpbox: %w", err))
+	}
+
+	return encryptErr
 }
 
 // decryptVault creates an unencrypted copy of the data center's vault in dst on the jumpbox.
