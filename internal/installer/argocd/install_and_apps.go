@@ -334,10 +334,7 @@ func (i *AppInstaller) getPcAppsValues(bomConfig *bom.Config) (files.ChartValues
 	rookCephAppValues := pcapps.RookCephPcAppsValues(&i.cfg.Config)
 	installerChartValues := pcapps.InstallerChartsPcAppsValues(&i.cfg.Config, i.cfg.SkipSteps)
 	sshWorkspaceProxyValues := pcapps.SSHWorkspaceProxyPcAppsValues(&i.cfg.Config)
-	errorPageServerValues, err := pcapps.ErrorPageServerPcAppsValues(&i.cfg.Config, bomConfig)
-	if err != nil {
-		return nil, fmt.Errorf("configuring error-page-server application: %w", err)
-	}
+	errorPageServerValues := pcapps.ErrorPageServerPcAppsValues(&i.cfg.Config)
 
 	values := util.DeepMergeMaps(openFGAppValues, rookCephAppValues)
 	values = util.DeepMergeMaps(values, sshWorkspaceProxyValues)
