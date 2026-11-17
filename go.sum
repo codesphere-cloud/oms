@@ -3225,8 +3225,8 @@ github.com/cockroachdb/datadriven v1.0.2/go.mod h1:a9RdTaap04u637JoCzcUoIcDmvwSU
 github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd/go.mod h1:sE/e/2PUdi/liOCUjSTXgM1o87ZssimdTWN964YiIeI=
 github.com/codahale/rfc6979 v0.0.0-20141003034818-6a90f24967eb h1:EDmT6Q9Zs+SbUoc7Ik9EfrFqcylYqgPZ9ANSbTAntnE=
 github.com/codahale/rfc6979 v0.0.0-20141003034818-6a90f24967eb/go.mod h1:ZjrT6AXHbDs86ZSdt/osfBi5qfexBrKUdONk989Wnk4=
-github.com/codesphere-cloud/cs-go v1.67.0 h1:wa69cAcR52Oidx5YaC7zLzEG7R5kdQla9ii2d3BGG+U=
-github.com/codesphere-cloud/cs-go v1.67.0/go.mod h1:gTkjAu9jEhK4Hv2+2Nn3RcjkzGUM4urJaDfJluCGhPk=
+github.com/codesphere-cloud/cs-go v1.68.0 h1:D1nlVvgYIlyTKGruq8CQ3x9jyZvXea4cr8Go1/HPnNE=
+github.com/codesphere-cloud/cs-go v1.68.0/go.mod h1:gTkjAu9jEhK4Hv2+2Nn3RcjkzGUM4urJaDfJluCGhPk=
 github.com/containerd/continuity v0.5.0 h1:7a85HZpCSs+1Zps0Ee3DPSuAWY+0SJM1JNM51nlEVDg=
 github.com/containerd/continuity v0.5.0/go.mod h1:/lNJvtJKUQStBzpVQ1+rasXO1LAWtUQssk28EZvJ3nE=
 github.com/containerd/errdefs v1.0.0 h1:tg5yIfIlQIrxYtu9ajqY42W3lpS19XqdxRQeEwYG8PI=
@@ -4721,8 +4721,8 @@ github.com/rogpeppe/go-internal v1.13.1/go.mod h1:uMEvuHeurkdAXX61udpOXGD/AzZDWN
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
 github.com/rogpeppe/go-internal v1.16.0 h1:O9DK+vNMDVGLr2BeZqmpLeMjiMNkuXfcqntWbZV6S5g=
 github.com/rogpeppe/go-internal v1.16.0/go.mod h1:DrUVZyrJU+txYW5/1kwtXQSMFio52ZOxX7yM1VHvnxs=
-github.com/rook/rook/pkg/apis v0.0.0-20261116061331-5f0de5f55ee9 h1:Ql6jWsS2M+eXnc8Th8/wDIdMgSrloOeSojOyVura0Yc=
-github.com/rook/rook/pkg/apis v0.0.0-20261116061331-5f0de5f55ee9/go.mod h1:LAbRS6GnCu+hOKVgaZ0osepeCLCs2RAc5Vjsh52dK5s=
+github.com/rook/rook/pkg/apis v0.0.0-20261116191034-f5fa76ed1c73 h1:m98DqmEf3lGpjtKP4c2+UCZnwJJ/a6+0U3INMHo2rcQ=
+github.com/rook/rook/pkg/apis v0.0.0-20261116191034-f5fa76ed1c73/go.mod h1:LAbRS6GnCu+hOKVgaZ0osepeCLCs2RAc5Vjsh52dK5s=
 github.com/rook/secrets v0.0.0-20240315053144-3195f6906937 h1:1TpdIqF9mtQfhNfwOpXdpJTMhx66PonVCCvYcGWvu/I=
 github.com/rook/secrets v0.0.0-20240315053144-3195f6906937/go.mod h1:jOxzr6jXuSz9UztMhEpcBi1/vPygUA4z9kFuFj+6zd8=
 github.com/rs/xid v1.2.1/go.mod h1:+uKXf+4Djp6Md1KODXJxgGQPKngRmWyn10oCKFzNHOQ=

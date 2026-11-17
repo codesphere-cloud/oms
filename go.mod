@@ -35,7 +35,7 @@ require (
 	github.com/argoproj/argo-cd/gitops-engine v0.7.1-0.20250908182407-97ad5b59a627
 	github.com/argoproj/argo-cd/v3 v3.5.7
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
-	github.com/codesphere-cloud/cs-go v1.67.0
+	github.com/codesphere-cloud/cs-go v1.68.0
 	github.com/creativeprojects/go-selfupdate v1.7.1
 	github.com/distribution/reference v0.6.0
 	github.com/evanphx/json-patch/v5 v5.9.11
@@ -49,7 +49,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.34.0
 	github.com/onsi/gomega v1.44.0
 	github.com/pkg/sftp v1.13.12
-	github.com/rook/rook/pkg/apis v0.0.0-20261116061331-5f0de5f55ee9
+	github.com/rook/rook/pkg/apis v0.0.0-20261116191034-f5fa76ed1c73
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v3 v3.0.6

@@ -63,6 +63,8 @@ const (
 
 	// Ceph
 	SecretCephSshPrivateKey = "cephSshPrivateKey"
+	SecretRgwAdminAccessKey = "rgwAdminAccessKey"
+	SecretRgwAdminSecretKey = "rgwAdminSecretKey"
 
 	// SSH workspace proxy
 	SecretSshWorkspaceProxyHostKey = "sshWorkspaceProxyHostKey"

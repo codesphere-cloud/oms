@@ -81,6 +81,8 @@ Use `oms beta bootstrap-gcp` or `oms beta bootstrap-gcp multi-node` for a multi-
 
 With `--airgapped`, the connected jumpbox stages cloud-controller manifests and images immediately after k0s installation, before Codesphere is installed. Nodes keep internet egress blocked; Private Google Access and a VPC-private DNS zone route Google API requests to `199.36.153.8/30`, with HTTPS allowed for k0s nodes so the cloud controller can manage load balancers. Reserved IPs are configured when the gateway Services are created.
 
+Before every release, CI bootstraps the latest official Codesphere release on fresh GCP infrastructure with an OMS binary built from `main` ([`.github/workflows/bootstrap-gcp.yml`](.github/workflows/bootstrap-gcp.yml), called by `tag-release.yml`). A failing bootstrap blocks the release. To run it on demand, use `gh workflow run bootstrap-gcp.yml --ref <branch>`; pass `-f install_version=codesphere-vX.Y.Z` to install a specific version and `-f prevent_destroy=true` to keep the project for debugging. The workflow uses the same GCP folder, DNS zone, and secrets as the monorepo's installer test, so the monorepo's TTL cleanup also removes leaked projects.
+
 #### Supported Host Operating Systems
 
 Codesphere hosts installed with OMS run Ubuntu 22.04 or RHEL 9.6 (x86-64). Other RHEL releases and RHEL derivatives such as Rocky Linux or AlmaLinux are not supported.

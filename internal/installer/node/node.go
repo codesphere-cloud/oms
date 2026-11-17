@@ -294,17 +294,19 @@ func (n *Node) InstallOms() error {
 // EnsureOmsDependencies installs the command-line tools used by remote OMS
 // workflows independently of how the OMS binary itself was provisioned.
 func (n *Node) EnsureOmsDependencies() error {
+	// Each install downloads into its own temporary directory and refers to it by absolute path,
+	// so it neither depends on the working directory of the session nor collides with files there.
 	dependencies := []struct {
 		command string
 		install string
 	}{
 		{
 			command: "sops",
-			install: "curl -LO https://github.com/getsops/sops/releases/download/v3.11.0/sops-v3.11.0.linux.amd64; sudo mv sops-v3.11.0.linux.amd64 /usr/local/bin/sops; sudo chmod +x /usr/local/bin/sops",
+			install: `dir=$(mktemp -d) && curl -fsSL https://github.com/getsops/sops/releases/download/v3.11.0/sops-v3.11.0.linux.amd64 -o "$dir/sops" && install -m 0755 "$dir/sops" /usr/local/bin/sops && rm -rf "$dir"`,
 		},
 		{
 			command: "age-keygen",
-			install: "curl -fsSL 'https://dl.filippo.io/age/latest?for=linux/amd64' -o age.tar.gz && tar -xvf age.tar.gz && sudo mv age/age* /usr/local/bin/",
+			install: `dir=$(mktemp -d) && curl -fsSL 'https://dl.filippo.io/age/latest?for=linux/amd64' -o "$dir/age.tar.gz" && tar -xzf "$dir/age.tar.gz" -C "$dir" && install -m 0755 "$dir"/age/age* /usr/local/bin/ && rm -rf "$dir"`,
 		},
 	}
 
