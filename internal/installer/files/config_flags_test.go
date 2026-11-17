@@ -20,4 +20,10 @@ var _ = Describe("CodesphereConfig.IsEnabled", func() {
 		Entry("unrelated", files.CodesphereConfig{Internal: []string{"other"}, Preview: map[string]bool{"other": true}, Features: map[string]bool{"other": true}}, false),
 		Entry("empty", files.CodesphereConfig{}, false),
 	)
+
+	It("reads a flag listed in the deprecated experiments", func() {
+		config := files.CodesphereConfig{Experiments: []string{"other", "target"}} //nolint:staticcheck
+
+		Expect(config.IsEnabled("target")).To(BeTrue())
+	})
 })

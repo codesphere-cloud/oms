@@ -9,10 +9,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// TemplateCmd groups the template subcommands.
 type TemplateCmd struct {
 	cmd *cobra.Command
 }
 
+// AddTemplateCmd registers the template command and its subcommands on the root command.
 func AddTemplateCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	template := TemplateCmd{
 		cmd: &cobra.Command{

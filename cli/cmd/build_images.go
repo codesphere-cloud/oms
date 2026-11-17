@@ -22,6 +22,7 @@ type BuildImagesCmd struct {
 	Env  env.Env
 }
 
+// BuildImagesOpts holds the flags of the build images command.
 type BuildImagesOpts struct {
 	*util.GlobalOptions
 	Config string
@@ -42,6 +43,7 @@ func (c *BuildImagesCmd) RunE(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
+// AddBuildImagesCmd registers the images command on the build command.
 func AddBuildImagesCmd(build *cobra.Command, opts *util.GlobalOptions) {
 	buildImages := BuildImagesCmd{
 		cmd: &cobra.Command{
@@ -63,6 +65,7 @@ func AddBuildImagesCmd(build *cobra.Command, opts *util.GlobalOptions) {
 	buildImages.cmd.RunE = buildImages.RunE
 }
 
+// BuildAndPushImages builds all images defined in the config and pushes them to the configured registry.
 func (c *BuildImagesCmd) BuildAndPushImages(pm installer.PackageManager, cm installer.ConfigManager, im system.ImageManager) error {
 	config, err := cm.ParseConfigYaml(c.Opts.Config)
 	if err != nil {

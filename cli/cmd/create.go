@@ -14,6 +14,7 @@ type CreateCmd struct {
 	cmd *cobra.Command
 }
 
+// AddCreateCmd registers the create command and its subcommands on the root command.
 func AddCreateCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	create := CreateCmd{
 		cmd: &cobra.Command{

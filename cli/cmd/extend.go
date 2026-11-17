@@ -14,6 +14,7 @@ type ExtendCmd struct {
 	cmd *cobra.Command
 }
 
+// AddExtendCmd registers the extend command and its subcommands on the root command.
 func AddExtendCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	extend := ExtendCmd{
 		cmd: &cobra.Command{

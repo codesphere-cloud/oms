@@ -33,7 +33,7 @@ var _ = Describe("CreateTestUser", func() {
 
 			cmd.AddCreateTestUserCmd(&createCmd, opts)
 
-			createCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+			createCmd.Commands()[0].RunE = func(_ *cobra.Command, _ []string) error {
 				return nil
 			}
 
@@ -49,7 +49,7 @@ var _ = Describe("CreateTestUser", func() {
 
 			cmd.AddCreateTestUserCmd(&createCmd, opts)
 
-			createCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+			createCmd.Commands()[0].RunE = func(_ *cobra.Command, _ []string) error {
 				return nil
 			}
 
@@ -66,7 +66,7 @@ var _ = Describe("CreateTestUser", func() {
 
 			cmd.AddCreateTestUserCmd(&createCmd, opts)
 
-			createCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+			createCmd.Commands()[0].RunE = func(_ *cobra.Command, _ []string) error {
 				return nil
 			}
 
@@ -88,7 +88,7 @@ var _ = Describe("CreateTestUser", func() {
 
 			cmd.AddCreateTestUserCmd(&createCmd, opts)
 
-			createCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+			createCmd.Commands()[0].RunE = func(_ *cobra.Command, _ []string) error {
 				return nil
 			}
 

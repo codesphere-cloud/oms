@@ -38,6 +38,7 @@ import (
 	gwalpha "sigs.k8s.io/gateway-api/apis/v1alpha2"
 )
 
+// BootstrapLocalCmd implements the bootstrap-local command.
 type BootstrapLocalCmd struct {
 	cmd           *cobra.Command
 	Opts          *util.GlobalOptions
@@ -49,7 +50,8 @@ type BootstrapLocalCmd struct {
 	experiments []string
 }
 
-func (c *BootstrapLocalCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE executes the bootstrap-local command.
+func (c *BootstrapLocalCmd) RunE(_ *cobra.Command, _ []string) error {
 	err := c.BootstrapLocal()
 	if err != nil {
 		return fmt.Errorf("failed to bootstrap: %w", err)
@@ -122,6 +124,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	util.AddCmd(parent, bootstrapLocalCmd.cmd)
 }
 
+// BootstrapLocal validates the input and prerequisites and bootstraps Codesphere on the current Kubernetes cluster.
 func (c *BootstrapLocalCmd) BootstrapLocal() error {
 	if err := validateLocalStorageEngine(c.CodesphereEnv.StorageEngine); err != nil {
 		return err
@@ -184,7 +187,11 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 
 	bs := local.NewLocalBootstrapper(ctx, stlog, kubeClient, restConfig, fw, icg, helmClient, c.CodesphereEnv, c.Opts.Verbose)
 
-	return bs.Bootstrap()
+	if err := bs.Bootstrap(); err != nil {
+		return fmt.Errorf("failed to bootstrap local cluster: %w", err)
+	}
+
+	return nil
 }
 
 func validateLocalStorageEngine(engine string) error {
@@ -269,7 +276,8 @@ func (c *BootstrapLocalCmd) ConfirmLocalBootstrapWarning(ctx context.Context) er
 	return nil
 }
 
-func (c *BootstrapLocalCmd) GetKubeClient(ctx context.Context) (ctrlclient.Client, *rest.Config, error) {
+// GetKubeClient creates a controller-runtime client and REST config for the current Kubernetes context.
+func (c *BootstrapLocalCmd) GetKubeClient(_ context.Context) (ctrlclient.Client, *rest.Config, error) {
 	kubeConfig, err := ctrlconfig.GetConfig()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to load Kubernetes config: %w", err)
@@ -308,6 +316,7 @@ func (c *BootstrapLocalCmd) GetKubeClient(ctx context.Context) (ctrlclient.Clien
 	return kubeClient, kubeConfig, nil
 }
 
+// ValidatePrerequisites checks that the Kubernetes cluster and the required encryption tools are available.
 func (c *BootstrapLocalCmd) ValidatePrerequisites(ctx context.Context) error {
 	if err := c.ValidateKubernetesCluster(ctx); err != nil {
 		return err
@@ -320,6 +329,7 @@ func (c *BootstrapLocalCmd) ValidatePrerequisites(ctx context.Context) error {
 	return nil
 }
 
+// ValidateKubernetesCluster checks that the current Kubernetes cluster is reachable and has nodes.
 func (c *BootstrapLocalCmd) ValidateKubernetesCluster(ctx context.Context) error {
 	kubeClient, _, err := c.GetKubeClient(ctx)
 	if err != nil {
@@ -338,6 +348,7 @@ func (c *BootstrapLocalCmd) ValidateKubernetesCluster(ctx context.Context) error
 	return nil
 }
 
+// ValidateEncryptionTools checks that sops and age are installed.
 func (c *BootstrapLocalCmd) ValidateEncryptionTools() error {
 	if _, err := exec.LookPath("sops"); err != nil {
 		return fmt.Errorf("sops binary not found in PATH; install it with: brew install sops")

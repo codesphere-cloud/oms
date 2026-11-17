@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// BootstrapGcpPostconfigCmd implements the bootstrap-gcp postconfig command.
 type BootstrapGcpPostconfigCmd struct {
 	cmd *cobra.Command
 
@@ -22,13 +23,15 @@ type BootstrapGcpPostconfigCmd struct {
 	CodesphereEnv gcp.CodesphereEnvironment
 }
 
+// BootstrapGcpPostconfigOpts holds the flags of the bootstrap-gcp postconfig command.
 type BootstrapGcpPostconfigOpts struct {
 	*util.GlobalOptions
 	InstallConfigPath string
 	PrivateKeyPath    string
 }
 
-func (c *BootstrapGcpPostconfigCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE runs the post-installation configuration of a GCP bootstrap.
+func (c *BootstrapGcpPostconfigCmd) RunE(_ *cobra.Command, _ []string) error {
 	log.Printf("running post-configuration steps...")
 
 	icg, err := installer.NewInstallConfigManager("plain", "")
@@ -59,6 +62,7 @@ func (c *BootstrapGcpPostconfigCmd) RunE(_ *cobra.Command, args []string) error 
 	return fmt.Errorf("not implemented: run config script on k0s-1 node to install GCP CCM")
 }
 
+// AddBootstrapGcpPostconfigCmd registers the postconfig command on the bootstrap-gcp command.
 func AddBootstrapGcpPostconfigCmd(bootstrapGcp *cobra.Command, opts *util.GlobalOptions) {
 	postconfig := BootstrapGcpPostconfigCmd{
 		cmd: &cobra.Command{

@@ -10,10 +10,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// RevokeCmd groups the revoke subcommands.
 type RevokeCmd struct {
 	cmd *cobra.Command
 }
 
+// AddRevokeCmd registers the revoke command and its subcommands on the root command.
 func AddRevokeCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	revoke := RevokeCmd{
 		cmd: &cobra.Command{

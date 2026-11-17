@@ -4,8 +4,6 @@
 package codesphere
 
 import (
-	"slices"
-
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
@@ -26,8 +24,7 @@ type Flags map[string][]FlagEnv
 // internal, deprecated experiments, preview and feature flags. Disabled flags are absent.
 func EnabledFlags(conf files.CodesphereConfig) map[string]bool {
 	flags := map[string]bool{}
-	// The installer still reads the deprecated experiments.
-	for _, flag := range slices.Concat(conf.Experiments, conf.Internal) { //nolint:staticcheck
+	for _, flag := range conf.InternalFlags() {
 		flags[flag] = true
 	}
 
@@ -51,7 +48,7 @@ func experimentsValues(conf files.CodesphereConfig, workspacesGatewayEnabled boo
 		experiments["gateway-domains"] = []FlagEnv{FlagEnvProd}
 	}
 
-	for _, flag := range slices.Concat(conf.Experiments, conf.Internal) { //nolint:staticcheck
+	for _, flag := range conf.InternalFlags() {
 		experiments[flag] = []FlagEnv{FlagEnvProd}
 	}
 

@@ -25,6 +25,7 @@ type ExtendBaseimageCmd struct {
 	Env  env.Env
 }
 
+// ExtendBaseimageOpts holds the flags of the extend baseimage command.
 type ExtendBaseimageOpts struct {
 	*util.GlobalOptions
 	Package    string
@@ -51,6 +52,7 @@ func (c *ExtendBaseimageCmd) RunE(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
+// AddExtendBaseimageCmd registers the baseimage command on the extend command.
 func AddExtendBaseimageCmd(extend *cobra.Command, opts *util.GlobalOptions) {
 	baseimage := ExtendBaseimageCmd{
 		cmd: &cobra.Command{
@@ -75,6 +77,7 @@ func AddExtendBaseimageCmd(extend *cobra.Command, opts *util.GlobalOptions) {
 	baseimage.cmd.RunE = baseimage.RunE
 }
 
+// ExtendBaseimage extracts the package, generates a Dockerfile based on the selected base image and loads that image into the local Docker daemon.
 func (c *ExtendBaseimageCmd) ExtendBaseimage(pm installer.PackageManager, im system.ImageManager) error {
 	err := pm.Extract(c.Opts.Force, c.Opts.Verbose)
 	if err != nil {
