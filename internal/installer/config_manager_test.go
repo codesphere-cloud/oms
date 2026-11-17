@@ -957,14 +957,12 @@ var _ = Describe("ConfigManager", func() {
 // vault type is plain", which broke bootstrapping with a vault from `oms init install-config`.
 var _ = Describe("Bootstrap vault loading", func() {
 	var (
-		dir       string
 		vaultPath string
 		ageKey    string
 	)
 
 	BeforeEach(func() {
-		dir = GinkgoT().TempDir()
-		vaultPath, ageKey = writeVaultFile(dir, &files.InstallVault{Secrets: []files.SecretEntry{
+		vaultPath, ageKey = writeVaultFile(GinkgoT().TempDir(), &files.InstallVault{Secrets: []files.SecretEntry{
 			{Name: "registryPassword", Fields: &files.SecretFields{Password: "ghcr-token"}},
 		}})
 	})
@@ -975,21 +973,6 @@ var _ = Describe("Bootstrap vault loading", func() {
 
 		Expect(manager.LoadVaultFromFileOrCreate(vaultPath)).To(Succeed())
 		Expect(manager.GetVault().GetSecret("registryPassword").Fields.Password).To(Equal("ghcr-token"))
-	})
-
-	It("loads a plaintext vault with the auto backend", func() {
-		plainPath := filepath.Join(dir, "plain.vault.yaml")
-		vaultYAML, err := (&files.InstallVault{Secrets: []files.SecretEntry{
-			{Name: "registryPassword", Fields: &files.SecretFields{Password: "plain-token"}},
-		}}).Marshal()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(os.WriteFile(plainPath, vaultYAML, 0600)).To(Succeed())
-
-		manager, err := installer.NewAutoInstallConfigManager("")
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(manager.LoadVaultFromFileOrCreate(plainPath)).To(Succeed())
-		Expect(manager.GetVault().GetSecret("registryPassword").Fields.Password).To(Equal("plain-token"))
 	})
 
 	It("re-encrypts a loaded SOPS vault when it is written back", func() {

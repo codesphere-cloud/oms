@@ -451,23 +451,23 @@ func (g *InstallConfig) WriteInstallConfig(configPath string, withComments bool)
 
 // WriteVault writes the vault using the manager's configured backend.
 func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
-	return g.writeVault(vaultPath, withComments, g.vaultType, "failed to write vault")
+	return g.writeVault(vaultPath, withComments, g.vaultType)
 }
 
 // WriteUnencryptedVault writes the vault as plaintext regardless of the configured vault type,
 // for the bootstrap transfer copy that the jumpbox encrypts with its own age key.
 func (g *InstallConfig) WriteUnencryptedVault(vaultPath string, withComments bool) error {
-	return g.writeVault(vaultPath, withComments, vault.TypePlain, "failed to write unencrypted vault")
+	return g.writeVault(vaultPath, withComments, vault.TypePlain)
 }
 
-func (g *InstallConfig) writeVault(vaultPath string, withComments bool, t vault.Type, errContext string) error {
+func (g *InstallConfig) writeVault(vaultPath string, withComments bool, t vault.Type) error {
 	store, err := g.vaultStore(vaultPath, withComments, t)
 	if err != nil {
 		return fmt.Errorf("failed to initialize vault backend: %w", err)
 	}
 
 	if err := store.Save(g.Vault); err != nil {
-		return fmt.Errorf("%s: %w", errContext, err)
+		return fmt.Errorf("failed to write vault: %w", err)
 	}
 
 	return nil

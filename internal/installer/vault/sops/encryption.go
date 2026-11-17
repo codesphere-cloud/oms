@@ -21,8 +21,6 @@ import (
 
 var xdgConfigHome = "XDG_CONFIG_HOME"
 
-var errNoConfiguredAgeKey = errors.New("SOPS vault requires an age key")
-
 // ResolveAgeKey resolves an existing age key or generates one in fallbackDir.
 func ResolveAgeKey(explicitKeyFile, fallbackDir string) (recipient string, keyPath string, err error) {
 	return resolveAgeKey(util.NewFilesystemWriter(), explicitKeyFile, fallbackDir, true)
@@ -105,39 +103,6 @@ func resolveAgeKey(fileIO util.FileIO, explicitKeyFile, fallbackDir string, gene
 	}
 
 	return recipient, keyPath, nil
-}
-
-// resolveConfiguredAgeKey resolves the key from the explicit key file, SOPS_AGE_KEY or
-// SOPS_AGE_KEY_FILE, in that order, and returns errNoConfiguredAgeKey when none is set.
-func resolveConfiguredAgeKey(fileIO util.FileIO, explicitKeyFile string) (recipient, keyPath string, err error) {
-	if explicitKeyFile != "" {
-		recipient, err = readRecipientFromFile(fileIO, explicitKeyFile)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to read age key from %s: %w", explicitKeyFile, err)
-		}
-
-		return recipient, explicitKeyFile, nil
-	}
-
-	if raw := os.Getenv(sopsage.SopsAgeKeyEnv); raw != "" {
-		recipient, err = parseEnvAgeKey(raw)
-		if err != nil {
-			return "", "", err
-		}
-
-		return recipient, "", nil
-	}
-
-	if keyFile := os.Getenv(sopsage.SopsAgeKeyFileEnv); keyFile != "" {
-		recipient, err = readRecipientFromFile(fileIO, keyFile)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to read age key from %s: %w", keyFile, err)
-		}
-
-		return recipient, keyFile, nil
-	}
-
-	return "", "", errNoConfiguredAgeKey
 }
 
 // parseEnvAgeKey validates the identity passed through SOPS_AGE_KEY and returns its recipient.

@@ -23,13 +23,13 @@ func resolveVaultAccess(fw intutil.FileIO, secretsFilePath, ageKeyFlag string, r
 		return vault.TypePlain, "", nil
 	}
 
-	vaultType, err := vault.DetectType(fw, secretsFilePath)
+	encrypted, err := vault.IsEncryptedFile(fw, secretsFilePath)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to detect vault type of %s: %w", secretsFilePath, err)
 	}
 
-	if vaultType != vault.TypeSOPS {
-		return vaultType, ageKeyFlag, nil
+	if !encrypted {
+		return vault.TypePlain, ageKeyFlag, nil
 	}
 
 	if _, err := exec.LookPath("sops"); err != nil {
@@ -41,5 +41,5 @@ func resolveVaultAccess(fw intutil.FileIO, secretsFilePath, ageKeyFlag string, r
 		return "", "", fmt.Errorf("vault %s is SOPS-encrypted, but no usable age key was found: %w", secretsFilePath, err)
 	}
 
-	return vaultType, ageKey, nil
+	return vault.TypeSOPS, ageKey, nil
 }

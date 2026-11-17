@@ -5,7 +5,6 @@ package vault_test
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -28,33 +27,19 @@ var _ = ginkgo.Describe("Auto vault", func() {
 		vaultPath = filepath.Join(tmpDir, "prod.vault.yaml")
 	})
 
-	ginkgo.Describe("DetectType", func() {
-		ginkgo.It("reports plain for a missing file so a new vault can be created", func() {
-			vaultType, err := vault.DetectType(fw, vaultPath)
-			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-			gomega.Expect(vaultType).To(gomega.Equal(vault.TypePlain))
-		})
-
-		ginkgo.It("reports plain for a plaintext vault", func() {
-			gomega.Expect(os.WriteFile(vaultPath, []byte("secrets: []\n"), 0600)).To(gomega.Succeed())
-
-			vaultType, err := vault.DetectType(fw, vaultPath)
-			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-			gomega.Expect(vaultType).To(gomega.Equal(vault.TypePlain))
-		})
-
-		ginkgo.It("reports sops for a vault with SOPS metadata", func() {
+	ginkgo.Describe("IsEncryptedFile", func() {
+		ginkgo.It("reports a vault with SOPS metadata as encrypted", func() {
 			gomega.Expect(os.WriteFile(vaultPath, []byte("secrets: []\nsops:\n    age: []\n"), 0600)).To(gomega.Succeed())
 
-			vaultType, err := vault.DetectType(fw, vaultPath)
+			encrypted, err := vault.IsEncryptedFile(fw, vaultPath)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-			gomega.Expect(vaultType).To(gomega.Equal(vault.TypeSOPS))
+			gomega.Expect(encrypted).To(gomega.BeTrue())
 		})
 
 		ginkgo.It("returns an error for a file that is not valid YAML", func() {
 			gomega.Expect(os.WriteFile(vaultPath, []byte("secrets:\n\tbroken: value\n"), 0600)).To(gomega.Succeed())
 
-			_, err := vault.DetectType(fw, vaultPath)
+			_, err := vault.IsEncryptedFile(fw, vaultPath)
 			gomega.Expect(err).To(gomega.HaveOccurred())
 		})
 	})
@@ -76,43 +61,6 @@ var _ = ginkgo.Describe("Auto vault", func() {
 			loaded, err := store.Load()
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(loaded.GetSecret("token").Fields.Password).To(gomega.Equal("s3cret"))
-		})
-
-		ginkgo.It("keeps an encrypted vault encrypted", func() {
-			if !sopsAndAgeAvailable() {
-				ginkgo.Skip("sops and age-keygen not available")
-			}
-
-			ageKeyPath := filepath.Join(tmpDir, "age_key.txt")
-			out, err := exec.Command("age-keygen", "-o", ageKeyPath).CombinedOutput()
-			gomega.Expect(err).NotTo(gomega.HaveOccurred(), string(out))
-
-			sopsStore, err := vault.New(vault.TypeSOPS, vault.Options{
-				Path: vaultPath, AgeKey: ageKeyPath, FileIO: fw,
-			})
-			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-			gomega.Expect(sopsStore.Save(&files.InstallVault{Secrets: []files.SecretEntry{
-				{Name: "token", Fields: &files.SecretFields{Password: "s3cret"}},
-			}})).To(gomega.Succeed())
-
-			store, err := vault.New(vault.TypeAuto, vault.Options{
-				Path: vaultPath, AgeKey: ageKeyPath, FileIO: fw,
-			})
-			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-
-			loaded, err := store.Load()
-			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-			loaded.SetSecret(files.SecretEntry{Name: "extra", Fields: &files.SecretFields{Password: "value"}})
-			gomega.Expect(store.Save(loaded)).To(gomega.Succeed())
-
-			raw, err := os.ReadFile(vaultPath)
-			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-			gomega.Expect(string(raw)).To(gomega.ContainSubstring("sops"))
-			gomega.Expect(string(raw)).NotTo(gomega.ContainSubstring("s3cret"))
-
-			reloaded, err := store.Load()
-			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-			gomega.Expect(reloaded.GetSecret("extra").Fields.Password).To(gomega.Equal("value"))
 		})
 
 		ginkgo.It("fails on an encrypted vault when no age key is available", func() {

@@ -189,3 +189,36 @@ func SetGeneratedAgeKey(secretKey string) error {
 
 	return nil
 }
+
+var errNoConfiguredAgeKey = errors.New("SOPS vault requires an age key")
+
+func resolveConfiguredAgeKey(fileIO util.FileIO, explicit string) (recipient, keyPath string, err error) {
+	if explicit != "" {
+		recipient, err := readRecipientFromFile(fileIO, explicit)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to read age key from %s: %w", explicit, err)
+		}
+
+		return recipient, explicit, nil
+	}
+
+	if raw := os.Getenv(sopsage.SopsAgeKeyEnv); raw != "" {
+		recipient, err := parseEnvAgeKey(raw)
+		if err != nil {
+			return "", "", err
+		}
+
+		return recipient, "", nil
+	}
+
+	if keyFile := os.Getenv(sopsage.SopsAgeKeyFileEnv); keyFile != "" {
+		recipient, err := readRecipientFromFile(fileIO, keyFile)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to read age key from %s: %w", keyFile, err)
+		}
+
+		return recipient, keyFile, nil
+	}
+
+	return "", "", errNoConfiguredAgeKey
+}

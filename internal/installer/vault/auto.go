@@ -14,25 +14,6 @@ import (
 // vault that changes format between runs (e.g. after --recover-config) keeps working.
 type autoVault struct{ options Options }
 
-// DetectType reports the on-disk vault type of path. A missing file counts as plaintext so
-// callers can create a new vault; any other read failure is returned as an error.
-func DetectType(fileIO util.FileIO, path string) (Type, error) {
-	if fileIO == nil {
-		fileIO = util.NewFilesystemWriter()
-	}
-
-	encrypted, err := IsEncryptedFile(fileIO, path)
-	if err != nil {
-		return "", err
-	}
-
-	if encrypted {
-		return TypeSOPS, nil
-	}
-
-	return TypePlain, nil
-}
-
 // Load reads the vault using the backend matching the file on disk.
 func (v *autoVault) Load() (*files.InstallVault, error) {
 	return v.load(Vault.Load)
@@ -72,11 +53,21 @@ func (v *autoVault) Save(data *files.InstallVault) error {
 	return nil
 }
 
+// backendForFile treats a missing file as plaintext so a new vault can be created.
 func (v *autoVault) backendForFile() (Vault, error) {
-	vaultType, err := DetectType(v.options.FileIO, v.options.Path)
+	fileIO := v.options.FileIO
+	if fileIO == nil {
+		fileIO = util.NewFilesystemWriter()
+	}
+
+	encrypted, err := IsEncryptedFile(fileIO, v.options.Path)
 	if err != nil {
 		return nil, err
 	}
 
-	return New(vaultType, v.options)
+	if encrypted {
+		return New(TypeSOPS, v.options)
+	}
+
+	return New(TypePlain, v.options)
 }

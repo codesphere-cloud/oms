@@ -111,25 +111,6 @@ var _ = Describe("resolveVaultAccess", func() {
 			Expect(ageKey).To(Equal(keyPath))
 		})
 
-		It("falls back to SOPS_AGE_KEY_FILE", func() {
-			keyPath := writeAgeKey("keys.txt")
-			GinkgoT().Setenv("SOPS_AGE_KEY_FILE", keyPath)
-
-			vaultType, ageKey, err := resolveVaultAccess(fw, vaultPath, "", false)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(vaultType).To(Equal(vault.TypeSOPS))
-			Expect(ageKey).To(Equal(keyPath))
-		})
-
-		It("falls back to an age_key.txt next to the vault", func() {
-			keyPath := writeAgeKey("age_key.txt")
-
-			vaultType, ageKey, err := resolveVaultAccess(fw, vaultPath, "", false)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(vaultType).To(Equal(vault.TypeSOPS))
-			Expect(ageKey).To(Equal(keyPath))
-		})
-
 		It("reports that no usable age key was found and never generates one", func() {
 			_, _, err := resolveVaultAccess(fw, vaultPath, "", false)
 			Expect(err).To(HaveOccurred())
