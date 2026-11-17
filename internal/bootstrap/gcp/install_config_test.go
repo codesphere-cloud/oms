@@ -395,6 +395,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 			icg.EXPECT().GetVault().Return(vault).Maybe()
 
 			csEnv.GitHubAppName = "fake-app-name"
+			csEnv.PublicGatewayIP = "2.2.2.2"
 		})
 		Describe("Valid UpdateInstallConfig", func() {
 			It("updates config and writes files", func() {
@@ -440,6 +441,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(bs.Env.InstallConfig.DataCenters).To(BeEmpty())
 				Expect(bs.Env.InstallConfig.DefaultDataCenterID).To(BeZero())
 				Expect(bs.Env.InstallConfig.Codesphere.Domain).To(Equal("cs.example.com"))
+				// Custom domains' A records point to the public gateway; the k0s nodes have no external IP.
+				Expect(bs.Env.InstallConfig.Codesphere.PublicIP).To(Equal("2.2.2.2"))
 				Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal(map[string]bool{}))
 				Expect(bs.Env.InstallConfig.Codesphere.Internal).To(Equal(gcp.DefaultInternalFlags))
 				Expect(bs.Env.InstallConfig.Codesphere.Preview).To(Equal(util.StringSliceToBoolMap(gcp.DefaultPreviewFlags)))
@@ -1259,6 +1262,14 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				err := bs.UpdateInstallConfig()
 				Expect(err).To(MatchError(ContainSubstring("codesphere registry password is not set")))
+			})
+
+			// A resumed bootstrap restores the gateway IP from its infra file, which may predate it.
+			It("fails when the data center has no public gateway IP", func() {
+				csEnv.PublicGatewayIP = ""
+
+				err := bs.UpdateInstallConfig()
+				Expect(err).To(MatchError(ContainSubstring("data center 1 has no public gateway IP")))
 			})
 
 			It("fails when GenerateSecrets fails", func() {

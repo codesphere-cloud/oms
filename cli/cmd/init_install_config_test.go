@@ -4,6 +4,8 @@
 package cmd
 
 import (
+	"bytes"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -54,6 +56,49 @@ var _ = Describe("ApplyProfile", func() {
 			Expect(config.Postgres.Mode).To(Equal("install"))
 			Expect(config.Kubernetes.ManagedByCodesphere).To(BeTrue())
 		})
+	})
+})
+
+var _ = Describe("Init install-config command", func() {
+	It("registers the Codesphere networking flags", func() {
+		command, _, err := GetRootCmd().Find([]string{"init", "install-config"})
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(command.Flags().Lookup("public-ip")).NotTo(BeNil())
+		Expect(command.Flags().Lookup("workspace-hosting-base-domain")).NotTo(BeNil())
+		Expect(command.Flags().Lookup("custom-domains-cname-base-domain")).NotTo(BeNil())
+		Expect(command.Flags().Lookup("dns-servers")).NotTo(BeNil())
+	})
+})
+
+var _ = Describe("warnIfPublicIPUnreachable", func() {
+	var output *bytes.Buffer
+
+	BeforeEach(func() {
+		output = &bytes.Buffer{}
+		log.SetOutput(output)
+		DeferCleanup(func() { log.SetOutput(os.Stderr) })
+	})
+
+	// The profiles default to this placeholder, which `install codesphere` rejects later.
+	It("warns about the loopback placeholder", func() {
+		warnIfPublicIPUnreachable(&files.RootConfig{Codesphere: files.CodesphereConfig{PublicIP: "127.0.0.1"}})
+
+		Expect(output.String()).To(ContainSubstring("WARNING: codesphere.publicIp is not reachable from other machines: 127.0.0.1"))
+		Expect(output.String()).To(ContainSubstring("--public-ip"))
+	})
+
+	It("stays silent for a reachable public IP", func() {
+		warnIfPublicIPUnreachable(&files.RootConfig{Codesphere: files.CodesphereConfig{PublicIP: "203.0.113.10"}})
+
+		Expect(output.String()).To(BeEmpty())
+	})
+
+	// Validation already reports a missing public IP as an error.
+	It("stays silent for a missing public IP", func() {
+		warnIfPublicIPUnreachable(&files.RootConfig{})
+
+		Expect(output.String()).To(BeEmpty())
 	})
 })
 
@@ -124,6 +169,15 @@ var _ = Describe("UpdateConfigFromOpts", func() {
 		secretKey := vault.GetSecret(files.SecretOpenfgaDbBackupSecretAccessKey)
 		Expect(secretKey).NotTo(BeNil())
 		Expect(secretKey.Fields.Password).To(Equal("secret-key"))
+	})
+
+	It("sets the Codesphere public IP", func() {
+		config := &files.RootConfig{}
+		command := &InitInstallConfigCmd{Opts: &InitInstallConfigOpts{CodespherePublicIP: "203.0.113.10"}}
+
+		command.updateConfigFromOpts(config, &files.InstallVault{})
+
+		Expect(config.Codesphere.PublicIP).To(Equal("203.0.113.10"))
 	})
 
 	It("does not set openfga backups config when not enabled", func() {

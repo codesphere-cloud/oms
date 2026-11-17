@@ -49,6 +49,9 @@ var _ = Describe("Single VM configuration", func() {
 		}
 		uploadedConfig = files.NewRootConfig()
 		uploadedVault = files.InstallVault{}
+
+		// The single VM bootstrap prepares its data center before it builds the install config.
+		Expect(b.prepareSingleVMDataCenter()).To(Succeed())
 	})
 
 	expectConfigUpload := func() {

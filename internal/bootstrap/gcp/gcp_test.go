@@ -2513,6 +2513,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 	Describe("UpdateInstallConfig", func() {
 		BeforeEach(func() {
+			csEnv.PublicGatewayIP = "1.1.1.2"
 			icg.EXPECT().GetVault().Return(&files.InstallVault{}).Maybe()
 			icg.EXPECT().GenerateSecrets().Return(nil).Maybe()
 			icg.EXPECT().WriteInstallConfig(mock.Anything, mock.Anything).Return(nil).Maybe()

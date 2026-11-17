@@ -63,10 +63,12 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
       --codesphere-hash string                     Optional Codesphere build hash to write to operations.codesphere.hash
       --codesphere-version string                  Codesphere version to write to operations.codesphere.version
   -c, --config string                              Output file path for config.yaml (default "config.yaml")
+      --custom-domains-cname-base-domain string    Custom domains CNAME base domain
       --dc-city string                             Datacenter city
       --dc-country-code string                     Datacenter country code
       --dc-id int                                  Datacenter ID
       --dc-name string                             Datacenter name
+      --dns-servers strings                        DNS servers (comma-separated)
       --domain string                              Main Codesphere domain
       --generate-keys[=true|false]                 Generate SSH keys and certificates (default true)
   -h, --help[=true|false]                          help for install-config
@@ -90,12 +92,14 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
       --postgres-primary-ip string                 Primary PostgreSQL server IP
       --postgres-server string                     PostgreSQL server: primary hostname in install mode, connection address in external mode
       --profile string                             Use a predefined configuration profile (dev, production, minimal)
+      --public-ip string                           Public IP that custom domains' A records point to (public gateway IP)
       --registry-server string                     Server for container registry
       --secrets-dir string                         Secrets base directory (default "/root/secrets")
       --validate[=true|false]                      Validate existing config files instead of creating new ones
       --vault string                               Output file path for prod.vault.yaml (default "prod.vault.yaml")
       --vault-type string                          Vault storage type (sops or plain) (default "sops")
       --with-comments[=true|false]                 Add helpful comments to the generated YAML files
+      --workspace-hosting-base-domain string       Workspace hosting base domain
 ```
 
 ### Options inherited from parent commands

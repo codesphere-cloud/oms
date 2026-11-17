@@ -627,7 +627,8 @@ var _ = Describe("ConfigManager", func() {
 						ControlPlanes:       []files.K8sNode{{IPAddress: "10.50.0.2"}},
 					},
 					Codesphere: files.CodesphereConfig{
-						Domain: "codesphere.example.com",
+						Domain:   "codesphere.example.com",
+						PublicIP: "203.0.113.10",
 					},
 				}
 			})
@@ -635,6 +636,22 @@ var _ = Describe("ConfigManager", func() {
 			It("should return no errors", func() {
 				errors := configManager.ValidateInstallConfig()
 				Expect(errors).To(BeEmpty())
+			})
+
+			It("requires the Codesphere public IP", func() {
+				configManager.Config.Codesphere.PublicIP = ""
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).To(ConsistOf(ContainSubstring("codesphere.publicIp is required")))
+			})
+
+			It("rejects an invalid Codesphere public IP", func() {
+				configManager.Config.Codesphere.PublicIP = "not-an-ip"
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).To(ConsistOf("invalid codesphere.publicIp: not-an-ip"))
 			})
 		})
 	})
