@@ -886,6 +886,8 @@ func (b *LocalBootstrapper) EnsureGitHubAccessConfigured() error {
 //   - cephFsId (password = FSID)
 //   - cephfsAdmin, cephfsAdminCodesphere (password = auth key)
 //   - rgwAdminAccessKey, rgwAdminSecretKey (password = S3 access/secret keys)
+//   - rgwBackupAccessKey, rgwBackupSecretKey (the SRE S3 backup job's RGW user;
+//     OMS-local only - the JS installer does not create it)
 //   - csiRbdNode, csiRbdProvisioner, csiCephfsNode, csiCephfsProvisioner, csiOperator (password = auth key)
 func (b *LocalBootstrapper) addCephSecretsToVault(vault *files.InstallVault) {
 	creds := b.cephCredentials
@@ -895,6 +897,8 @@ func (b *LocalBootstrapper) addCephSecretsToVault(vault *files.InstallVault) {
 	vault.SetSecret(files.SecretEntry{Name: "cephfsAdminCodesphere", Fields: &files.SecretFields{Username: creds.CephfsAdminCodesphere.Entity, Password: creds.CephfsAdminCodesphere.Key}})
 	vault.SetSecret(files.SecretEntry{Name: "rgwAdminAccessKey", Fields: &files.SecretFields{Password: creds.RGWAdmin.AccessKey}})
 	vault.SetSecret(files.SecretEntry{Name: "rgwAdminSecretKey", Fields: &files.SecretFields{Password: creds.RGWAdmin.SecretKey}})
+	vault.SetSecret(files.SecretEntry{Name: "rgwBackupAccessKey", Fields: &files.SecretFields{Password: creds.RGWBackup.AccessKey}})
+	vault.SetSecret(files.SecretEntry{Name: "rgwBackupSecretKey", Fields: &files.SecretFields{Password: creds.RGWBackup.SecretKey}})
 	vault.SetSecret(files.SecretEntry{Name: "csiRbdNode", Fields: &files.SecretFields{Username: creds.CSIRBDNode.Entity, Password: creds.CSIRBDNode.Key}})
 	vault.SetSecret(files.SecretEntry{Name: "csiRbdProvisioner", Fields: &files.SecretFields{Username: creds.CSIRBDProvisioner.Entity, Password: creds.CSIRBDProvisioner.Key}})
 	vault.SetSecret(files.SecretEntry{Name: "csiCephfsNode", Fields: &files.SecretFields{Username: creds.CSICephFSNode.Entity, Password: creds.CSICephFSNode.Key}})
