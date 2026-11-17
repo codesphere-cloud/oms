@@ -4,40 +4,37 @@
 package pcapps
 
 import (
-	"fmt"
-	"time"
-
-	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	csappsvalues "github.com/codesphere-cloud/oms/internal/installer/csapps/values"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
-	"github.com/codesphere-cloud/oms/internal/installer/vault"
 )
 
-// ErrorPageServerPcAppsValues passes the error-page-server application the Codesphere globals,
-// as the chart read them as a subchart of the Codesphere umbrella chart.
-// It leaves enabled to the pc-applications chart:
-// the pc-applications version enables the application in step with the umbrella chart dropping it,
-// since both would render the same error-page-server Service.
-func ErrorPageServerPcAppsValues(config *files.RootConfig, installerBom *bom.Config) (files.ChartValues, error) {
-	codesphereValues, err := csappsvalues.Build(config, installerBom)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build the Codesphere values: %w", err)
-	}
-
-	global := csappsvalues.MergeOverride(map[string]any{"global": codesphereValues["global"]}, map[string]any{
-		"global": map[string]any{
-			"externalSecretsVaultSecret": vault.VaultSecretName,
-			// ESO only re-reads the vault when the ExternalSecret changes,
-			// so a new trigger on every install brings refreshed service user tokens to the pod.
-			"externalSecretsSyncTrigger": time.Now().UTC().Format(time.RFC3339Nano),
-		},
-	})
-
+// ErrorPageServerPcAppsValues derives the pc-applications values for error-page-server from the config.yaml.
+// The chart reads the Codesphere globals, as it did as a subchart of the umbrella chart,
+// and its defaults fit a private cloud except for these three.
+// They are the base of the pc-apps values: an explicit `pcApps` block in config.yaml and any --pc-apps-values file
+// still override them.
+// The pc-applications chart decides whether the application is enabled,
+// in step with the umbrella chart dropping its error-page-server.
+func ErrorPageServerPcAppsValues(config *files.RootConfig) files.ChartValues {
 	return files.ChartValues{
 		"applications": files.ChartValues{
 			"error-page-server": files.ChartValues{
-				"valuesObject": global,
+				"valuesObject": files.ChartValues{
+					"global": files.ChartValues{
+						// The error pages link back to the IDE on the first host.
+						"hosts": []string{config.Codesphere.Domain},
+						"customDomains": files.ChartValues{
+							"gatewayApi": files.ChartValues{
+								// Without the Gateway API, custom domains reach the server through the chart's proxy.
+								"useGateway": csappsvalues.WorkspacesUseGatewayAPI(config.Cluster),
+							},
+						},
+						"services": files.ChartValues{
+							"priorityClass": csappsvalues.PriorityClass,
+						},
+					},
+				},
 			},
 		},
-	}, nil
+	}
 }
