@@ -810,7 +810,19 @@ func (b *GCPBootstrapper) applyPcAppsDefaults(dc *datacenter.DataCenter) {
 			},
 		},
 	})
+
+	if util.InstallVersionAtLeast(b.Env.InstallVersion, clickhouseMinInstallVersion) {
+		dc.InstallConfig.PcApps = util.DeepMergeMaps(dc.InstallConfig.PcApps, files.ChartValues{
+			"applications": map[string]any{
+				"ms-backend-clickhouse": map[string]any{
+					"enabled": true,
+				},
+			},
+		})
+	}
 }
+
+const clickhouseMinInstallVersion = "v1.117.0"
 
 func (b *GCPBootstrapper) applyManagedServiceDefaults(dc *datacenter.DataCenter) {
 	if dc.InstallConfig.Codesphere.ManagedServices == nil {
@@ -827,6 +839,10 @@ func (b *GCPBootstrapper) applyManagedServiceDefaults(dc *datacenter.DataCenter)
 
 		if util.InstallVersionAtLeast(b.Env.InstallVersion, "v1.106.0") {
 			ms = append(ms, files.ManagedServiceConfig{Name: "url-shortener", SchemaVersion: "v0"})
+		}
+
+		if util.InstallVersionAtLeast(b.Env.InstallVersion, clickhouseMinInstallVersion) {
+			ms = append(ms, files.ManagedServiceConfig{Name: "clickhouse", SchemaVersion: "v0"})
 		}
 
 		dc.InstallConfig.Codesphere.ManagedServices = ms
