@@ -245,12 +245,14 @@ type InstallerAPI interface {
 // pc-applications app-of-apps workflow.
 type AppInstallerConfig struct {
 	Config       files.RootConfig
-	Vault        *files.InstallVault
-	RESTConfig   *rest.Config
-	KubeClient   client.Client
 	HelmClient   installer.HelmClient
 	Installer    InstallerAPI
+	KubeClient   client.Client
 	PCAppsValues []string
+	RESTConfig   *rest.Config
+	// SkipSteps are the --skip-steps; the config's operations.skip counts too.
+	SkipSteps []string
+	Vault     *files.InstallVault
 }
 
 // AppInstaller installs ArgoCD, syncs the vault secret, and registers the
@@ -315,10 +317,8 @@ func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config)
 	return nil
 }
 
-// getPcAppsValues collects the base values for some apps from the config (OpenFGA, Rook) and merges these with
-// explicit pcApps block in the config.yaml.
-// The pcApps block in the config.yaml and --pc-apps-values always win over derived values from the config.yaml.
-// Returns a ChartValues map
+// getPcAppsValues derives the pc-applications values from the config and merges its pcApps block
+// over them. The --pc-apps-values files are applied on top at install.
 func (i *AppInstaller) getPcAppsValues() (files.ChartValues, error) {
 	clusterConfigValues, err := pcapps.ClusterConfigPcAppsValues(&i.cfg.Config, i.cfg.Vault)
 	if err != nil {
@@ -327,9 +327,11 @@ func (i *AppInstaller) getPcAppsValues() (files.ChartValues, error) {
 
 	openFGAppValues := pcapps.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault)
 	rookCephAppValues := pcapps.RookCephPcAppsValues(&i.cfg.Config)
+	installerChartValues := pcapps.InstallerChartsPcAppsValues(&i.cfg.Config, i.cfg.SkipSteps)
 
 	values := util.DeepMergeMaps(openFGAppValues, rookCephAppValues)
 	values = util.DeepMergeMaps(values, clusterConfigValues)
+	values = util.DeepMergeMaps(values, installerChartValues)
 	values = util.DeepMergeMaps(values, i.cfg.Config.PcApps)
 
 	return values, nil
