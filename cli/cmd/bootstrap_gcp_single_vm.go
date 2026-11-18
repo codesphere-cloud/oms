@@ -48,12 +48,17 @@ func newBootstrapGcpSingleNodeCmd(opts *util.GlobalOptions) *BootstrapGcpCmd {
 		return c.RunE(command, args)
 	}
 	c.addSharedBootstrapFlags()
+	c.cmd.Flags().IntVar(&c.CodesphereEnv.MaxPods, "max-pods", gcp.DefaultSingleVMMaxPods, "Maximum number of pods on the single node")
 	c.cmd.Flags().StringVar(&c.StorageEngine, "storage-engine", local.StorageEngineRookCeph, "Storage engine (rook-ceph or local)")
 
 	return c
 }
 
 func (c *BootstrapGcpCmd) validateSingleVMOptions() error {
+	if c.CodesphereEnv.MaxPods < 1 {
+		return fmt.Errorf("--max-pods must be greater than zero")
+	}
+
 	if err := validateLocalStorageEngine(c.StorageEngine); err != nil {
 		return err
 	}
