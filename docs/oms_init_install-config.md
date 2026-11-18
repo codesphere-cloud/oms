@@ -47,61 +47,63 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
 ### Options
 
 ```
-      --acme-custom-domains-eab-key-id string      External Account Binding key ID for custom-domain certificates (must differ from --acme-eab-key-id)
-      --acme-custom-domains-eab-mac-key string     External Account Binding MAC key for custom-domain certificates
-      --acme-dns01-provider string                 DNS provider for DNS-01 solver (e.g., cloudflare)
-      --acme-eab-key-id string                     External Account Binding key ID (required by some ACME providers)
-      --acme-eab-mac-key string                    External Account Binding MAC key (required by some ACME providers)
-      --acme-email string                          Email address for ACME account registration
-      --acme-enabled[=true|false]                  Enable ACME certificate issuer
-      --acme-issuer-name string                    Name for the ACME ClusterIssuer (default "acme-issuer")
-      --acme-server string                         ACME server URL (default "https://acme-v02.api.letsencrypt.org/directory")
-      --age-key string                             Path to the age private key for the sops vault (falls back to SOPS_AGE_KEY or SOPS_AGE_KEY_FILE; if none is set, a new key is generated and printed once)
-      --ansible-inventory string                   Path to Ansible inventory file to import host information from
-      --ceph-csi-kubelet-dir string                Directory of kubelet for ceph csi. Required for some cloud providers
-      --ceph-nodes-subnet string                   CIDR subnet for ceph nodes
-      --codesphere-hash string                     Optional Codesphere build hash to write to operations.codesphere.hash
-      --codesphere-version string                  Codesphere version to write to operations.codesphere.version
-  -c, --config string                              Output file path for config.yaml (default "config.yaml")
-      --custom-domains-cname-base-domain string    Custom domains CNAME base domain
-      --dc-city string                             Datacenter city
-      --dc-country-code string                     Datacenter country code
-      --dc-id int                                  Datacenter ID
-      --dc-name string                             Datacenter name
-      --dns-servers strings                        DNS servers (comma-separated)
-      --domain string                              Main Codesphere domain
-      --generate-keys[=true|false]                 Generate SSH keys and certificates (default true)
-  -h, --help[=true|false]                          help for install-config
-      --interactive[=true|false]                   Enable interactive prompting (version and hash flags provide prompt defaults) (default true)
-      --k8s-control-plane strings                  K8s control plane IPs (comma-separated)
-      --k8s-managed[=true|false]                   Use Codesphere-managed Kubernetes (default true)
-      --k8s-pod-cidr string                        Pod CIDR (required when --k8s-managed=false)
-      --k8s-service-cidr string                    Service CIDR (required when --k8s-managed=false)
-      --openbao-engine string                      Engine for OpenBao (default "cs-secrets-engine")
-      --openbao-password string                    Password for OpenBao authentication
-      --openbao-uri string                         URI for OpenBao (e.g., https://openbao.example.com)
-      --openbao-user string                        Username for OpenBao authentication (default "admin")
-      --openfga-backups-access-key-id string       S3 access key ID for OpenFGA backups
-      --openfga-backups-destination string         Backup destination (S3 URL, e.g. s3://backup-openfga)
-      --openfga-backups-enabled[=true|false]       Enable OpenFGA database backups
-      --openfga-backups-endpoint string            S3-compatible endpoint URL (e.g. https://storage.googleapis.com)
-      --openfga-backups-retention string           Retention policy (e.g. 7d, empty for chart default)
-      --openfga-backups-schedule string            Backup schedule (6-field cron, empty for chart default)
-      --openfga-backups-secret-access-key string   S3 secret access key for OpenFGA backups
-      --postgres-mode string                       PostgreSQL setup mode (install/external)
-      --postgres-primary-ip string                 Primary PostgreSQL server IP
-      --postgres-server string                     PostgreSQL server: primary hostname in install mode, connection address in external mode
-      --profile string                             Use a predefined configuration profile (dev, production, minimal)
-      --public-ip string                           Public IP that custom domains' A records point to (public gateway IP)
-      --registry-server string                     Server for container registry
-      --secrets-dir string                         Secrets base directory (default "/root/secrets")
-      --ssh-proxy-node-port int                    Node port of the SSH workspace proxy service (ignored for ClusterIP) (default 30022)
-      --ssh-proxy-service-type string              Kubernetes service type of the SSH workspace proxy (ClusterIP, NodePort, LoadBalancer) (default "LoadBalancer")
-      --validate[=true|false]                      Validate existing config files instead of creating new ones
-      --vault string                               Output file path for prod.vault.yaml (default "prod.vault.yaml")
-      --vault-type string                          Vault storage type (sops or plain) (default "sops")
-      --with-comments[=true|false]                 Add helpful comments to the generated YAML files
-      --workspace-hosting-base-domain string       Workspace hosting base domain
+      --acme-custom-domains-eab-key-id string          External Account Binding key ID for custom-domain certificates (must differ from --acme-eab-key-id)
+      --acme-custom-domains-eab-mac-key string         External Account Binding MAC key for custom-domain certificates
+      --acme-dns01-provider string                     DNS provider for DNS-01 solver (e.g., cloudflare)
+      --acme-eab-key-id string                         External Account Binding key ID (required by some ACME providers)
+      --acme-eab-mac-key string                        External Account Binding MAC key (required by some ACME providers)
+      --acme-email string                              Email address for ACME account registration
+      --acme-enabled[=true|false]                      Enable ACME certificate issuer
+      --acme-issuer-name string                        Name for the ACME ClusterIssuer (default "acme-issuer")
+      --acme-server string                             ACME server URL (default "https://acme-v02.api.letsencrypt.org/directory")
+      --age-key string                                 Path to the age private key for the sops vault (falls back to SOPS_AGE_KEY or SOPS_AGE_KEY_FILE; if none is set, a new key is generated and printed once)
+      --ansible-inventory string                       Path to Ansible inventory file to import host information from
+      --ceph-csi-kubelet-dir string                    Directory of kubelet for ceph csi. Required for some cloud providers
+      --ceph-nodes-subnet string                       CIDR subnet for ceph nodes
+      --codesphere-hash string                         Optional Codesphere build hash to write to operations.codesphere.hash
+      --codesphere-version string                      Codesphere version to write to operations.codesphere.version
+  -c, --config string                                  Output file path for config.yaml (default "config.yaml")
+      --custom-domains-cname-base-domain string        Custom domains CNAME base domain
+      --dc-city string                                 Datacenter city
+      --dc-country-code string                         Datacenter country code
+      --dc-id int                                      Datacenter ID
+      --dc-name string                                 Datacenter name
+      --dns-servers strings                            DNS servers (comma-separated)
+      --domain string                                  Main Codesphere domain
+      --generate-keys[=true|false]                     Generate SSH keys and certificates (default true)
+  -h, --help[=true|false]                              help for install-config
+      --interactive[=true|false]                       Enable interactive prompting (version and hash flags provide prompt defaults) (default true)
+      --k8s-control-plane strings                      K8s control plane IPs (comma-separated)
+      --k8s-managed[=true|false]                       Use Codesphere-managed Kubernetes (default true)
+      --k8s-pod-cidr string                            Pod CIDR (required when --k8s-managed=false)
+      --k8s-service-cidr string                        Service CIDR (required when --k8s-managed=false)
+      --openbao-engine string                          Engine for OpenBao (default "cs-secrets-engine")
+      --openbao-password string                        Password for OpenBao authentication
+      --openbao-uri string                             URI for OpenBao (e.g., https://openbao.example.com)
+      --openbao-user string                            Username for OpenBao authentication (default "admin")
+      --openfga-backups-access-key-id string           S3 access key ID for OpenFGA backups
+      --openfga-backups-destination string             Backup destination (S3 URL, e.g. s3://backup-openfga)
+      --openfga-backups-enabled[=true|false]           Enable OpenFGA database backups
+      --openfga-backups-endpoint string                S3-compatible endpoint URL (e.g. https://storage.googleapis.com)
+      --openfga-backups-retention string               Retention policy (e.g. 7d, empty for chart default)
+      --openfga-backups-schedule string                Backup schedule (6-field cron, empty for chart default)
+      --openfga-backups-secret-access-key string       S3 secret access key for OpenFGA backups
+      --postgres-mode string                           PostgreSQL setup mode (install/external)
+      --postgres-primary-ip string                     Primary PostgreSQL server IP
+      --postgres-server string                         PostgreSQL server: primary hostname in install mode, connection address in external mode
+      --profile string                                 Use a predefined configuration profile (dev, production, minimal)
+      --public-ip string                               Public IP that custom domains' A records point to (public gateway IP)
+      --registry-server string                         Server for container registry
+      --secrets-dir string                             Secrets base directory (default "/root/secrets")
+      --ssh-proxy-load-balancer-ip string              Fixed IP of the SSH workspace proxy load balancer (only for service type LoadBalancer)
+      --ssh-proxy-node-port int                        Node port of the SSH workspace proxy service (ignored for ClusterIP) (default 30022)
+      --ssh-proxy-service-annotations stringToString   Annotations of the SSH workspace proxy service, e.g. to pin a cloud or MetalLB load balancer IP (key=value, comma-separated) (default [])
+      --ssh-proxy-service-type string                  Kubernetes service type of the SSH workspace proxy (ClusterIP, NodePort, LoadBalancer) (default "LoadBalancer")
+      --validate[=true|false]                          Validate existing config files instead of creating new ones
+      --vault string                                   Output file path for prod.vault.yaml (default "prod.vault.yaml")
+      --vault-type string                              Vault storage type (sops or plain) (default "sops")
+      --with-comments[=true|false]                     Add helpful comments to the generated YAML files
+      --workspace-hosting-base-domain string           Workspace hosting base domain
 ```
 
 ### Options inherited from parent commands
