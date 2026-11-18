@@ -27,6 +27,9 @@ oms install k0s [flags]
 # Path to Codesphere install-config file to generate k0s config from
 $ oms install k0s --install-config <path>
 
+# Install k0s with a limit of 250 pods per worker node
+$ oms install k0s --install-config <path> --max-pods 250
+
 # Overwrite a previously generated k0sctl config without asking
 $ oms install k0s --install-config <path> --yes
 
@@ -64,7 +67,7 @@ $ oms install k0s --single --package <file>
   -h, --help[=true|false]          help for k0s
       --install-config string      Path to Codesphere install-config file to generate the k0sctl config from
       --k0sctl-version string      Version of k0sctl to use (default "v0.33.1")
-      --max-pods int               Maximum pods on the single node (omit to keep the existing kubelet limit); changing it restarts k0s
+      --max-pods int               Maximum pods per worker node; changing it restarts k0s
       --no-download[=true|false]   Skip downloading k0s binary
   -p, --package string             Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from
       --single[=true|false]        Install a single-node controller and worker on this machine
