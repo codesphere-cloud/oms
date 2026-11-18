@@ -96,7 +96,7 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
       --registry-server string                         Server for container registry
       --secrets-dir string                             Secrets base directory (default "/root/secrets")
       --ssh-proxy-load-balancer-ip string              Fixed IP of the SSH workspace proxy load balancer (only for service type LoadBalancer)
-      --ssh-proxy-node-port int                        Node port of the SSH workspace proxy service (ignored for ClusterIP) (default 30022)
+      --ssh-proxy-node-port int                        Node port of the SSH workspace proxy service (only for service type NodePort) (default 30022)
       --ssh-proxy-service-annotations stringToString   Annotations of the SSH workspace proxy service, e.g. to pin a cloud or MetalLB load balancer IP (key=value, comma-separated) (default [])
       --ssh-proxy-service-type string                  Kubernetes service type of the SSH workspace proxy (ClusterIP, NodePort, LoadBalancer) (default "LoadBalancer")
       --validate[=true|false]                          Validate existing config files instead of creating new ones
