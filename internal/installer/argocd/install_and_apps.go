@@ -328,10 +328,12 @@ func (i *AppInstaller) getPcAppsValues() (files.ChartValues, error) {
 	openFGAppValues := pcapps.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault)
 	rookCephAppValues := pcapps.RookCephPcAppsValues(&i.cfg.Config)
 	installerChartValues := pcapps.InstallerChartsPcAppsValues(&i.cfg.Config, i.cfg.SkipSteps)
+	errorPageServerValues := pcapps.ErrorPageServerPcAppsValues(&i.cfg.Config)
 
 	values := util.DeepMergeMaps(openFGAppValues, rookCephAppValues)
 	values = util.DeepMergeMaps(values, clusterConfigValues)
 	values = util.DeepMergeMaps(values, installerChartValues)
+	values = util.DeepMergeMaps(values, errorPageServerValues)
 	values = util.DeepMergeMaps(values, i.cfg.Config.PcApps)
 
 	return values, nil
