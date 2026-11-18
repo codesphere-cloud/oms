@@ -175,13 +175,6 @@ func (b *GCPBootstrapper) singleVMConfig(config files.RootConfig) files.RootConf
 	config.Cluster.Gateway.ServiceType = "ClusterIP"
 	config.Cluster.PublicGateway.ServiceType = "ClusterIP"
 	config.Codesphere.EnsureSSHWorkspaceProxyService().Type = "ClusterIP"
-	config.PcApps = util.DeepMergeMaps(config.PcApps, files.ChartValues{
-		"applications": map[string]any{
-			"ssh-workspace-proxy": map[string]any{
-				"enabled": true,
-			},
-		},
-	})
 
 	return config
 }

@@ -7,21 +7,18 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
-// SSHWorkspaceProxyPcAppsValues derives the pc-applications values for the SSH workspace proxy
-// service from the codesphere.sshWorkspaceProxy.service block. They are the base of the pc-apps
-// values: an explicit `pcApps` block in config.yaml and any --pc-apps-values file still override
-// them. Returns nil when the config has no service block, leaving the chart defaults untouched.
+// SSHWorkspaceProxyPcAppsValues derives the pc-applications values for the SSH workspace proxy.
+// The proxy and its service are always enabled; the service settings come from the
+// codesphere.sshWorkspaceProxy.service block and are left to the chart defaults when it is unset.
+// They are the base of the pc-apps values: an explicit `pcApps` block in config.yaml and any
+// --pc-apps-values file still override them.
 func SSHWorkspaceProxyPcAppsValues(config *files.RootConfig) files.ChartValues {
-	service := config.Codesphere.SSHWorkspaceProxy.ServiceConfig()
-	if service == nil {
-		return nil
-	}
-
 	return files.ChartValues{
 		"applications": files.ChartValues{
 			"ssh-workspace-proxy": files.ChartValues{
+				"enabled": true,
 				"valuesObject": files.ChartValues{
-					"service": sshWorkspaceProxyServiceValues(service),
+					"service": sshWorkspaceProxyServiceValues(config.Codesphere.SSHWorkspaceProxy.ServiceConfig()),
 				},
 			},
 		},
@@ -31,10 +28,12 @@ func SSHWorkspaceProxyPcAppsValues(config *files.RootConfig) files.ChartValues {
 // sshWorkspaceProxyServiceValues always enables the service. A load balancer keeps the client
 // source IP (externalTrafficPolicy Local) and may request a fixed IP.
 func sshWorkspaceProxyServiceValues(service *files.SSHWorkspaceProxyServiceConfig) files.ChartValues {
-	values := files.ChartValues{
-		"enabled": true,
-		"type":    service.ServiceType(),
+	values := files.ChartValues{"enabled": true}
+	if service == nil {
+		return values
 	}
+
+	values["type"] = service.ServiceType()
 
 	if service.UsesNodePort() {
 		values["nodePort"] = service.ServiceNodePort()

@@ -44,7 +44,6 @@ func configureSharedExposure(config *files.RootConfig) {
 	config.PcApps = util.DeepMergeMaps(config.PcApps, map[string]any{
 		"applications": map[string]any{
 			"ssh-workspace-proxy": map[string]any{
-				"enabled": true,
 				"valuesObject": map[string]any{
 					"replicas": 1,
 					"service":  map[string]any{"port": 22},

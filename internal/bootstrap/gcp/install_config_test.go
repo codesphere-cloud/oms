@@ -446,8 +446,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(bs.Env.InstallConfig.Codesphere.OpenfgaBackups).To(BeNil())
 
 				applications := bs.Env.InstallConfig.PcApps["applications"].(map[string]interface{})
-				sshProxy := applications["ssh-workspace-proxy"].(map[string]interface{})
-				Expect(sshProxy["enabled"]).To(Equal(true))
+				// The install enables the SSH proxy itself (see pcapps.SSHWorkspaceProxyPcAppsValues).
+				Expect(applications).NotTo(HaveKey("ssh-workspace-proxy"))
 				Expect(bs.Env.InstallConfig.Codesphere.SSHWorkspaceProxy.ServiceConfig()).To(Equal(&files.SSHWorkspaceProxyServiceConfig{
 					Type:           "LoadBalancer",
 					LoadBalancerIP: "3.3.3.3",

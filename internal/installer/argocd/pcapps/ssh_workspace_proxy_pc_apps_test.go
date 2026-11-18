@@ -33,12 +33,31 @@ var _ = Describe("SSHWorkspaceProxyPcAppsValues", func() {
 		return &files.RootConfig{Codesphere: files.CodesphereConfig{SSHWorkspaceProxy: proxy}}
 	}
 
-	It("returns nil when sshWorkspaceProxy is not set", func() {
-		Expect(pcapps.SSHWorkspaceProxyPcAppsValues(configWith(nil))).To(BeNil())
+	It("enables the proxy and its service when sshWorkspaceProxy is not set", func() {
+		values := pcapps.SSHWorkspaceProxyPcAppsValues(configWith(nil))
+
+		Expect(values).To(Equal(files.ChartValues{
+			"applications": files.ChartValues{
+				"ssh-workspace-proxy": files.ChartValues{
+					"enabled":      true,
+					"valuesObject": files.ChartValues{"service": files.ChartValues{"enabled": true}},
+				},
+			},
+		}))
 	})
 
-	It("returns nil when sshWorkspaceProxy has no service", func() {
-		Expect(pcapps.SSHWorkspaceProxyPcAppsValues(configWith(&files.SSHWorkspaceProxyConfig{BaseDomain: "ssh.example.com"}))).To(BeNil())
+	It("leaves the service settings to the chart when sshWorkspaceProxy has no service", func() {
+		values := pcapps.SSHWorkspaceProxyPcAppsValues(configWith(&files.SSHWorkspaceProxyConfig{BaseDomain: "ssh.example.com"}))
+
+		Expect(serviceValues(values)).To(Equal(files.ChartValues{"enabled": true}))
+	})
+
+	It("enables the proxy when a service is configured", func() {
+		values := pcapps.SSHWorkspaceProxyPcAppsValues(configWith(&files.SSHWorkspaceProxyConfig{
+			Service: &files.SSHWorkspaceProxyServiceConfig{Type: "ClusterIP"},
+		}))
+
+		Expect(values["applications"]).To(HaveKeyWithValue("ssh-workspace-proxy", HaveKeyWithValue("enabled", true)))
 	})
 
 	It("defaults an empty service to a local-traffic LoadBalancer on node port 30022", func() {

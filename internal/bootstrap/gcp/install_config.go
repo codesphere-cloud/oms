@@ -844,9 +844,6 @@ func (b *GCPBootstrapper) applyPcAppsDefaults(dc *datacenter.DataCenter) {
 	applySSHProxyServiceDefaults(dc)
 	dc.InstallConfig.PcApps = util.DeepMergeMaps(dc.InstallConfig.PcApps, files.ChartValues{
 		"applications": map[string]any{
-			"ssh-workspace-proxy": map[string]any{
-				"enabled": true,
-			},
 			"rabbitmq-operator": map[string]any{
 				"enabled": true,
 			},
