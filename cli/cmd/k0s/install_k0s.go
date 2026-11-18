@@ -46,7 +46,6 @@ type InstallK0sOpts struct {
 	// K0sctlConfig is an existing k0sctl config to apply instead of generating one.
 	K0sctlConfig  string
 	Single        bool
-	MaxPods       int
 	K0sctlVersion string
 	Vault         string
 	VaultPrivKey  string
@@ -59,10 +58,6 @@ type InstallK0sOpts struct {
 func (c *InstallK0sCmd) RunE(cmd *cobra.Command, _ []string) error {
 	if c.Opts.MaxPods < 0 {
 		return fmt.Errorf("--max-pods must be greater than zero when specified")
-	}
-
-	if c.Opts.MaxPods != 0 && !c.Opts.Single {
-		return fmt.Errorf("--max-pods requires --single")
 	}
 
 	if cmd != nil && cmd.Flags().Changed("max-pods") && c.Opts.MaxPods == 0 {
@@ -107,6 +102,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 			Alternatively, apply a k0sctl config created with 'oms init k0s-config' with --config.`),
 			Example: util.FormatExamples("install k0s", []packageio.Example{
 				{Cmd: "--install-config <path>", Desc: "Path to Codesphere install-config file to generate k0s config from"},
+				{Cmd: "--install-config <path> --max-pods 250", Desc: "Install k0s with a limit of 250 pods per worker node"},
 				{Cmd: "--install-config <path> --yes", Desc: "Overwrite a previously generated k0sctl config without asking"},
 				{Cmd: "--config <path>", Desc: "Path to an existing k0sctl config to apply"},
 				{Cmd: "--version <version>", Desc: "Version of k0s to install (e.g., v1.36.5+k0s.0)"},
@@ -133,8 +129,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Yes, "yes", "y", false, "Overwrite an existing generated k0sctl config without asking")
 
 	k0s.cmd.Flags().BoolVar(&k0s.Opts.Single, "single", false, "Install a single-node controller and worker on this machine")
-	k0s.cmd.Flags().IntVar(&k0s.Opts.MaxPods, "max-pods", 0, "Maximum pods on the single node (omit to keep the existing kubelet limit); changing it restarts k0s")
-	k0s.cmd.MarkFlagsMutuallyExclusive("install-config", "max-pods")
+	k0s.cmd.Flags().IntVar(&k0s.Opts.MaxPods, "max-pods", 0, "Maximum pods per worker node; changing it restarts k0s")
 	k0s.cmd.MarkFlagsMutuallyExclusive("config", "max-pods")
 
 	k0s.cmd.Flags().StringVar(&k0s.Opts.Vault, "vault", "", "Path to prod.vault.yaml to save the kubeconfig into (optional)")

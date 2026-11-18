@@ -91,11 +91,6 @@ var _ = Describe("InstallK0sCmd", func() {
 			}))
 		})
 
-		It("rejects a pod limit without single-node mode before creating clients", func() {
-			c.Opts.MaxPods = 250
-			Expect(c.RunE(nil, nil)).To(MatchError(ContainSubstring("--max-pods requires --single")))
-		})
-
 		It("rejects a negative pod limit before creating clients", func() {
 			c.Opts.Single = true
 			c.Opts.MaxPods = -1
@@ -195,6 +190,16 @@ var _ = Describe("InstallK0sCmd", func() {
 		It("rejects --yes with --config", func() {
 			Expect(installK0sCmd.ParseFlags([]string{"--config", "k0sctl.yaml", "--yes"})).To(Succeed())
 			Expect(installK0sCmd.ValidateFlagGroups()).To(MatchError(ContainSubstring("yes")))
+		})
+
+		It("accepts a pod limit with a multi-node install-config", func() {
+			Expect(installK0sCmd.ParseFlags([]string{"--install-config", "cluster.yaml", "--max-pods", "250"})).To(Succeed())
+			Expect(installK0sCmd.ValidateFlagGroups()).To(Succeed())
+		})
+
+		It("rejects overriding the pod limit of a supplied k0sctl config", func() {
+			Expect(installK0sCmd.ParseFlags([]string{"--config", "k0sctl.yaml", "--max-pods", "250"})).To(Succeed())
+			Expect(installK0sCmd.ValidateFlagGroups()).To(MatchError(ContainSubstring("max-pods")))
 		})
 
 		It("rejects an explicit zero pod limit before installing k0s", func() {
