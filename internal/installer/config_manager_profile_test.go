@@ -37,6 +37,15 @@ var _ = Describe("ConfigManagerProfile", func() {
 				Expect(config.Kubernetes.ControlPlanes).To(HaveLen(1))
 				Expect(config.Kubernetes.Workers).To(HaveLen(1))
 				Expect(config.Codesphere.Domain).To(Equal("codesphere.local"))
+				Expect(config.Codesphere.PublicIP).To(Equal("127.0.0.1"))
+			})
+
+			It("keeps an existing Codesphere public IP", func() {
+				manager.GetInstallConfig().Codesphere.PublicIP = "203.0.113.10"
+
+				Expect(manager.ApplyProfile(installer.PROFILE_DEV)).To(Succeed())
+
+				Expect(manager.GetInstallConfig().Codesphere.PublicIP).To(Equal("203.0.113.10"))
 			})
 
 			It("uses one replica and explicit zero requests for every Codesphere service", func() {

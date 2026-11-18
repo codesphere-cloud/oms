@@ -84,7 +84,7 @@ provision:
       apiServerHost: api.test.local
     codesphere:
       domain: test.local
-      publicIP: ${VM_IP}
+      publicIp: ${VM_IP}
       deployConfig:
         images: {}
       plans:
