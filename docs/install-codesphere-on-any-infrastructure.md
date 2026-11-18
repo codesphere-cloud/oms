@@ -330,7 +330,7 @@ Review the generated files and ensure they describe the actual infrastructure:
 - `postgres.primary` contains the PostgreSQL hostname and private IP, or `postgres.mode` describes the external database.
 - `ceph.nodesSubnet` matches the private host network.
 - `ceph.hosts` lists three hosts for a POC or at least four hosts for production, with exactly one initial master.
-- `ceph.csiKubeletDir` is `/var/lib/k0s/kubelet` when Codesphere manages k0s.
+- `ceph.csiKubeletDir` is `/var/lib/k0s/kubelet` when Codesphere manages k0s. On other Kubernetes distributions, set it to the kubelet root directory of the nodes; otherwise the Rook CSI plugins stay in `ContainerCreating`. OMS passes the value to the Rook CSI settings of the `rook-ceph` application.
 - Each Ceph OSD definition selects only the intended, empty data and DB/WAL devices.
 - `kubernetes.apiServerHost` is the first control-plane node's private IP, or a stable load-balancer address or DNS name when using multiple control-plane nodes.
 - `kubernetes.controlPlanes` and `kubernetes.workers` assign every k0s node to its intended role. The production baseline uses three dedicated control-plane nodes and a separate worker pool:
