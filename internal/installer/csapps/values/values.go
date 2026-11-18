@@ -60,6 +60,16 @@ func Build(cfg *files.RootConfig, b *bom.Config) (map[string]any, error) {
 	}), nil
 }
 
+// PriorityClass is the priority class of the Codesphere services.
+// pc-applications gives it to error-page-server, which used to be one of them.
+const PriorityClass = platform.PriorityClass
+
+// WorkspacesUseGatewayAPI reports whether workspaces and their custom domains go through the Gateway API,
+// as the Codesphere values decide it.
+func WorkspacesUseGatewayAPI(conf files.ClusterConfig) bool {
+	return cluster.GatewayAPIs(conf).Workspaces.Use
+}
+
 const authServiceImage = "auth-service"
 
 // releaseImageTag is the tag of all Codesphere service images in the BOM. The chart pins every
