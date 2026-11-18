@@ -474,21 +474,18 @@ func (g *InstallConfig) collectSSHWorkspaceProxyConfig(prompter prompt.Prompter)
 	service := g.Config.Codesphere.EnsureSSHWorkspaceProxyService()
 	service.Type = g.collectChoice(prompter, "SSH workspace proxy service type", files.SSHWorkspaceProxyServiceTypes, service.ServiceType())
 
-	if !service.UsesNodePort() {
-		service.NodePort = 0
-		service.LoadBalancerIP = ""
-
-		return
+	nodePort := 0
+	if service.IsNodePort() {
+		nodePort = g.collectInt(prompter, "SSH workspace proxy node port", service.ServiceNodePort())
 	}
 
-	service.NodePort = g.collectInt(prompter, "SSH workspace proxy node port", service.ServiceNodePort())
-
-	if !service.IsLoadBalancer() {
-		service.LoadBalancerIP = ""
-		return
+	loadBalancerIP := ""
+	if service.IsLoadBalancer() {
+		loadBalancerIP = g.collectString(prompter, "SSH workspace proxy load balancer IP (empty to let the load balancer choose)", service.LoadBalancerIP)
 	}
 
-	service.LoadBalancerIP = g.collectString(prompter, "SSH workspace proxy load balancer IP (empty to let the load balancer choose)", service.LoadBalancerIP)
+	service.NodePort = nodePort
+	service.LoadBalancerIP = loadBalancerIP
 }
 
 func (g *InstallConfig) collectOpenfgaBackupsConfig(prompter prompt.Prompter) {

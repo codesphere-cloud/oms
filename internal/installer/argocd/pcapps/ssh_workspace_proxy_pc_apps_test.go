@@ -60,7 +60,7 @@ var _ = Describe("SSHWorkspaceProxyPcAppsValues", func() {
 		Expect(values["applications"]).To(HaveKeyWithValue("ssh-workspace-proxy", HaveKeyWithValue("enabled", true)))
 	})
 
-	It("defaults an empty service to a local-traffic LoadBalancer on node port 30022", func() {
+	It("defaults an empty service to a local-traffic LoadBalancer", func() {
 		values := pcapps.SSHWorkspaceProxyPcAppsValues(configWith(&files.SSHWorkspaceProxyConfig{
 			Service: &files.SSHWorkspaceProxyServiceConfig{},
 		}))
@@ -68,7 +68,6 @@ var _ = Describe("SSHWorkspaceProxyPcAppsValues", func() {
 		Expect(serviceValues(values)).To(Equal(files.ChartValues{
 			"enabled":               true,
 			"type":                  "LoadBalancer",
-			"nodePort":              30022,
 			"externalTrafficPolicy": "Local",
 		}))
 	})
@@ -84,11 +83,19 @@ var _ = Describe("SSHWorkspaceProxyPcAppsValues", func() {
 		Expect(serviceValues(values)).To(Equal(files.ChartValues{
 			"enabled":               true,
 			"type":                  "LoadBalancer",
-			"nodePort":              30022,
 			"externalTrafficPolicy": "Local",
 			"loadBalancerIP":        "203.0.113.22",
 			"annotations":           files.ChartValues{"cloud.google.com/load-balancer-ipv4": "203.0.113.22"},
 		}))
+	})
+
+	// The chart ignores the node port of a LoadBalancer service.
+	It("leaves a configured node port out for LoadBalancer", func() {
+		values := pcapps.SSHWorkspaceProxyPcAppsValues(configWith(&files.SSHWorkspaceProxyConfig{
+			Service: &files.SSHWorkspaceProxyServiceConfig{Type: "LoadBalancer", NodePort: 31022},
+		}))
+
+		Expect(serviceValues(values)).NotTo(HaveKey("nodePort"))
 	})
 
 	It("uses the configured type and node port without load balancer settings", func() {

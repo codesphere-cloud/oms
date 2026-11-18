@@ -35,7 +35,7 @@ func sshWorkspaceProxyServiceValues(service *files.SSHWorkspaceProxyServiceConfi
 
 	values["type"] = service.ServiceType()
 
-	if service.UsesNodePort() {
+	if service.IsNodePort() {
 		values["nodePort"] = service.ServiceNodePort()
 	}
 

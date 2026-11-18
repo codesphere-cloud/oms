@@ -282,7 +282,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	c.cmd.Flags().StringVar(&c.Opts.SSHWorkspaceProxyServiceType, "ssh-proxy-service-type", files.DefaultSSHWorkspaceProxyServiceType,
 		fmt.Sprintf("Kubernetes service type of the SSH workspace proxy (%s)", strings.Join(files.SSHWorkspaceProxyServiceTypes, ", ")))
 	c.cmd.Flags().IntVar(&c.Opts.SSHWorkspaceProxyServiceNodePort, "ssh-proxy-node-port", files.DefaultSSHWorkspaceProxyNodePort,
-		"Node port of the SSH workspace proxy service (ignored for ClusterIP)")
+		"Node port of the SSH workspace proxy service (only for service type NodePort)")
 	c.cmd.Flags().StringVar(&c.Opts.SSHWorkspaceProxyServiceLoadBalancerIP, "ssh-proxy-load-balancer-ip", "",
 		"Fixed IP of the SSH workspace proxy load balancer (only for service type LoadBalancer)")
 	c.cmd.Flags().StringToStringVar(&c.Opts.SSHWorkspaceProxyServiceAnnotations, "ssh-proxy-service-annotations", nil,
@@ -719,8 +719,11 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 
 	sshProxyService := config.Codesphere.EnsureSSHWorkspaceProxyService()
 	sshProxyService.Type = c.Opts.SSHWorkspaceProxyServiceType
-	sshProxyService.NodePort = c.Opts.SSHWorkspaceProxyServiceNodePort
 	sshProxyService.LoadBalancerIP = c.Opts.SSHWorkspaceProxyServiceLoadBalancerIP
+
+	if sshProxyService.IsNodePort() {
+		sshProxyService.NodePort = c.Opts.SSHWorkspaceProxyServiceNodePort
+	}
 
 	if len(c.Opts.SSHWorkspaceProxyServiceAnnotations) > 0 {
 		sshProxyService.Annotations = c.Opts.SSHWorkspaceProxyServiceAnnotations

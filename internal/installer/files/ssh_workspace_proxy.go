@@ -15,6 +15,7 @@ const (
 	// DefaultSSHWorkspaceProxyNodePort is the node port of the SSH workspace proxy when none is configured.
 	DefaultSSHWorkspaceProxyNodePort = 30022
 
+	nodePortServiceType     = "NodePort"
 	loadBalancerServiceType = "LoadBalancer"
 
 	maxPort = 65535
@@ -41,10 +42,10 @@ func (s *SSHWorkspaceProxyServiceConfig) ServiceNodePort() int {
 	return s.NodePort
 }
 
-// UsesNodePort reports whether the service type allocates a node port. Kubernetes rejects a
-// node port on a ClusterIP service.
-func (s *SSHWorkspaceProxyServiceConfig) UsesNodePort() bool {
-	return s.ServiceType() != "ClusterIP"
+// IsNodePort reports whether SSH is served on a node port. The chart only applies the node port
+// to NodePort services.
+func (s *SSHWorkspaceProxyServiceConfig) IsNodePort() bool {
+	return s.ServiceType() == nodePortServiceType
 }
 
 // IsLoadBalancer reports whether the service is exposed through a load balancer.

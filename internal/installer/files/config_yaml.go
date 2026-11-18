@@ -635,7 +635,7 @@ type SSHWorkspaceProxyConfig struct {
 type SSHWorkspaceProxyServiceConfig struct {
 	// Type is the Kubernetes service type. Defaults to LoadBalancer.
 	Type string `yaml:"type,omitempty"`
-	// NodePort is the node port SSH is served on. Defaults to 30022. Not used for ClusterIP.
+	// NodePort is the node port SSH is served on. Defaults to 30022. Only used for NodePort.
 	NodePort int `yaml:"nodePort,omitempty"`
 	// LoadBalancerIP requests a fixed IP for a LoadBalancer service. Unset by default.
 	LoadBalancerIP string `yaml:"loadBalancerIP,omitempty"`

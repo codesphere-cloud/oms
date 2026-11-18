@@ -194,9 +194,9 @@ var _ = Describe("UpdateConfigFromOpts", func() {
 
 		command.updateConfigFromOpts(config, &files.InstallVault{})
 
+		// The node port only applies to NodePort services, so it stays out of the config.
 		Expect(config.Codesphere.SSHWorkspaceProxy.ServiceConfig()).To(Equal(&files.SSHWorkspaceProxyServiceConfig{
 			Type:           "LoadBalancer",
-			NodePort:       30022,
 			LoadBalancerIP: "203.0.113.22",
 			Annotations:    map[string]string{"metallb.universe.tf/loadBalancerIPs": "203.0.113.22"},
 		}))

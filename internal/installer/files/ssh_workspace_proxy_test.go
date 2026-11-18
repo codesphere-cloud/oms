@@ -11,12 +11,11 @@ import (
 )
 
 var _ = Describe("SSH workspace proxy service", func() {
-	It("defaults to a LoadBalancer on node port 30022", func() {
+	It("defaults to a LoadBalancer and node port 30022", func() {
 		service := &files.SSHWorkspaceProxyServiceConfig{}
 
 		Expect(service.ServiceType()).To(Equal("LoadBalancer"))
 		Expect(service.ServiceNodePort()).To(Equal(30022))
-		Expect(service.UsesNodePort()).To(BeTrue())
 	})
 
 	It("uses the configured type and node port", func() {
@@ -26,8 +25,17 @@ var _ = Describe("SSH workspace proxy service", func() {
 		Expect(service.ServiceNodePort()).To(Equal(31022))
 	})
 
-	It("does not use a node port for ClusterIP", func() {
-		Expect((&files.SSHWorkspaceProxyServiceConfig{Type: "ClusterIP"}).UsesNodePort()).To(BeFalse())
+	It("serves on a node port for NodePort", func() {
+		Expect((&files.SSHWorkspaceProxyServiceConfig{Type: "NodePort"}).IsNodePort()).To(BeTrue())
+	})
+
+	// The chart ignores the node port of a LoadBalancer service.
+	It("does not serve on a node port for the default LoadBalancer", func() {
+		Expect((&files.SSHWorkspaceProxyServiceConfig{}).IsNodePort()).To(BeFalse())
+	})
+
+	It("does not serve on a node port for ClusterIP", func() {
+		Expect((&files.SSHWorkspaceProxyServiceConfig{Type: "ClusterIP"}).IsNodePort()).To(BeFalse())
 	})
 
 	It("is a load balancer by default", func() {
