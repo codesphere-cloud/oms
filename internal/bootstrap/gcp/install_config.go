@@ -826,22 +826,24 @@ func (b *GCPBootstrapper) skipInstallerStep(dc *datacenter.DataCenter, step stri
 	}
 }
 
+// applySSHProxyServiceDefaults serves the SSH proxy on its reserved external IP, which needs a
+// LoadBalancer service pinned to that IP. Annotations configured in the install config are kept.
+func applySSHProxyServiceDefaults(dc *datacenter.DataCenter) {
+	service := dc.InstallConfig.Codesphere.EnsureSSHWorkspaceProxyService()
+	service.Type = "LoadBalancer"
+	service.LoadBalancerIP = dc.SSHProxyIP
+
+	if service.Annotations == nil {
+		service.Annotations = map[string]string{}
+	}
+
+	service.Annotations["cloud.google.com/load-balancer-ipv4"] = dc.SSHProxyIP
+}
+
 func (b *GCPBootstrapper) applyPcAppsDefaults(dc *datacenter.DataCenter) {
+	applySSHProxyServiceDefaults(dc)
 	dc.InstallConfig.PcApps = util.DeepMergeMaps(dc.InstallConfig.PcApps, files.ChartValues{
 		"applications": map[string]any{
-			"ssh-workspace-proxy": map[string]any{
-				"enabled": true,
-				"valuesObject": map[string]any{
-					"service": map[string]any{
-						"enabled":        true,
-						"type":           "LoadBalancer",
-						"loadBalancerIP": dc.SSHProxyIP,
-						"annotations": map[string]any{
-							"cloud.google.com/load-balancer-ipv4": dc.SSHProxyIP,
-						},
-					},
-				},
-			},
 			"rabbitmq-operator": map[string]any{
 				"enabled": true,
 			},

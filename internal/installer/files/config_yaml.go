@@ -626,6 +626,25 @@ type CustomCertificate struct {
 type SSHWorkspaceProxyConfig struct {
 	// BaseDomain defaults to the Codesphere domain in the chart.
 	BaseDomain string `yaml:"baseDomain,omitempty"`
+	// Service configures the Kubernetes service exposing the proxy. The install turns it into
+	// the ssh-workspace-proxy pc-applications values (see pcapps.SSHWorkspaceProxyPcAppsValues).
+	Service *SSHWorkspaceProxyServiceConfig `yaml:"service,omitempty"`
+}
+
+// SSHWorkspaceProxyServiceConfig configures the Kubernetes service of the SSH workspace proxy.
+type SSHWorkspaceProxyServiceConfig struct {
+	// Type is the Kubernetes service type. Defaults to LoadBalancer.
+	Type string `yaml:"type,omitempty"`
+	// NodePort is the node port SSH is served on. Defaults to 30022. Only used for NodePort.
+	NodePort int `yaml:"nodePort,omitempty"`
+	// LoadBalancerIP requests a fixed IP for a LoadBalancer service. Unset by default.
+	LoadBalancerIP string `yaml:"loadBalancerIP,omitempty"`
+	// Annotations are added to the service, e.g. to pin the IP of a cloud or MetalLB load balancer:
+	//   MetalLB: https://metallb.universe.tf/usage/
+	//   GKE: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/service-load-balancer-parameters#spd-static-ip
+	//   AKS: https://learn.microsoft.com/en-us/azure/aks/static-ip#create-a-service-using-the-static-ip-address
+	//   AWS EKS: https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/guide/service/annotations/
+	Annotations map[string]string `yaml:"annotations,omitempty"`
 }
 
 // IPServiceConfig selects the load balancer that gives workspace services their IP addresses.

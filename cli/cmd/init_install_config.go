@@ -108,6 +108,11 @@ type InitInstallConfigOpts struct {
 	CodesphereWorkspacePlanName            string
 	CodesphereWorkspacePlanMaxReplicas     int
 
+	SSHWorkspaceProxyServiceType           string
+	SSHWorkspaceProxyServiceNodePort       int
+	SSHWorkspaceProxyServiceLoadBalancerIP string
+	SSHWorkspaceProxyServiceAnnotations    map[string]string
+
 	CodesphereOpenBaoURI      string
 	CodesphereOpenBaoEngine   string
 	CodesphereOpenBaoUser     string
@@ -272,6 +277,16 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereWorkspaceHostingBaseDomain, "workspace-hosting-base-domain", "", "Workspace hosting base domain")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereCustomDomainsCNameBaseDomain, "custom-domains-cname-base-domain", "", "Custom domains CNAME base domain")
 	c.cmd.Flags().StringSliceVar(&c.Opts.CodesphereDNSServers, "dns-servers", []string{}, "DNS servers (comma-separated)")
+
+	// SSH workspace proxy
+	c.cmd.Flags().StringVar(&c.Opts.SSHWorkspaceProxyServiceType, "ssh-proxy-service-type", files.DefaultSSHWorkspaceProxyServiceType,
+		fmt.Sprintf("Kubernetes service type of the SSH workspace proxy (%s)", strings.Join(files.SSHWorkspaceProxyServiceTypes, ", ")))
+	c.cmd.Flags().IntVar(&c.Opts.SSHWorkspaceProxyServiceNodePort, "ssh-proxy-node-port", files.DefaultSSHWorkspaceProxyNodePort,
+		"Node port of the SSH workspace proxy service (only for service type NodePort)")
+	c.cmd.Flags().StringVar(&c.Opts.SSHWorkspaceProxyServiceLoadBalancerIP, "ssh-proxy-load-balancer-ip", "",
+		"Fixed IP of the SSH workspace proxy load balancer (only for service type LoadBalancer)")
+	c.cmd.Flags().StringToStringVar(&c.Opts.SSHWorkspaceProxyServiceAnnotations, "ssh-proxy-service-annotations", nil,
+		"Annotations of the SSH workspace proxy service, e.g. to pin a cloud or MetalLB load balancer IP (key=value, comma-separated)")
 
 	// OpenBao
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoURI, "openbao-uri", "", "URI for OpenBao (e.g., https://openbao.example.com)")
@@ -700,6 +715,18 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 
 	if len(c.Opts.CodesphereDNSServers) > 0 {
 		config.Codesphere.DNSServers = c.Opts.CodesphereDNSServers
+	}
+
+	sshProxyService := config.Codesphere.EnsureSSHWorkspaceProxyService()
+	sshProxyService.Type = c.Opts.SSHWorkspaceProxyServiceType
+	sshProxyService.LoadBalancerIP = c.Opts.SSHWorkspaceProxyServiceLoadBalancerIP
+
+	if sshProxyService.IsNodePort() {
+		sshProxyService.NodePort = c.Opts.SSHWorkspaceProxyServiceNodePort
+	}
+
+	if len(c.Opts.SSHWorkspaceProxyServiceAnnotations) > 0 {
+		sshProxyService.Annotations = c.Opts.SSHWorkspaceProxyServiceAnnotations
 	}
 
 	if c.Opts.CodesphereWorkspaceImageBomRef != "" {
