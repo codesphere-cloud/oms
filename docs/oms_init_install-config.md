@@ -95,6 +95,8 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
       --public-ip string                           Public IP that custom domains' A records point to (public gateway IP)
       --registry-server string                     Server for container registry
       --secrets-dir string                         Secrets base directory (default "/root/secrets")
+      --ssh-proxy-node-port int                    Node port of the SSH workspace proxy service (ignored for ClusterIP) (default 30022)
+      --ssh-proxy-service-type string              Kubernetes service type of the SSH workspace proxy (ClusterIP, NodePort, LoadBalancer) (default "LoadBalancer")
       --validate[=true|false]                      Validate existing config files instead of creating new ones
       --vault string                               Output file path for prod.vault.yaml (default "prod.vault.yaml")
       --vault-type string                          Vault storage type (sops or plain) (default "sops")
