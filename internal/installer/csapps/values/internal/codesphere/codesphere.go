@@ -34,23 +34,29 @@ type Codesphere struct {
 	WorkspaceImages               WorkspaceImages `yaml:"workspaceImages"`
 	FrontendGateway               FrontendGateway `yaml:"frontendGateway"`
 
-	IPService             *IPService                     `yaml:"ipService,omitempty"`
-	ManagedServices       []files.ManagedServiceConfig   `yaml:"managedServices,omitempty"`
-	SSHWorkspaceProxy     *files.SSHWorkspaceProxyConfig `yaml:"sshWorkspaceProxy,omitempty"`
-	Branding              *files.BrandingConfig          `yaml:"branding,omitempty"`
-	TLSCertificate        *TLSCertificate                `yaml:"tlsCertificate,omitempty"`
-	UnderprovisionFactors *files.UnderprovisionFactors   `yaml:"underprovisionFactors,omitempty"`
-	ExtraWorkspaceFiles   []files.ExtraWorkspaceFile     `yaml:"extraWorkspaceFiles,omitempty"`
-	SMTP                  *files.SMTPConfig              `yaml:"smtp,omitempty"`
-	OpenBao               *files.OpenBaoConfig           `yaml:"openBao,omitempty"`
-	OpenFGA               *OpenFGA                       `yaml:"openFga,omitempty"`
-	ExtraCAPem            string                         `yaml:"extraCaPem,omitempty"`
-	ExtraWorkspaceEnvVars map[string]string              `yaml:"extraWorkspaceEnvVars,omitempty"`
+	IPService             *IPService                   `yaml:"ipService,omitempty"`
+	ManagedServices       []files.ManagedServiceConfig `yaml:"managedServices,omitempty"`
+	SSHWorkspaceProxy     *SSHWorkspaceProxy           `yaml:"sshWorkspaceProxy,omitempty"`
+	Branding              *files.BrandingConfig        `yaml:"branding,omitempty"`
+	TLSCertificate        *TLSCertificate              `yaml:"tlsCertificate,omitempty"`
+	UnderprovisionFactors *files.UnderprovisionFactors `yaml:"underprovisionFactors,omitempty"`
+	ExtraWorkspaceFiles   []files.ExtraWorkspaceFile   `yaml:"extraWorkspaceFiles,omitempty"`
+	SMTP                  *files.SMTPConfig            `yaml:"smtp,omitempty"`
+	OpenBao               *files.OpenBaoConfig         `yaml:"openBao,omitempty"`
+	OpenFGA               *OpenFGA                     `yaml:"openFga,omitempty"`
+	ExtraCAPem            string                       `yaml:"extraCaPem,omitempty"`
+	ExtraWorkspaceEnvVars map[string]string            `yaml:"extraWorkspaceEnvVars,omitempty"`
 }
 
 // VPN is the peer id of the workspace VPN tunnels.
 type VPN struct {
 	LeftPeerID string `yaml:"leftPeerId,omitempty"`
+}
+
+// SSHWorkspaceProxy is the SSH proxy into workspaces. Its service is configured through the
+// pc-applications values instead.
+type SSHWorkspaceProxy struct {
+	BaseDomain string `yaml:"baseDomain,omitempty"`
 }
 
 // TLSCertificate is the custom certificate Codesphere serves. Its key is the vault entry KeyName.
@@ -124,7 +130,7 @@ func Values(conf files.CodesphereConfig, in Inputs) (Codesphere, error) {
 		FrontendGateway:               frontendGateway,
 		IPService:                     ipService,
 		ManagedServices:               managedServicesValues(conf.ManagedServices),
-		SSHWorkspaceProxy:             conf.SSHWorkspaceProxy,
+		SSHWorkspaceProxy:             sshWorkspaceProxyValues(conf.SSHWorkspaceProxy),
 		Branding:                      conf.Branding,
 		TLSCertificate:                tlsCertificateValues(conf.CustomCertificate),
 		UnderprovisionFactors:         conf.UnderprovisionFactors,
@@ -151,4 +157,12 @@ func tlsCertificateValues(certificate *files.CustomCertificate) *TLSCertificate 
 	}
 
 	return &TLSCertificate{Cert: certificate.Cert, KeyName: files.SecretCustomCertificateKey}
+}
+
+func sshWorkspaceProxyValues(conf *files.SSHWorkspaceProxyConfig) *SSHWorkspaceProxy {
+	if conf == nil {
+		return nil
+	}
+
+	return &SSHWorkspaceProxy{BaseDomain: conf.BaseDomain}
 }

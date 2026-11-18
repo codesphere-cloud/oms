@@ -827,6 +827,8 @@ func (b *GCPBootstrapper) skipInstallerStep(dc *datacenter.DataCenter, step stri
 }
 
 func (b *GCPBootstrapper) applyPcAppsDefaults(dc *datacenter.DataCenter) {
+	// The SSH proxy is served on its reserved external IP, which needs a LoadBalancer service.
+	dc.InstallConfig.Codesphere.EnsureSSHWorkspaceProxyService().Type = "LoadBalancer"
 	dc.InstallConfig.PcApps = util.DeepMergeMaps(dc.InstallConfig.PcApps, files.ChartValues{
 		"applications": map[string]any{
 			"ssh-workspace-proxy": map[string]any{
@@ -834,7 +836,6 @@ func (b *GCPBootstrapper) applyPcAppsDefaults(dc *datacenter.DataCenter) {
 				"valuesObject": map[string]any{
 					"service": map[string]any{
 						"enabled":        true,
-						"type":           "LoadBalancer",
 						"loadBalancerIP": dc.SSHProxyIP,
 						"annotations": map[string]any{
 							"cloud.google.com/load-balancer-ipv4": dc.SSHProxyIP,

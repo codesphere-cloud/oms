@@ -414,6 +414,7 @@ func (g *InstallConfig) collectCodesphereConfig(prompter prompt.Prompter) {
 	g.Config.Codesphere.PublicIP = g.collectString(prompter, "Public IP custom domains' A records point to (public gateway IP)", g.Config.Codesphere.PublicIP)
 	g.Config.Codesphere.CustomDomains.CNameBaseDomain = g.collectString(prompter, "Custom domain CNAME base", defaultCustomDomain)
 	g.Config.Codesphere.DNSServers = g.collectStringSlice(prompter, "DNS servers (comma-separated)", defaultDNSServers)
+	g.collectSSHWorkspaceProxyConfig(prompter)
 
 	log.Println("\n=== Workspace Plans Configuration ===")
 
@@ -467,6 +468,18 @@ func (g *InstallConfig) collectCodesphereConfig(prompter prompt.Prompter) {
 
 	g.collectOpenBaoConfig(prompter)
 	g.collectOpenfgaBackupsConfig(prompter)
+}
+
+func (g *InstallConfig) collectSSHWorkspaceProxyConfig(prompter prompt.Prompter) {
+	service := g.Config.Codesphere.EnsureSSHWorkspaceProxyService()
+	service.Type = g.collectChoice(prompter, "SSH workspace proxy service type", files.SSHWorkspaceProxyServiceTypes, service.ServiceType())
+
+	if !service.UsesNodePort() {
+		service.NodePort = 0
+		return
+	}
+
+	service.NodePort = g.collectInt(prompter, "SSH workspace proxy node port", service.ServiceNodePort())
 }
 
 func (g *InstallConfig) collectOpenfgaBackupsConfig(prompter prompt.Prompter) {

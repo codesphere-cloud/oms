@@ -39,13 +39,15 @@ func configureSharedExposure(config *files.RootConfig) {
 		})
 	}
 
+	// The edge Gateway forwards SSH to the proxy, so it stays internal.
+	config.Codesphere.EnsureSSHWorkspaceProxyService().Type = "ClusterIP"
 	config.PcApps = util.DeepMergeMaps(config.PcApps, map[string]any{
 		"applications": map[string]any{
 			"ssh-workspace-proxy": map[string]any{
 				"enabled": true,
 				"valuesObject": map[string]any{
 					"replicas": 1,
-					"service":  map[string]any{"enabled": true, "type": "ClusterIP", "port": 22},
+					"service":  map[string]any{"enabled": true, "port": 22},
 				},
 			},
 		},

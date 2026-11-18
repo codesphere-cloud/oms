@@ -171,6 +171,33 @@ var _ = Describe("UpdateConfigFromOpts", func() {
 		Expect(secretKey.Fields.Password).To(Equal("secret-key"))
 	})
 
+	It("sets the SSH workspace proxy service", func() {
+		config := &files.RootConfig{}
+		command := &InitInstallConfigCmd{Opts: &InitInstallConfigOpts{
+			SSHWorkspaceProxyServiceType:     "NodePort",
+			SSHWorkspaceProxyServiceNodePort: 31022,
+		}}
+
+		command.updateConfigFromOpts(config, &files.InstallVault{})
+
+		Expect(config.Codesphere.SSHWorkspaceProxy.ServiceConfig()).To(Equal(&files.SSHWorkspaceProxyServiceConfig{Type: "NodePort", NodePort: 31022}))
+	})
+
+	It("keeps the SSH workspace proxy base domain when setting its service", func() {
+		config := &files.RootConfig{Codesphere: files.CodesphereConfig{
+			SSHWorkspaceProxy: &files.SSHWorkspaceProxyConfig{BaseDomain: "ssh.example.com"},
+		}}
+		command := &InitInstallConfigCmd{Opts: &InitInstallConfigOpts{
+			SSHWorkspaceProxyServiceType:     "LoadBalancer",
+			SSHWorkspaceProxyServiceNodePort: 30022,
+		}}
+
+		command.updateConfigFromOpts(config, &files.InstallVault{})
+
+		Expect(config.Codesphere.SSHWorkspaceProxy.BaseDomain).To(Equal("ssh.example.com"))
+		Expect(config.Codesphere.SSHWorkspaceProxy.Service.Type).To(Equal("LoadBalancer"))
+	})
+
 	It("sets the Codesphere public IP", func() {
 		config := &files.RootConfig{}
 		command := &InitInstallConfigCmd{Opts: &InitInstallConfigOpts{CodespherePublicIP: "203.0.113.10"}}

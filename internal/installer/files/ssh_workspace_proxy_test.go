@@ -1,0 +1,80 @@
+// Copyright (c) Codesphere Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+package files_test
+
+import (
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"github.com/codesphere-cloud/oms/internal/installer/files"
+)
+
+var _ = Describe("SSH workspace proxy service", func() {
+	It("defaults to a LoadBalancer on node port 30022", func() {
+		service := &files.SSHWorkspaceProxyServiceConfig{}
+
+		Expect(service.ServiceType()).To(Equal("LoadBalancer"))
+		Expect(service.ServiceNodePort()).To(Equal(30022))
+		Expect(service.UsesNodePort()).To(BeTrue())
+	})
+
+	It("uses the configured type and node port", func() {
+		service := &files.SSHWorkspaceProxyServiceConfig{Type: "NodePort", NodePort: 31022}
+
+		Expect(service.ServiceType()).To(Equal("NodePort"))
+		Expect(service.ServiceNodePort()).To(Equal(31022))
+	})
+
+	It("does not use a node port for ClusterIP", func() {
+		Expect((&files.SSHWorkspaceProxyServiceConfig{Type: "ClusterIP"}).UsesNodePort()).To(BeFalse())
+	})
+
+	It("has no service when the proxy block is unset", func() {
+		var config *files.SSHWorkspaceProxyConfig
+
+		Expect(config.ServiceConfig()).To(BeNil())
+	})
+
+	It("accepts an unset service", func() {
+		var service *files.SSHWorkspaceProxyServiceConfig
+
+		Expect(service.Validate()).To(Succeed())
+	})
+
+	It("accepts a valid service", func() {
+		Expect((&files.SSHWorkspaceProxyServiceConfig{Type: "NodePort", NodePort: 30022}).Validate()).To(Succeed())
+	})
+
+	It("rejects an unknown service type", func() {
+		err := (&files.SSHWorkspaceProxyServiceConfig{Type: "ExternalName"}).Validate()
+
+		Expect(err).To(MatchError(ContainSubstring(`invalid codesphere.sshWorkspaceProxy.service.type "ExternalName"`)))
+	})
+
+	It("rejects a node port outside the port range", func() {
+		err := (&files.SSHWorkspaceProxyServiceConfig{NodePort: 70000}).Validate()
+
+		Expect(err).To(MatchError(ContainSubstring("invalid codesphere.sshWorkspaceProxy.service.nodePort 70000")))
+	})
+
+	It("creates the service block when ensuring it", func() {
+		config := &files.CodesphereConfig{}
+
+		config.EnsureSSHWorkspaceProxyService().Type = "ClusterIP"
+
+		Expect(config.SSHWorkspaceProxy.Service.Type).To(Equal("ClusterIP"))
+	})
+
+	It("keeps the configured service when ensuring it", func() {
+		config := &files.CodesphereConfig{SSHWorkspaceProxy: &files.SSHWorkspaceProxyConfig{
+			BaseDomain: "ssh.example.com",
+			Service:    &files.SSHWorkspaceProxyServiceConfig{NodePort: 31022},
+		}}
+
+		config.EnsureSSHWorkspaceProxyService().Type = "LoadBalancer"
+
+		Expect(config.SSHWorkspaceProxy.BaseDomain).To(Equal("ssh.example.com"))
+		Expect(config.SSHWorkspaceProxy.Service).To(Equal(&files.SSHWorkspaceProxyServiceConfig{Type: "LoadBalancer", NodePort: 31022}))
+	})
+})

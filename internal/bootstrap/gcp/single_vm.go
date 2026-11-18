@@ -174,6 +174,7 @@ func (b *GCPBootstrapper) singleVMConfig(config files.RootConfig) files.RootConf
 	config.Codesphere.CustomDomains.CNameBaseDomain = config.Codesphere.WorkspaceHostingBaseDomain
 	config.Cluster.Gateway.ServiceType = "ClusterIP"
 	config.Cluster.PublicGateway.ServiceType = "ClusterIP"
+	config.Codesphere.EnsureSSHWorkspaceProxyService().Type = "ClusterIP"
 	config.PcApps = util.DeepMergeMaps(config.PcApps, files.ChartValues{
 		"applications": map[string]any{
 			"ssh-workspace-proxy": map[string]any{
@@ -181,7 +182,6 @@ func (b *GCPBootstrapper) singleVMConfig(config files.RootConfig) files.RootConf
 				"valuesObject": map[string]any{
 					"service": map[string]any{
 						"enabled": true,
-						"type":    "ClusterIP",
 					},
 				},
 			},

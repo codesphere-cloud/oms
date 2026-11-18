@@ -108,6 +108,9 @@ type InitInstallConfigOpts struct {
 	CodesphereWorkspacePlanName            string
 	CodesphereWorkspacePlanMaxReplicas     int
 
+	SSHWorkspaceProxyServiceType     string
+	SSHWorkspaceProxyServiceNodePort int
+
 	CodesphereOpenBaoURI      string
 	CodesphereOpenBaoEngine   string
 	CodesphereOpenBaoUser     string
@@ -272,6 +275,12 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereWorkspaceHostingBaseDomain, "workspace-hosting-base-domain", "", "Workspace hosting base domain")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereCustomDomainsCNameBaseDomain, "custom-domains-cname-base-domain", "", "Custom domains CNAME base domain")
 	c.cmd.Flags().StringSliceVar(&c.Opts.CodesphereDNSServers, "dns-servers", []string{}, "DNS servers (comma-separated)")
+
+	// SSH workspace proxy
+	c.cmd.Flags().StringVar(&c.Opts.SSHWorkspaceProxyServiceType, "ssh-proxy-service-type", files.DefaultSSHWorkspaceProxyServiceType,
+		fmt.Sprintf("Kubernetes service type of the SSH workspace proxy (%s)", strings.Join(files.SSHWorkspaceProxyServiceTypes, ", ")))
+	c.cmd.Flags().IntVar(&c.Opts.SSHWorkspaceProxyServiceNodePort, "ssh-proxy-node-port", files.DefaultSSHWorkspaceProxyNodePort,
+		"Node port of the SSH workspace proxy service (ignored for ClusterIP)")
 
 	// OpenBao
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoURI, "openbao-uri", "", "URI for OpenBao (e.g., https://openbao.example.com)")
@@ -701,6 +710,10 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 	if len(c.Opts.CodesphereDNSServers) > 0 {
 		config.Codesphere.DNSServers = c.Opts.CodesphereDNSServers
 	}
+
+	sshProxyService := config.Codesphere.EnsureSSHWorkspaceProxyService()
+	sshProxyService.Type = c.Opts.SSHWorkspaceProxyServiceType
+	sshProxyService.NodePort = c.Opts.SSHWorkspaceProxyServiceNodePort
 
 	if c.Opts.CodesphereWorkspaceImageBomRef != "" {
 		if config.Codesphere.WorkspaceImages == nil {

@@ -198,7 +198,7 @@ var _ = Describe("Single VM configuration", func() {
 		Expect(uploadedConfig.Codesphere.PublicIP).To(Equal("192.0.2.13"))
 		service := uploadedConfig.PcApps["applications"].(map[string]any)["ssh-workspace-proxy"].(map[string]any)["valuesObject"].(map[string]any)["service"]
 		Expect(service).To(HaveKeyWithValue("port", 2222))
-		Expect(service).To(HaveKeyWithValue("type", "ClusterIP"))
+		Expect(uploadedConfig.Codesphere.SSHWorkspaceProxy.ServiceConfig().ServiceType()).To(Equal("ClusterIP"))
 	})
 
 	It("merges repeated config files in order and renders their secrets", func() {
@@ -231,8 +231,7 @@ var _ = Describe("Single VM configuration", func() {
 		Expect(config.Codesphere.CustomDomains.CNameBaseDomain).To(Equal("ws.example.com"))
 		Expect(config.Cluster.Gateway.ServiceType).To(Equal("ClusterIP"))
 		Expect(config.Cluster.PublicGateway.ServiceType).To(Equal("ClusterIP"))
-		service := config.PcApps["applications"].(map[string]any)["ssh-workspace-proxy"].(map[string]any)["valuesObject"].(map[string]any)["service"]
-		Expect(service).To(HaveKeyWithValue("type", "ClusterIP"))
+		Expect(config.Codesphere.SSHWorkspaceProxy.ServiceConfig().ServiceType()).To(Equal("ClusterIP"))
 	})
 
 	It("uses the VM address for every public DNS target", func() {

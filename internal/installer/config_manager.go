@@ -230,6 +230,10 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 		errors = append(errors, err.Error())
 	}
 
+	if err := g.Config.Codesphere.SSHWorkspaceProxy.ServiceConfig().Validate(); err != nil {
+		errors = append(errors, err.Error())
+	}
+
 	if g.Config.Codesphere.OpenBao != nil {
 		if g.Config.Codesphere.OpenBao.URI == "" {
 			errors = append(errors, "OpenBao URI is required when OpenBao integration is enabled")

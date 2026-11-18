@@ -134,8 +134,12 @@ func TestConfigureSharedExposure(t *testing.T) {
 	ssh := apps["ssh-workspace-proxy"].(map[string]any)
 
 	service := ssh["valuesObject"].(map[string]any)["service"].(map[string]any)
-	if service["type"] != "ClusterIP" || service["port"] != 22 {
+	if service["port"] != 22 {
 		t.Fatalf("unexpected SSH backend: %#v", service)
+	}
+
+	if serviceType := config.Codesphere.SSHWorkspaceProxy.ServiceConfig().ServiceType(); serviceType != "ClusterIP" {
+		t.Fatalf("SSH proxy service should be ClusterIP, got %q", serviceType)
 	}
 }
 

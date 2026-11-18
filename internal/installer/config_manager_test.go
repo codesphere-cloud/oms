@@ -355,6 +355,24 @@ var _ = Describe("ConfigManager", func() {
 			})
 		})
 
+		Context("ssh workspace proxy validation", func() {
+			It("should reject an invalid service type", func() {
+				configManager.Config.Codesphere.SSHWorkspaceProxy = &files.SSHWorkspaceProxyConfig{
+					Service: &files.SSHWorkspaceProxyServiceConfig{Type: "ExternalName"},
+				}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring("invalid codesphere.sshWorkspaceProxy.service.type")))
+			})
+
+			It("should accept a valid service", func() {
+				configManager.Config.Codesphere.SSHWorkspaceProxy = &files.SSHWorkspaceProxyConfig{
+					Service: &files.SSHWorkspaceProxyServiceConfig{Type: "NodePort", NodePort: 30022},
+				}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).ToNot(ContainElement(ContainSubstring("sshWorkspaceProxy")))
+			})
+		})
+
 		Context("openfga backups validation", func() {
 			It("should require destinationPath and endpointURL when enabled", func() {
 				configManager.Config.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{
