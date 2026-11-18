@@ -136,7 +136,6 @@ jobs:
             --profile minimal \
             --config config.yaml \
             --vault prod.vault.yaml \
-            --vault-type=plain \
             --domain="$BASE_DOMAIN" \
             --dc-id="$DC_ID" \
             --dc-name="$DC_NAME" \

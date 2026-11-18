@@ -50,6 +50,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 		mockGitHubClient *github.MockGitHubClient
 
 		bs *gcp.GCPBootstrapper
+
+		localVaults map[string][]byte
 	)
 
 	JustBeforeEach(func() {
@@ -78,6 +80,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 		icg = installer.NewMockInstallConfigManager(GinkgoT())
 		gc = gcp.NewMockGCPClientManager(GinkgoT())
 		fw = util.NewMockFileIO(GinkgoT())
+		localVaults = map[string][]byte{"": nil, "fake-secret": nil, "fake-secret-dc2": nil}
+		expectLocalVaults(fw, localVaults)
 		mockPortalClient = portal.NewMockPortal(GinkgoT())
 		mockGitHubClient = github.NewMockGitHubClient(GinkgoT())
 		stlog = bootstrap.NewStepLogger(false)
@@ -352,7 +356,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			projectID := "test-project-12345"
 
 			// EnsureSecrets
-			icg.EXPECT().LoadVaultFromUnecryptedFile("fake-secret").Return(nil)
+			icg.EXPECT().LoadVaultFromFileOrCreate("fake-secret").Return(nil)
 			icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 			// EnsureProject
@@ -434,10 +438,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 			nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(false)
 
 			// EncryptVault
-			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "cp /etc/codesphere/secrets/prod.vault.yaml{,.bak}").Return(nil)
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(cmd string) bool {
 				return strings.Contains(cmd, "sops --encrypt")
 			})).Return(nil)
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "rm -f /etc/codesphere/secrets/prod.vault.yaml.bak").Return(nil)
 
 			// EnsureDNSRecords
 			gc.EXPECT().EnsureDNSManagedZone(csEnv.DNSProjectID, "test-zone", "example.com.", mock.Anything).Return(nil)
@@ -916,7 +920,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 			It("uses existing when config file exists", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -926,7 +930,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("loads existing vault before existing config for templating", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -948,7 +952,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 		Describe("Invalid cases", func() {
 			It("returns error when config file exists but fails to load", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(fmt.Errorf("bad format"))
 
 				err := bs.EnsureInstallConfig()
@@ -972,7 +976,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureSecrets", func() {
 		Describe("Valid EnsureSecrets", func() {
 			It("loads existing secrets file", func() {
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 				err := bs.EnsureSecrets()
@@ -980,7 +984,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("skips when secrets file missing", func() {
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 				err := bs.EnsureSecrets()
@@ -988,9 +992,38 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 		})
 
+		Describe("with multiple data centers", func() {
+			BeforeEach(func() {
+				csEnv.MultiDC = true
+				// Keep the developer's own age keys out of the lookup.
+				GinkgoT().Setenv("XDG_CONFIG_HOME", GinkgoT().TempDir())
+				GinkgoT().Setenv("SOPS_AGE_KEY", "")
+				GinkgoT().Setenv("SOPS_AGE_KEY_FILE", "")
+			})
+
+			It("resolves the age key of an encrypted secondary vault on its own", func() {
+				localVaults["fake-secret-dc2"] = encryptedLocalVault
+
+				err := bs.EnsureSecrets()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to resolve age key for data center 2"))
+			})
+
+			It("does not inspect the secondary vault when recovering it from the jumpbox", func() {
+				csEnv.RecoverConfig = true
+				localVaults["fake-secret-dc2"] = encryptedLocalVault
+
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().GetVault().Return(&files.InstallVault{})
+
+				Expect(bs.EnsureSecrets()).To(Succeed())
+				Expect(fw.Calls).NotTo(ContainElement(HaveField("Arguments", ContainElement("fake-secret-dc2"))))
+			})
+		})
+
 		Describe("Invalid cases", func() {
 			It("returns error when secrets file load fails", func() {
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(fmt.Errorf("load error"))
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(fmt.Errorf("load error"))
 
 				err := bs.EnsureSecrets()
 				Expect(err).To(HaveOccurred())
@@ -2397,15 +2430,16 @@ var _ = Describe("GCP Bootstrapper", func() {
 	})
 
 	Describe("EncryptVault", func() {
-		Describe("Valid EncryptVault", func() {
-			It("encrypts vault using sops", func() {
-				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
-					return strings.HasPrefix(cmd, "cp ")
-				})).Return(nil)
+		const (
+			encryptCommand         = "sops --encrypt --age $(age-keygen -y /etc/codesphere/secrets/age_key.txt) --output /etc/codesphere/secrets/prod.vault.yaml.enc /etc/codesphere/secrets/prod.vault.yaml && mv /etc/codesphere/secrets/prod.vault.yaml.enc /etc/codesphere/secrets/prod.vault.yaml"
+			removeBackupCommand    = "rm -f /etc/codesphere/secrets/prod.vault.yaml.bak"
+			removePlaintextCommand = "rm -f /etc/codesphere/secrets/prod.vault.yaml /etc/codesphere/secrets/prod.vault.yaml.enc"
+		)
 
-				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
-					return strings.Contains(cmd, "sops --encrypt")
-				})).Return(nil)
+		Describe("Valid EncryptVault", func() {
+			It("encrypts the vault without keeping a plaintext backup", func() {
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", encryptCommand).Return(nil)
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", removeBackupCommand).Return(nil)
 
 				err := bs.EncryptVault()
 				Expect(err).NotTo(HaveOccurred())
@@ -2413,28 +2447,32 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 
 		Describe("Invalid cases", func() {
-			It("fails when backup vault command fails", func() {
-				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
-					return strings.HasPrefix(cmd, "cp ")
-				})).Return(fmt.Errorf("backup error"))
-
-				err := bs.EncryptVault()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed backup vault on jumpbox"))
-			})
-
-			It("fails when sops encrypt command fails", func() {
-				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
-					return strings.HasPrefix(cmd, "cp ")
-				})).Return(nil)
-
-				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
-					return strings.Contains(cmd, "sops --encrypt")
-				})).Return(fmt.Errorf("encrypt error"))
+			It("removes the plaintext vault when sops encrypt fails", func() {
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", encryptCommand).Return(fmt.Errorf("encrypt error"))
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", removePlaintextCommand).Return(nil)
 
 				err := bs.EncryptVault()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to encrypt vault on jumpbox"))
+			})
+
+			It("reports a plaintext vault that could not be removed after a failed encryption", func() {
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", encryptCommand).Return(fmt.Errorf("encrypt error"))
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", removePlaintextCommand).Return(fmt.Errorf("rm error"))
+
+				err := bs.EncryptVault()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to encrypt vault on jumpbox"))
+				Expect(err.Error()).To(ContainSubstring("failed to remove plaintext vault from jumpbox"))
+			})
+
+			It("keeps the encrypted vault when the old backup cannot be removed", func() {
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", encryptCommand).Return(nil)
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", removeBackupCommand).Return(fmt.Errorf("rm error"))
+
+				err := bs.EncryptVault()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to remove plaintext vault backup from jumpbox"))
 			})
 		})
 	})

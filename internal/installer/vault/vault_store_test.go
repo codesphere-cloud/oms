@@ -80,6 +80,23 @@ var _ = Describe("Vault stores", func() {
 		Expect(vaultType).To(Equal(vault.TypeSOPS))
 	})
 
+	// TypeAuto follows whatever format is already on disk, so a command that promises
+	// encrypted output would silently write a plaintext vault if a user could select it.
+	It("rejects the internal auto type from user facing entry points", func() {
+		_, err := vault.ParseType(string(vault.TypeAuto))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("unsupported vault type"))
+
+		_, err = vault.NewFromString(string(vault.TypeAuto), vault.Options{Path: filepath.Join(GinkgoT().TempDir(), "prod.vault.yaml")})
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("rejects an auto vault without a file path", func() {
+		_, err := vault.New(vault.TypeAuto, vault.Options{})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("requires a file path"))
+	})
+
 	It("validates file paths in the file-backed implementations", func() {
 		_, err := plain.New(plain.Options{})
 		Expect(err).To(HaveOccurred())

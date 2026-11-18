@@ -969,3 +969,44 @@ var _ = Describe("ConfigManager", func() {
 		})
 	})
 })
+
+// Bootstrap vault loading guards against "vault file prod.vault.yaml is SOPS-encrypted, but
+// vault type is plain", which broke bootstrapping with a vault from `oms init install-config`.
+var _ = Describe("Bootstrap vault loading", func() {
+	var (
+		vaultPath string
+		ageKey    string
+	)
+
+	BeforeEach(func() {
+		vaultPath, ageKey = writeVaultFile(GinkgoT().TempDir(), &files.InstallVault{Secrets: []files.SecretEntry{
+			{Name: "registryPassword", Fields: &files.SecretFields{Password: "ghcr-token"}},
+		}})
+	})
+
+	It("loads an existing SOPS-encrypted vault with the auto backend", func() {
+		manager, err := installer.NewAutoInstallConfigManager(ageKey)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(manager.LoadVaultFromFileOrCreate(vaultPath)).To(Succeed())
+		Expect(manager.GetVault().GetSecret("registryPassword").Fields.Password).To(Equal("ghcr-token"))
+	})
+
+	It("re-encrypts a loaded SOPS vault when it is written back", func() {
+		manager, err := installer.NewAutoInstallConfigManager(ageKey)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(manager.LoadVaultFromFileOrCreate(vaultPath)).To(Succeed())
+
+		manager.GetVault().SetSecret(files.SecretEntry{Name: "extra", Fields: &files.SecretFields{Password: "value"}})
+		Expect(manager.WriteVault(vaultPath, false)).To(Succeed())
+
+		raw, err := os.ReadFile(vaultPath)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(raw)).To(ContainSubstring("sops"))
+
+		reloaded, err := installer.NewAutoInstallConfigManager(ageKey)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(reloaded.LoadVaultFromFileOrCreate(vaultPath)).To(Succeed())
+		Expect(reloaded.GetVault().GetSecret("extra").Fields.Password).To(Equal("value"))
+	})
+})
