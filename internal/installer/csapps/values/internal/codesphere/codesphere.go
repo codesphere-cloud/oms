@@ -53,12 +53,6 @@ type VPN struct {
 	LeftPeerID string `yaml:"leftPeerId,omitempty"`
 }
 
-// SSHWorkspaceProxy is the SSH proxy into workspaces. Its service is configured through the
-// pc-applications values instead.
-type SSHWorkspaceProxy struct {
-	BaseDomain string `yaml:"baseDomain,omitempty"`
-}
-
 // TLSCertificate is the custom certificate Codesphere serves. Its key is the vault entry KeyName.
 type TLSCertificate struct {
 	Cert    string `yaml:"cert"`
@@ -157,12 +151,4 @@ func tlsCertificateValues(certificate *files.CustomCertificate) *TLSCertificate 
 	}
 
 	return &TLSCertificate{Cert: certificate.Cert, KeyName: files.SecretCustomCertificateKey}
-}
-
-func sshWorkspaceProxyValues(conf *files.SSHWorkspaceProxyConfig) *SSHWorkspaceProxy {
-	if conf == nil {
-		return nil
-	}
-
-	return &SSHWorkspaceProxy{BaseDomain: conf.BaseDomain}
 }
