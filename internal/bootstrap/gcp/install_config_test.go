@@ -448,13 +448,11 @@ var _ = Describe("Installconfig & Secrets", func() {
 				applications := bs.Env.InstallConfig.PcApps["applications"].(map[string]interface{})
 				sshProxy := applications["ssh-workspace-proxy"].(map[string]interface{})
 				Expect(sshProxy["enabled"]).To(Equal(true))
-				sshProxyValues := sshProxy["valuesObject"].(map[string]interface{})
-				sshProxyService := sshProxyValues["service"].(map[string]interface{})
-				Expect(sshProxyService["enabled"]).To(Equal(true))
-				Expect(bs.Env.InstallConfig.Codesphere.SSHWorkspaceProxy.ServiceConfig().ServiceType()).To(Equal("LoadBalancer"))
-				Expect(sshProxyService["loadBalancerIP"]).To(Equal("3.3.3.3"))
-				sshProxyAnnotations := sshProxyService["annotations"].(map[string]interface{})
-				Expect(sshProxyAnnotations["cloud.google.com/load-balancer-ipv4"]).To(Equal("3.3.3.3"))
+				Expect(bs.Env.InstallConfig.Codesphere.SSHWorkspaceProxy.ServiceConfig()).To(Equal(&files.SSHWorkspaceProxyServiceConfig{
+					Type:           "LoadBalancer",
+					LoadBalancerIP: "3.3.3.3",
+					Annotations:    map[string]string{"cloud.google.com/load-balancer-ipv4": "3.3.3.3"},
+				}))
 
 				Expect(applications["kubevirt-operator"].(map[string]interface{})["enabled"]).To(Equal(true))
 				Expect(applications["kubevirt-cr"].(map[string]interface{})["enabled"]).To(Equal(true))
@@ -546,6 +544,25 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(bs.Env.InstallConfig.Datacenter.Name).To(Equal("staging"))
+			})
+			It("keeps configured SSH proxy annotations next to the reserved IP", func() {
+				csEnv.SSHProxyIP = "3.3.3.3"
+				csEnv.InstallConfig.Codesphere.SSHWorkspaceProxy = &files.SSHWorkspaceProxyConfig{
+					Service: &files.SSHWorkspaceProxyServiceConfig{Annotations: map[string]string{"team": "platform"}},
+				}
+
+				icg.EXPECT().GenerateSecrets().Return(nil)
+				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+				Expect(bs.UpdateInstallConfig()).To(Succeed())
+
+				Expect(bs.Env.InstallConfig.Codesphere.SSHWorkspaceProxy.ServiceConfig().Annotations).To(Equal(map[string]string{
+					"team":                                "platform",
+					"cloud.google.com/load-balancer-ipv4": "3.3.3.3",
+				}))
 			})
 			It("sets the codesphere registry independently of the registry server", func() {
 				csEnv.ContainerRegistryURL = "ghcr.io"

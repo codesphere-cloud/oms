@@ -179,11 +179,6 @@ func (b *GCPBootstrapper) singleVMConfig(config files.RootConfig) files.RootConf
 		"applications": map[string]any{
 			"ssh-workspace-proxy": map[string]any{
 				"enabled": true,
-				"valuesObject": map[string]any{
-					"service": map[string]any{
-						"enabled": true,
-					},
-				},
 			},
 		},
 	})

@@ -41,20 +41,51 @@ var _ = Describe("SSHWorkspaceProxyPcAppsValues", func() {
 		Expect(pcapps.SSHWorkspaceProxyPcAppsValues(configWith(&files.SSHWorkspaceProxyConfig{BaseDomain: "ssh.example.com"}))).To(BeNil())
 	})
 
-	It("defaults an empty service to a LoadBalancer on node port 30022", func() {
+	It("defaults an empty service to a local-traffic LoadBalancer on node port 30022", func() {
 		values := pcapps.SSHWorkspaceProxyPcAppsValues(configWith(&files.SSHWorkspaceProxyConfig{
 			Service: &files.SSHWorkspaceProxyServiceConfig{},
 		}))
 
-		Expect(serviceValues(values)).To(Equal(files.ChartValues{"type": "LoadBalancer", "nodePort": 30022}))
+		Expect(serviceValues(values)).To(Equal(files.ChartValues{
+			"enabled":               true,
+			"type":                  "LoadBalancer",
+			"nodePort":              30022,
+			"externalTrafficPolicy": "Local",
+		}))
 	})
 
-	It("uses the configured type and node port", func() {
+	It("pins the load balancer IP and adds the configured annotations", func() {
+		values := pcapps.SSHWorkspaceProxyPcAppsValues(configWith(&files.SSHWorkspaceProxyConfig{
+			Service: &files.SSHWorkspaceProxyServiceConfig{
+				LoadBalancerIP: "203.0.113.22",
+				Annotations:    map[string]string{"cloud.google.com/load-balancer-ipv4": "203.0.113.22"},
+			},
+		}))
+
+		Expect(serviceValues(values)).To(Equal(files.ChartValues{
+			"enabled":               true,
+			"type":                  "LoadBalancer",
+			"nodePort":              30022,
+			"externalTrafficPolicy": "Local",
+			"loadBalancerIP":        "203.0.113.22",
+			"annotations":           files.ChartValues{"cloud.google.com/load-balancer-ipv4": "203.0.113.22"},
+		}))
+	})
+
+	It("uses the configured type and node port without load balancer settings", func() {
 		values := pcapps.SSHWorkspaceProxyPcAppsValues(configWith(&files.SSHWorkspaceProxyConfig{
 			Service: &files.SSHWorkspaceProxyServiceConfig{Type: "NodePort", NodePort: 31022},
 		}))
 
-		Expect(serviceValues(values)).To(Equal(files.ChartValues{"type": "NodePort", "nodePort": 31022}))
+		Expect(serviceValues(values)).To(Equal(files.ChartValues{"enabled": true, "type": "NodePort", "nodePort": 31022}))
+	})
+
+	It("adds the configured annotations to a service without a load balancer", func() {
+		values := pcapps.SSHWorkspaceProxyPcAppsValues(configWith(&files.SSHWorkspaceProxyConfig{
+			Service: &files.SSHWorkspaceProxyServiceConfig{Type: "NodePort", Annotations: map[string]string{"team": "platform"}},
+		}))
+
+		Expect(serviceValues(values)).To(HaveKeyWithValue("annotations", files.ChartValues{"team": "platform"}))
 	})
 
 	// Kubernetes rejects a nodePort on a ClusterIP service.
@@ -63,6 +94,6 @@ var _ = Describe("SSHWorkspaceProxyPcAppsValues", func() {
 			Service: &files.SSHWorkspaceProxyServiceConfig{Type: "ClusterIP", NodePort: 30022},
 		}))
 
-		Expect(serviceValues(values)).To(Equal(files.ChartValues{"type": "ClusterIP"}))
+		Expect(serviceValues(values)).To(Equal(files.ChartValues{"enabled": true, "type": "ClusterIP"}))
 	})
 })

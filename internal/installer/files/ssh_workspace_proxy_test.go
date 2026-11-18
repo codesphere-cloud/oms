@@ -30,6 +30,14 @@ var _ = Describe("SSH workspace proxy service", func() {
 		Expect((&files.SSHWorkspaceProxyServiceConfig{Type: "ClusterIP"}).UsesNodePort()).To(BeFalse())
 	})
 
+	It("is a load balancer by default", func() {
+		Expect((&files.SSHWorkspaceProxyServiceConfig{}).IsLoadBalancer()).To(BeTrue())
+	})
+
+	It("is not a load balancer for NodePort", func() {
+		Expect((&files.SSHWorkspaceProxyServiceConfig{Type: "NodePort"}).IsLoadBalancer()).To(BeFalse())
+	})
+
 	It("has no service when the proxy block is unset", func() {
 		var config *files.SSHWorkspaceProxyConfig
 
@@ -56,6 +64,22 @@ var _ = Describe("SSH workspace proxy service", func() {
 		err := (&files.SSHWorkspaceProxyServiceConfig{NodePort: 70000}).Validate()
 
 		Expect(err).To(MatchError(ContainSubstring("invalid codesphere.sshWorkspaceProxy.service.nodePort 70000")))
+	})
+
+	It("accepts a load balancer IP for a LoadBalancer", func() {
+		Expect((&files.SSHWorkspaceProxyServiceConfig{LoadBalancerIP: "203.0.113.22"}).Validate()).To(Succeed())
+	})
+
+	It("rejects a load balancer IP that is not an IP", func() {
+		err := (&files.SSHWorkspaceProxyServiceConfig{LoadBalancerIP: "not-an-ip"}).Validate()
+
+		Expect(err).To(MatchError(ContainSubstring(`invalid codesphere.sshWorkspaceProxy.service.loadBalancerIP "not-an-ip"`)))
+	})
+
+	It("rejects a load balancer IP for a service without a load balancer", func() {
+		err := (&files.SSHWorkspaceProxyServiceConfig{Type: "NodePort", LoadBalancerIP: "203.0.113.22"}).Validate()
+
+		Expect(err).To(MatchError(ContainSubstring("loadBalancerIP requires service type LoadBalancer, not NodePort")))
 	})
 
 	It("creates the service block when ensuring it", func() {

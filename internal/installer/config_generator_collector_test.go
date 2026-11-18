@@ -113,7 +113,7 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 		It("should preserve an existing SSH workspace proxy service as prompt default", func() {
 			Expect(manager.ApplyProfile(installer.PROFILE_DEV)).To(Succeed())
 			manager.GetInstallConfig().Codesphere.SSHWorkspaceProxy = &files.SSHWorkspaceProxyConfig{
-				Service: &files.SSHWorkspaceProxyServiceConfig{Type: "NodePort", NodePort: 31022},
+				Service: &files.SSHWorkspaceProxyServiceConfig{Type: "LoadBalancer", NodePort: 31022, LoadBalancerIP: "203.0.113.22"},
 			}
 
 			// An empty stdin resolves every prompt to its default value.
@@ -126,7 +126,7 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 			DeferCleanup(func() { os.Stdin = oldStdin; Expect(stdin.Close()).To(Succeed()) })
 
 			Expect(manager.CollectInteractively(context.Background())).To(Succeed())
-			Expect(manager.GetInstallConfig().Codesphere.SSHWorkspaceProxy.ServiceConfig()).To(Equal(&files.SSHWorkspaceProxyServiceConfig{Type: "NodePort", NodePort: 31022}))
+			Expect(manager.GetInstallConfig().Codesphere.SSHWorkspaceProxy.ServiceConfig()).To(Equal(&files.SSHWorkspaceProxyServiceConfig{Type: "LoadBalancer", NodePort: 31022, LoadBalancerIP: "203.0.113.22"}))
 		})
 
 		It("should preserve the existing Codesphere public IP as prompt default", func() {

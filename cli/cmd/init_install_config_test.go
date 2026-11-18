@@ -183,6 +183,25 @@ var _ = Describe("UpdateConfigFromOpts", func() {
 		Expect(config.Codesphere.SSHWorkspaceProxy.ServiceConfig()).To(Equal(&files.SSHWorkspaceProxyServiceConfig{Type: "NodePort", NodePort: 31022}))
 	})
 
+	It("sets the SSH workspace proxy load balancer IP and annotations", func() {
+		config := &files.RootConfig{}
+		command := &InitInstallConfigCmd{Opts: &InitInstallConfigOpts{
+			SSHWorkspaceProxyServiceType:           "LoadBalancer",
+			SSHWorkspaceProxyServiceNodePort:       30022,
+			SSHWorkspaceProxyServiceLoadBalancerIP: "203.0.113.22",
+			SSHWorkspaceProxyServiceAnnotations:    map[string]string{"metallb.universe.tf/loadBalancerIPs": "203.0.113.22"},
+		}}
+
+		command.updateConfigFromOpts(config, &files.InstallVault{})
+
+		Expect(config.Codesphere.SSHWorkspaceProxy.ServiceConfig()).To(Equal(&files.SSHWorkspaceProxyServiceConfig{
+			Type:           "LoadBalancer",
+			NodePort:       30022,
+			LoadBalancerIP: "203.0.113.22",
+			Annotations:    map[string]string{"metallb.universe.tf/loadBalancerIPs": "203.0.113.22"},
+		}))
+	})
+
 	It("keeps the SSH workspace proxy base domain when setting its service", func() {
 		config := &files.RootConfig{Codesphere: files.CodesphereConfig{
 			SSHWorkspaceProxy: &files.SSHWorkspaceProxyConfig{BaseDomain: "ssh.example.com"},

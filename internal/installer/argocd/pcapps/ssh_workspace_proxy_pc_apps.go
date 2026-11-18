@@ -17,18 +17,45 @@ func SSHWorkspaceProxyPcAppsValues(config *files.RootConfig) files.ChartValues {
 		return nil
 	}
 
-	serviceValues := files.ChartValues{"type": service.ServiceType()}
-	if service.UsesNodePort() {
-		serviceValues["nodePort"] = service.ServiceNodePort()
-	}
-
 	return files.ChartValues{
 		"applications": files.ChartValues{
 			"ssh-workspace-proxy": files.ChartValues{
 				"valuesObject": files.ChartValues{
-					"service": serviceValues,
+					"service": sshWorkspaceProxyServiceValues(service),
 				},
 			},
 		},
 	}
+}
+
+// sshWorkspaceProxyServiceValues always enables the service. A load balancer keeps the client
+// source IP (externalTrafficPolicy Local) and may request a fixed IP.
+func sshWorkspaceProxyServiceValues(service *files.SSHWorkspaceProxyServiceConfig) files.ChartValues {
+	values := files.ChartValues{
+		"enabled": true,
+		"type":    service.ServiceType(),
+	}
+
+	if service.UsesNodePort() {
+		values["nodePort"] = service.ServiceNodePort()
+	}
+
+	if service.IsLoadBalancer() {
+		values["externalTrafficPolicy"] = "Local"
+	}
+
+	if service.IsLoadBalancer() && service.LoadBalancerIP != "" {
+		values["loadBalancerIP"] = service.LoadBalancerIP
+	}
+
+	if len(service.Annotations) > 0 {
+		annotations := files.ChartValues{}
+		for key, value := range service.Annotations {
+			annotations[key] = value
+		}
+
+		values["annotations"] = annotations
+	}
+
+	return values
 }

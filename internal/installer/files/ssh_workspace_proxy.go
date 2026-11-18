@@ -5,6 +5,7 @@ package files
 
 import (
 	"fmt"
+	"net"
 	"slices"
 )
 
@@ -13,6 +14,8 @@ const (
 	DefaultSSHWorkspaceProxyServiceType = "LoadBalancer"
 	// DefaultSSHWorkspaceProxyNodePort is the node port of the SSH workspace proxy when none is configured.
 	DefaultSSHWorkspaceProxyNodePort = 30022
+
+	loadBalancerServiceType = "LoadBalancer"
 
 	maxPort = 65535
 )
@@ -44,7 +47,12 @@ func (s *SSHWorkspaceProxyServiceConfig) UsesNodePort() bool {
 	return s.ServiceType() != "ClusterIP"
 }
 
-// Validate checks the service type and node port.
+// IsLoadBalancer reports whether the service is exposed through a load balancer.
+func (s *SSHWorkspaceProxyServiceConfig) IsLoadBalancer() bool {
+	return s.ServiceType() == loadBalancerServiceType
+}
+
+// Validate checks the service type, node port and load balancer IP.
 func (s *SSHWorkspaceProxyServiceConfig) Validate() error {
 	if s == nil {
 		return nil
@@ -56,6 +64,22 @@ func (s *SSHWorkspaceProxyServiceConfig) Validate() error {
 
 	if s.NodePort < 0 || s.NodePort > maxPort {
 		return fmt.Errorf("invalid codesphere.sshWorkspaceProxy.service.nodePort %d (must be between 1 and %d)", s.NodePort, maxPort)
+	}
+
+	return s.validateLoadBalancerIP()
+}
+
+func (s *SSHWorkspaceProxyServiceConfig) validateLoadBalancerIP() error {
+	if s.LoadBalancerIP == "" {
+		return nil
+	}
+
+	if !s.IsLoadBalancer() {
+		return fmt.Errorf("codesphere.sshWorkspaceProxy.service.loadBalancerIP requires service type %s, not %s", loadBalancerServiceType, s.ServiceType())
+	}
+
+	if net.ParseIP(s.LoadBalancerIP) == nil {
+		return fmt.Errorf("invalid codesphere.sshWorkspaceProxy.service.loadBalancerIP %q", s.LoadBalancerIP)
 	}
 
 	return nil

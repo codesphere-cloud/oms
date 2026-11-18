@@ -364,6 +364,14 @@ var _ = Describe("ConfigManager", func() {
 				Expect(errors).To(ContainElement(ContainSubstring("invalid codesphere.sshWorkspaceProxy.service.type")))
 			})
 
+			It("should reject a load balancer IP for a NodePort service", func() {
+				configManager.Config.Codesphere.SSHWorkspaceProxy = &files.SSHWorkspaceProxyConfig{
+					Service: &files.SSHWorkspaceProxyServiceConfig{Type: "NodePort", LoadBalancerIP: "203.0.113.22"},
+				}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring("loadBalancerIP requires service type LoadBalancer")))
+			})
+
 			It("should accept a valid service", func() {
 				configManager.Config.Codesphere.SSHWorkspaceProxy = &files.SSHWorkspaceProxyConfig{
 					Service: &files.SSHWorkspaceProxyServiceConfig{Type: "NodePort", NodePort: 30022},

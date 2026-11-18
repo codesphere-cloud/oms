@@ -476,10 +476,19 @@ func (g *InstallConfig) collectSSHWorkspaceProxyConfig(prompter prompt.Prompter)
 
 	if !service.UsesNodePort() {
 		service.NodePort = 0
+		service.LoadBalancerIP = ""
+
 		return
 	}
 
 	service.NodePort = g.collectInt(prompter, "SSH workspace proxy node port", service.ServiceNodePort())
+
+	if !service.IsLoadBalancer() {
+		service.LoadBalancerIP = ""
+		return
+	}
+
+	service.LoadBalancerIP = g.collectString(prompter, "SSH workspace proxy load balancer IP (empty to let the load balancer choose)", service.LoadBalancerIP)
 }
 
 func (g *InstallConfig) collectOpenfgaBackupsConfig(prompter prompt.Prompter) {

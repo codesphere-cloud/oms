@@ -47,7 +47,7 @@ func configureSharedExposure(config *files.RootConfig) {
 				"enabled": true,
 				"valuesObject": map[string]any{
 					"replicas": 1,
-					"service":  map[string]any{"enabled": true, "port": 22},
+					"service":  map[string]any{"port": 22},
 				},
 			},
 		},
