@@ -15,7 +15,7 @@ import (
 )
 
 var _ = Describe("InstallerChartsPcAppsValues", func() {
-	allCharts := []string{pcapps.MsBackendS3, pcapps.Rgw, pcapps.RgwLoadBalancer}
+	allCharts := []string{pcapps.MsBackendS3, pcapps.Rgw, pcapps.RgwLoadBalancer, pcapps.PostgresOperator, pcapps.BarmanCloudPlugin}
 
 	ceph := func(ips ...string) files.CephConfig {
 		if len(ips) == 0 {
@@ -37,7 +37,10 @@ var _ = Describe("InstallerChartsPcAppsValues", func() {
 	}
 
 	valuesOf := func(config *files.RootConfig, skipped ...string) files.ChartValues {
-		return pcapps.InstallerChartsPcAppsValues(config, skipped)
+		values, err := pcapps.InstallerChartsPcAppsValues(config, skipped, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		return values
 	}
 	application := func(config *files.RootConfig, chart string) files.ChartValues {
 		applications, _ := valuesOf(config)["applications"].(files.ChartValues)
@@ -181,8 +184,8 @@ var _ = Describe("InstallerChartsPcAppsValues", func() {
 		})
 
 		It("turns off the charts of a step the run skips", func() {
-			Expect(turnedOff(withRgw(), installer.SetUpClusterStep)).To(Equal([]string{pcapps.Rgw, pcapps.RgwLoadBalancer}))
-			Expect(turnedOff(withRgw(), installer.MsBackendsStep)).To(Equal([]string{pcapps.MsBackendS3}))
+			Expect(turnedOff(withRgw(), installer.SetUpClusterStep)).To(Equal([]string{pcapps.PostgresOperator, pcapps.Rgw, pcapps.RgwLoadBalancer}))
+			Expect(turnedOff(withRgw(), installer.MsBackendsStep)).To(Equal([]string{pcapps.BarmanCloudPlugin, pcapps.MsBackendS3}))
 		})
 
 		It("leaves the enablement of a chart the config asks for to the pc-applications default", func() {

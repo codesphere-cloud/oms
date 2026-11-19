@@ -4,21 +4,27 @@
 package pcapps
 
 import (
+	"fmt"
+
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
 // Each name is the key of the chart under `applications` in the pc-applications values.
 const (
-	MsBackendS3     = "ms-backend-s3"
-	Rgw             = "rgw"
-	RgwLoadBalancer = "rgw-load-balancer"
+	MsBackendS3       = "ms-backend-s3"
+	Rgw               = "rgw"
+	RgwLoadBalancer   = "rgw-load-balancer"
+	PostgresOperator  = "postgres-operator"
+	BarmanCloudPlugin = "barman-cloud-plugin"
 )
 
 // InstallerChartsPcAppsValues returns the pc-applications values of the charts the PC installer
 // installs: `enabled: false` for a chart the config does not ask for or whose step skipSteps or
 // operations.skip skips, otherwise the chart's values with `enabled` left to the pc-applications default.
-func InstallerChartsPcAppsValues(config *files.RootConfig, skipSteps []string) files.ChartValues {
+// The images of the charts come from packageBom, which may be nil to leave the chart defaults.
+func InstallerChartsPcAppsValues(config *files.RootConfig, skipSteps []string, packageBom *bom.Config) (files.ChartValues, error) {
 	msBackendsRuns := !installer.IsStepSkipped(*config, skipSteps, installer.MsBackendsStep)
 	setUpClusterRuns := !installer.IsStepSkipped(*config, skipSteps, installer.SetUpClusterStep)
 
@@ -27,7 +33,31 @@ func InstallerChartsPcAppsValues(config *files.RootConfig, skipSteps []string) f
 	setApplication(applications, Rgw, setUpClusterRuns && rgwInstalled(config), rgwValues(config))
 	setApplication(applications, RgwLoadBalancer, setUpClusterRuns && rgwLoadBalancerInstalled(config), rgwLoadBalancerValues(config))
 
-	return files.ChartValues{"applications": applications}
+	postgresOperatorRuns := setUpClusterRuns && postgresOperatorInstalled(config)
+	barmanCloudPluginRuns := msBackendsRuns && barmanCloudPluginInstalled(config)
+
+	// The values of an app the run does not install are not derived, so a BOM image they cannot be
+	// built from cannot fail a run that never uses it.
+	var postgresOperator, barmanCloudPlugin files.ChartValues
+
+	if postgresOperatorRuns {
+		var err error
+		if postgresOperator, err = postgresOperatorValues(config, packageBom); err != nil {
+			return nil, fmt.Errorf("configuring %s application: %w", PostgresOperator, err)
+		}
+	}
+
+	if barmanCloudPluginRuns {
+		var err error
+		if barmanCloudPlugin, err = barmanCloudPluginValues(config, packageBom); err != nil {
+			return nil, fmt.Errorf("configuring %s application: %w", BarmanCloudPlugin, err)
+		}
+	}
+
+	setApplication(applications, PostgresOperator, postgresOperatorRuns, postgresOperator)
+	setApplication(applications, BarmanCloudPlugin, barmanCloudPluginRuns, barmanCloudPlugin)
+
+	return files.ChartValues{"applications": applications}, nil
 }
 
 // setApplication sets the entry of a chart: `enabled: false` when the run does not install it,
