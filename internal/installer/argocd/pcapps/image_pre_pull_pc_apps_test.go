@@ -52,7 +52,7 @@ var _ = Describe("ImagePrePullPcAppsValues", func() {
 
 		return &bom.Config{Components: map[string]bom.ComponentConfig{
 			"codesphere":      {ContainerImages: images},
-			"pc-applications": pcAppsChart("0.442.0"),
+			"pc-applications": pcAppsChart("0.488.0"),
 		}}
 	}
 
@@ -171,7 +171,7 @@ var _ = Describe("ImagePrePullPcAppsValues", func() {
 
 	It("returns nil when the pc-applications chart in the BOM is too old", func() {
 		bomConfig := testBOM(nil)
-		bomConfig.Components["pc-applications"] = pcAppsChart("0.441.0")
+		bomConfig.Components["pc-applications"] = pcAppsChart("0.487.0")
 
 		Expect(pcapps.ImagePrePullPcAppsValues(testConfig(), bomConfig)).To(BeNil())
 	})

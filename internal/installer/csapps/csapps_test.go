@@ -283,11 +283,11 @@ var _ = Describe("Install", func() {
 		}
 
 		It("pc-applications has the app -> turns off the pre-pull of the release", func() {
-			Expect(at(installWithPcApps(prePullConfig(), "0.442.0"), "global", "prePullImages")).To(BeFalse())
+			Expect(at(installWithPcApps(prePullConfig(), "0.488.0"), "global", "prePullImages")).To(BeFalse())
 		})
 
 		It("pc-applications is too old for the app -> keeps the pre-pull of the release", func() {
-			Expect(at(installWithPcApps(prePullConfig(), "0.441.0"), "global", "prePullImages")).To(BeTrue())
+			Expect(at(installWithPcApps(prePullConfig(), "0.487.0"), "global", "prePullImages")).To(BeTrue())
 		})
 
 		It("pcApps disables the app -> keeps the pre-pull of the release", func() {
@@ -296,11 +296,11 @@ var _ = Describe("Install", func() {
 				"applications": files.ChartValues{"image-pre-pull": files.ChartValues{"enabled": false}},
 			}
 
-			Expect(at(installWithPcApps(cfg, "0.442.0"), "global", "prePullImages")).To(BeTrue())
+			Expect(at(installWithPcApps(cfg, "0.488.0"), "global", "prePullImages")).To(BeTrue())
 		})
 
 		It("config turns pre-pull off -> stays off", func() {
-			Expect(at(installWithPcApps(fullConfig("pr-1"), "0.442.0"), "global", "prePullImages")).To(BeFalse())
+			Expect(at(installWithPcApps(fullConfig("pr-1"), "0.488.0"), "global", "prePullImages")).To(BeFalse())
 		})
 	})
 })

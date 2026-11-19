@@ -45,7 +45,7 @@ func prePullBOM() *bom.Config {
 	return &bom.Config{Components: map[string]bom.ComponentConfig{
 		"codesphere": {ContainerImages: images},
 		"pc-applications": {Files: map[string]bom.FileRef{
-			"chart": {OciRef: "ghcr.io/codesphere-cloud/charts/pc-applications:0.442.0"},
+			"chart": {OciRef: "ghcr.io/codesphere-cloud/charts/pc-applications:0.488.0"},
 		}},
 	}}
 }

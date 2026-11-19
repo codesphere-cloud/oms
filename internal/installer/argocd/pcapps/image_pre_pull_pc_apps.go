@@ -26,7 +26,7 @@ import (
 // imagePrePullMinChartVersion is the first pc-applications chart version with the image-pre-pull
 // application. OMS also installs older packages, and an application the chart does not know breaks the
 // sync. The chart's values are an OCI artifact OMS does not load, so the BOM's chart version is checked.
-const imagePrePullMinChartVersion = "0.442.0"
+const imagePrePullMinChartVersion = "0.488.0"
 
 const pcAppsChart = "pc-applications"
 
