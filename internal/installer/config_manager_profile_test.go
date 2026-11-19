@@ -81,6 +81,81 @@ var _ = Describe("ConfigManagerProfile", func() {
 			})
 		})
 
+		Context("with prod profile", func() {
+			It("runs the critical Codesphere services with two replicas", func() {
+				Expect(manager.ApplyProfile(installer.PROFILE_PROD)).To(Succeed())
+
+				config := manager.GetInstallConfig()
+				Expect(getServiceOverride(config, "auth_service")).To(Equal(map[string]any{"replicas": 2}))
+				Expect(getServiceOverride(config, "deployment_service")).To(Equal(map[string]any{"replicas": 2}))
+				Expect(getServiceOverride(config, "public_api_service")).To(Equal(map[string]any{"replicas": 2}))
+				Expect(getServiceOverride(config, "team_service")).To(Equal(map[string]any{"replicas": 2}))
+				Expect(getServiceOverride(config, "workspace_service")).To(Equal(map[string]any{"replicas": 2}))
+			})
+
+			It("leaves the replicas of the services without owner sign-off to the chart", func() {
+				Expect(manager.ApplyProfile(installer.PROFILE_PROD)).To(Succeed())
+
+				global := MustMap[any](manager.GetInstallConfig().Codesphere.Override["global"])
+				Expect(global).NotTo(HaveKey("frontendGateway"))
+				Expect(global["services"]).NotTo(HaveKey("workspace_proxy"))
+				Expect(global["services"]).NotTo(HaveKey("ide_service"))
+			})
+
+			It("keeps replica counts set in the config", func() {
+				manager.GetInstallConfig().Codesphere.Override = map[string]any{
+					"global": map[string]any{
+						"services": map[string]any{
+							"team_service": map[string]any{"replicas": 1},
+							"auth_service": map[string]any{"replicas": 3, "requests": map[string]any{"cpu": "100m"}},
+						},
+					},
+				}
+
+				Expect(manager.ApplyProfile(installer.PROFILE_PROD)).To(Succeed())
+
+				config := manager.GetInstallConfig()
+				Expect(getServiceOverride(config, "team_service")).To(Equal(map[string]any{"replicas": 1}))
+				Expect(getServiceOverride(config, "auth_service")).To(Equal(map[string]any{"replicas": 3, "requests": map[string]any{"cpu": "100m"}}))
+				Expect(getServiceOverride(config, "workspace_service")).To(Equal(map[string]any{"replicas": 2}))
+			})
+
+			It("does not configure Kyverno", func() {
+				Expect(manager.ApplyProfile(installer.PROFILE_PROD)).To(Succeed())
+
+				Expect(manager.GetInstallConfig().Cluster.Kyverno).To(BeNil())
+			})
+		})
+
+		Context("kyverno-policies on the single-replica profiles", func() {
+			It("keeps the PDB policy in Audit mode for dev without changing Kyverno's enablement", func() {
+				Expect(manager.ApplyProfile(installer.PROFILE_DEV)).To(Succeed())
+
+				config := manager.GetInstallConfig()
+				Expect(config.Cluster.Kyverno.Enabled).To(BeNil())
+				Expect(getKyvernoPdbPolicy(config)).To(HaveKeyWithValue("failureAction", "Audit"))
+			})
+
+			It("keeps the PDB policy in Audit mode for minimal", func() {
+				Expect(manager.ApplyProfile(installer.PROFILE_MINIMAL)).To(Succeed())
+
+				Expect(getKyvernoPdbPolicy(manager.GetInstallConfig())).To(HaveKeyWithValue("failureAction", "Audit"))
+			})
+
+			It("keeps a failureAction and enablement set in the config", func() {
+				manager.GetInstallConfig().Cluster.Kyverno = &files.KyvernoConfig{
+					Enabled:          new(false),
+					PoliciesOverride: map[string]any{"pdbPolicy": map[string]any{"failureAction": "Enforce"}},
+				}
+
+				Expect(manager.ApplyProfile(installer.PROFILE_DEV)).To(Succeed())
+
+				config := manager.GetInstallConfig()
+				Expect(config.Cluster.Kyverno.Enabled).To(HaveValue(BeFalse()))
+				Expect(getKyvernoPdbPolicy(config)).To(HaveKeyWithValue("failureAction", "Enforce"))
+			})
+		})
+
 		Context("with unknown profile", func() {
 			It("should return error for unknown profile", func() {
 				err := manager.ApplyProfile("unknown")
@@ -247,7 +322,7 @@ var _ = Describe("ConfigManagerProfile", func() {
 				Expect(prodManager.GetInstallConfig().Cluster.Monitoring.Loki.Enabled).To(BeTrue())
 				Expect(prodManager.GetInstallConfig().Cluster.Monitoring.Grafana.Enabled).To(BeTrue())
 				Expect(prodManager.GetInstallConfig().Cluster.Monitoring.GrafanaAlloy.Enabled).To(BeTrue())
-				Expect(prodManager.GetInstallConfig().Codesphere.Override).To(BeNil())
+				Expect(getServiceOverride(prodManager.GetInstallConfig(), "auth_service")).To(Equal(map[string]any{"replicas": 2}))
 			})
 
 			It("should have the expected default workspace plans", func() {
@@ -289,6 +364,14 @@ var _ = Describe("ConfigManagerProfile", func() {
 		})
 	})
 })
+
+func getServiceOverride(config *files.RootConfig, service string) map[string]any {
+	return MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])[service])
+}
+
+func getKyvernoPdbPolicy(config *files.RootConfig) map[string]any {
+	return MustMap[any](config.Cluster.Kyverno.PoliciesOverride["pdbPolicy"])
+}
 
 func getAuthServiceRequests(config *files.RootConfig) map[string]string {
 	authService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["auth_service"])

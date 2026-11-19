@@ -356,7 +356,7 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	}
 
 	dc.InstallConfig.Cluster.Kyverno = &files.KyvernoConfig{
-		Enabled: false,
+		Enabled: new(false),
 	}
 
 	dc.InstallConfig.Cluster.Gateway.ServiceType = "LoadBalancer"

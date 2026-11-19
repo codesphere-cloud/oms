@@ -527,8 +527,10 @@ type RgwLoadBalancerConfig struct {
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 
+// KyvernoConfig configures Kyverno and its policies. An unset Enabled is enabled.
 type KyvernoConfig struct {
-	Enabled bool `yaml:"enabled"`
+	Enabled          *bool         `yaml:"enabled,omitempty"`
+	PoliciesOverride ChartOverride `yaml:"policiesOverride,omitempty"`
 }
 
 type MetalLBConfig struct {
