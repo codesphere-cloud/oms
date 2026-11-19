@@ -7,7 +7,20 @@ import (
 	"fmt"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/util"
 )
+
+// prodReplicatedServices are the critical Codesphere services the prod profile runs with
+// prodServiceReplicas, so the chart renders their PodDisruptionBudget and topology spread.
+var prodReplicatedServices = []string{
+	"auth_service",
+	"deployment_service",
+	"public_api_service",
+	"team_service",
+	"workspace_service",
+}
+
+const prodServiceReplicas = 2
 
 const (
 	PROFILE_DEV         = "dev"
@@ -268,12 +281,44 @@ func (g *InstallConfig) ensureWorkspacePlans(name string, maxReplicas int) {
 	}
 }
 
+// ensureProdServiceReplicas runs the critical Codesphere services with prodServiceReplicas.
+// Unlike the resource profiles, the existing override is merged over the defaults, so a
+// replica count set in the config wins.
+func (g *InstallConfig) ensureProdServiceReplicas() {
+	services := map[string]any{}
+	for _, service := range prodReplicatedServices {
+		services[service] = map[string]any{"replicas": prodServiceReplicas}
+	}
+
+	defaults := map[string]any{
+		"global": map[string]any{"services": services},
+	}
+
+	g.Config.Codesphere.Override = util.DeepMergeMaps(defaults, g.Config.Codesphere.Override)
+}
+
+// ensureKyvernoAuditPolicies keeps the kyverno-policies PDB policy in Audit mode for the
+// single-replica profiles, so an Enforce default does not reject their critical workloads.
+// The existing override is merged over the default, so a configured failureAction wins.
+func (g *InstallConfig) ensureKyvernoAuditPolicies() {
+	if g.Config.Cluster.Kyverno == nil {
+		g.Config.Cluster.Kyverno = &files.KyvernoConfig{}
+	}
+
+	defaults := map[string]any{
+		"pdbPolicy": map[string]any{"failureAction": "Audit"},
+	}
+
+	g.Config.Cluster.Kyverno.PoliciesOverride = util.DeepMergeMaps(defaults, g.Config.Cluster.Kyverno.PoliciesOverride)
+}
+
 func (g *InstallConfig) applyProfileDev() error {
 	if g.Config.Datacenter.Name == "" {
 		g.Config.Datacenter.Name = "dev"
 	}
 
 	g.ensureMonitoringDefaults("dev", false, false, false)
+	g.ensureKyvernoAuditPolicies()
 
 	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequestsSingleReplica); err != nil {
 		return fmt.Errorf("applying resource profile: %w", err)
@@ -289,6 +334,7 @@ func (g *InstallConfig) applyProfileMinimal() error {
 
 	g.ensureMonitoringDefaults("dev", true, true, true)
 	g.ensureWorkspacePlans("Standard Developer", 1)
+	g.ensureKyvernoAuditPolicies()
 
 	if g.Config.Cluster.RgwLoadBalancer == nil {
 		g.Config.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{
@@ -309,6 +355,7 @@ func (g *InstallConfig) applyProfileProd() error {
 	}
 
 	g.ensureWorkspacePlans("Standard Developer", 3)
+	g.ensureProdServiceReplicas()
 	g.Config.Cluster.Monitoring = &files.MonitoringConfig{
 		Prometheus: &files.PrometheusConfig{
 			RemoteWrite: &files.RemoteWriteConfig{

@@ -82,6 +82,26 @@ var _ = Describe("AppInstaller getPcAppsValues", func() {
 		})
 	})
 
+	Context("with a kyverno policies override", func() {
+		BeforeEach(func() {
+			config.Cluster.Kyverno = &files.KyvernoConfig{
+				PoliciesOverride: files.ChartOverride{"pdbPolicy": map[string]any{"failureAction": "Audit"}},
+			}
+		})
+
+		It("passes it to the kyverno-policies application", func() {
+			Expect(application("kyverno-policies")["valuesObject"]).To(HaveKeyWithValue("pdbPolicy", map[string]any{"failureAction": "Audit"}))
+		})
+
+		It("lets the pcApps block win over it", func() {
+			config.PcApps = files.ChartValues{"applications": files.ChartValues{"kyverno-policies": files.ChartValues{
+				"valuesObject": files.ChartValues{"pdbPolicy": files.ChartValues{"failureAction": "Enforce"}},
+			}}}
+
+			Expect(application("kyverno-policies")["valuesObject"]).To(HaveKeyWithValue("pdbPolicy", map[string]any{"failureAction": "Enforce"}))
+		})
+	})
+
 	Context("when the run skips an installer step", func() {
 		It("turns off ms-backend-s3 for --skip-steps ms-backends", func() {
 			skipSteps = []string{installer.MsBackendsStep}
