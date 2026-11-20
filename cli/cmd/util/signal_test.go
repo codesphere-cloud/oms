@@ -4,14 +4,15 @@
 package util_test
 
 import (
-	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"syscall"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
@@ -49,13 +50,13 @@ var _ = Describe("NotifySignalContext", func() {
 var _ = Describe("NewSignalContext", func() {
 	var (
 		source  *util.MockSignalSource
-		out     *bytes.Buffer
+		out     *gbytes.Buffer
 		signals chan<- os.Signal
 	)
 
 	BeforeEach(func() {
 		source = util.NewMockSignalSource(GinkgoT())
-		out = &bytes.Buffer{}
+		out = gbytes.NewBuffer()
 
 		source.EXPECT().Notify(mock.Anything).Run(func(c chan<- os.Signal) {
 			signals = c
@@ -73,7 +74,7 @@ var _ = Describe("NewSignalContext", func() {
 		<-ctx.Done()
 
 		Expect(ctx.Err()).To(MatchError(context.Canceled))
-		Eventually(out.String).Should(Equal("Interrupt received, stopping. Press Ctrl-C again to force.\n"))
+		Eventually(out).Should(gbytes.Say("Interrupt received, stopping. Press Ctrl-C again to force.\n"))
 	})
 
 	It("forces the stop with the second signal", func() {
@@ -96,6 +97,29 @@ var _ = Describe("NewSignalContext", func() {
 		Eventually(forced).Should(Receive(Equal(syscall.SIGTERM)))
 	})
 
+	It("forces the stop with the second signal while the notice cannot be written", func() {
+		forced := make(chan os.Signal, 1)
+		// Nothing reads from the pipe, so writing the notice blocks.
+		_, blocked := io.Pipe()
+		defer func() { _ = blocked.Close() }()
+
+		source.EXPECT().Stop(mock.Anything).Return()
+		source.EXPECT().Force(os.Interrupt).Run(func(sig os.Signal) {
+			forced <- sig
+		}).Once()
+
+		ctx, stop := util.NewSignalContext(context.Background(), source, blocked)
+		defer stop()
+
+		signals <- os.Interrupt
+
+		<-ctx.Done()
+
+		signals <- os.Interrupt
+
+		Eventually(forced).Should(Receive(Equal(os.Interrupt)))
+	})
+
 	It("prints nothing when stopped without a signal", func() {
 		source.EXPECT().Stop(mock.Anything).Return().Once()
 
@@ -103,7 +127,7 @@ var _ = Describe("NewSignalContext", func() {
 		stop()
 
 		Expect(ctx.Err()).To(MatchError(context.Canceled))
-		Expect(out.String()).To(BeEmpty())
+		Expect(out.Contents()).To(BeEmpty())
 	})
 })
 

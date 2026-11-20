@@ -47,7 +47,7 @@ func (OSSignalSource) Stop(c chan<- os.Signal) {
 // Force passes sig on to the commands running in their own process group, which the terminal does
 // not signal, and exits with prompt.InterruptExitCode.
 func (OSSignalSource) Force(sig os.Signal) {
-	system.SignalOwnGroups(sig)
+	system.ForceOwnGroups(sig)
 	os.Exit(prompt.InterruptExitCode)
 }
 
@@ -73,7 +73,10 @@ func NewSignalContext(parent context.Context, source SignalSource, out io.Writer
 			return
 		}
 
-		_, _ = fmt.Fprintln(out, "Interrupt received, stopping. Press Ctrl-C again to force.")
+		// Written aside, so that a blocked out cannot keep a second signal from forcing the stop.
+		go func() {
+			_, _ = fmt.Fprintln(out, "Interrupt received, stopping. Press Ctrl-C again to force.")
+		}()
 
 		cancel()
 
