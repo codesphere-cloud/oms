@@ -24,6 +24,17 @@ const (
 	defaultReleaseName  = "codesphere"
 )
 
+// ValidateBOM returns an error unless csBom has the charts Install deploys.
+func ValidateBOM(csBom *bom.Config) error {
+	for _, component := range []string{csAppsComponent, csUmbrellaComponent} {
+		if _, ok := csBom.GetChart(component); !ok {
+			return fmt.Errorf("%s chart not found in BOM", component)
+		}
+	}
+
+	return nil
+}
+
 // Install applies the cs-applications Application of the release cfg configures, and waits until
 // ArgoCD has deployed all sub applications with the values built from cfg and they are healthy.
 // The release reads its secrets from the vault Secret vaultSecretName.

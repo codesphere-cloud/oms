@@ -72,13 +72,28 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 
 	viaArgoCD := opts.CodesphereViaArgoCD && !installer.IsStepSkipped(cfg, opts.SkipSteps, installer.CodesphereStep)
 
+	workdir := env.GetOmsWorkdir()
+
+	pm := installer.NewPackage(workdir, opts.Package)
+	if opts.LocalComponents {
+		pm = installer.NewPackage(filepath.Dir(opts.Package), opts.Package)
+	}
+
 	var (
 		kubeClient       client.Client
+		installerBOM     *bom.Config
 		installedVersion string
 	)
 
 	if viaArgoCD {
 		var err error
+
+		// ci.Install migrates the database before the ArgoCD deploy, so a BOM the deploy
+		// cannot use must stop the install here.
+		installerBOM, err = readArgoCDBOM(pm, opts)
+		if err != nil {
+			return err
+		}
 
 		kubeClient, err = newKubeClient(opts, cfg)
 		if err != nil {
@@ -89,13 +104,6 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		if err != nil {
 			return fmt.Errorf("failed to read the installed Codesphere version: %w", err)
 		}
-	}
-
-	workdir := env.GetOmsWorkdir()
-
-	pm := installer.NewPackage(workdir, opts.Package)
-	if opts.LocalComponents {
-		pm = installer.NewPackage(filepath.Dir(opts.Package), opts.Package)
 	}
 
 	cm := installer.NewConfig()
@@ -126,8 +134,8 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	}
 
 	if viaArgoCD {
-		if err := deployCodesphereViaArgoCD(ctx, kubeClient, cfg, pm, opts.VaultSecretName); err != nil {
-			return err
+		if err := csapps.Install(ctx, kubeClient, &cfg, installerBOM, opts.VaultSecretName); err != nil {
+			return fmt.Errorf("failed to deploy Codesphere through ArgoCD: %w", err)
 		}
 	}
 
@@ -149,23 +157,22 @@ func newKubeClient(opts *InstallCodesphereOpts, cfg files.RootConfig) (client.Cl
 	return kubeClient, nil
 }
 
-func deployCodesphereViaArgoCD(
-	ctx context.Context,
-	kubeClient client.Client,
-	cfg files.RootConfig,
-	pm installer.PackageManager,
-	vaultSecretName string,
-) error {
+// readArgoCDBOM reads the package BOM and checks it has the charts the ArgoCD deploy needs.
+func readArgoCDBOM(pm installer.PackageManager, opts *InstallCodesphereOpts) (*bom.Config, error) {
+	if err := pm.ExtractDependency(bom.Filename, opts.Force, opts.Verbose); err != nil {
+		return nil, fmt.Errorf("failed to extract the package BOM: %w", err)
+	}
+
 	installerBOM, err := bom.Parse(pm.GetDependencyPath(bom.Filename))
 	if err != nil {
-		return fmt.Errorf("failed to read the package BOM: %w", err)
+		return nil, fmt.Errorf("failed to read the package BOM: %w", err)
 	}
 
-	if err := csapps.Install(ctx, kubeClient, &cfg, installerBOM, vaultSecretName); err != nil {
-		return fmt.Errorf("failed to deploy Codesphere through ArgoCD: %w", err)
+	if err := csapps.ValidateBOM(installerBOM); err != nil {
+		return nil, fmt.Errorf("the package cannot be deployed through ArgoCD: %w", err)
 	}
 
-	return nil
+	return installerBOM, nil
 }
 
 // ensureVaultSecret writes the vault Secret even though the dependencies phase already wrote
