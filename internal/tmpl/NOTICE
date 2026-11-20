@@ -881,39 +881,39 @@ License URL: https://github.com/kevinburke/ssh_config/blob/v1.6.0/LICENSE
  
 ----------
 Module: github.com/klauspost/compress
-Version: v1.20.1
+Version: v1.20.3
 License: MIT
-License URL: https://github.com/klauspost/compress/blob/v1.20.1/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.20.3/LICENSE
  
 ----------
 Module: github.com/klauspost/compress
-Version: v1.20.1
+Version: v1.20.3
 License: Apache-2.0
-License URL: https://github.com/klauspost/compress/blob/v1.20.1/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.20.3/LICENSE
  
 ----------
 Module: github.com/klauspost/compress
-Version: v1.20.1
+Version: v1.20.3
 License: BSD-3-Clause
-License URL: https://github.com/klauspost/compress/blob/v1.20.1/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.20.3/LICENSE
  
 ----------
 Module: github.com/klauspost/compress/internal/snapref
-Version: v1.20.1
+Version: v1.20.3
 License: BSD-3-Clause
-License URL: https://github.com/klauspost/compress/blob/v1.20.1/internal/snapref/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.20.3/internal/snapref/LICENSE
  
 ----------
 Module: github.com/klauspost/compress/s2
-Version: v1.20.1
+Version: v1.20.3
 License: BSD-3-Clause
-License URL: https://github.com/klauspost/compress/blob/v1.20.1/s2/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.20.3/s2/LICENSE
  
 ----------
 Module: github.com/klauspost/compress/zstd/internal/xxhash
-Version: v1.20.1
+Version: v1.20.3
 License: MIT
-License URL: https://github.com/klauspost/compress/blob/v1.20.1/zstd/internal/xxhash/LICENSE.txt
+License URL: https://github.com/klauspost/compress/blob/v1.20.3/zstd/internal/xxhash/LICENSE.txt
  
 ----------
 Module: github.com/kr/fs
@@ -1601,9 +1601,9 @@ License URL: https://github.com/go-yaml/yaml/blob/v3.0.1/LICENSE
  
 ----------
 Module: helm.sh/helm/v4
-Version: v4.3.0
+Version: v4.3.2
 License: Apache-2.0
-License URL: https://github.com/helm/helm/blob/v4.3.0/LICENSE
+License URL: https://github.com/helm/helm/blob/v4.3.2/LICENSE
  
 ----------
 Module: k8s.io/api
@@ -1751,9 +1751,9 @@ License URL: https://github.com/oras-project/oras-go/blob/v2.6.2/LICENSE
  
 ----------
 Module: sigs.k8s.io/controller-runtime
-Version: v0.24.1
+Version: v0.25.2
 License: Apache-2.0
-License URL: https://github.com/kubernetes-sigs/controller-runtime/blob/v0.24.1/LICENSE
+License URL: https://github.com/kubernetes-sigs/controller-runtime/blob/v0.25.2/LICENSE
  
 ----------
 Module: sigs.k8s.io/gateway-api/apis/v1
@@ -1781,9 +1781,9 @@ License URL: https://github.com/kubernetes-sigs/kustomize/blob/api/v0.21.1/api/L
  
 ----------
 Module: sigs.k8s.io/kustomize/kyaml
-Version: v0.21.1
+Version: v0.21.2
 License: Apache-2.0
-License URL: https://github.com/kubernetes-sigs/kustomize/blob/kyaml/v0.21.1/kyaml/LICENSE
+License URL: https://github.com/kubernetes-sigs/kustomize/blob/kyaml/v0.21.2/kyaml/LICENSE
  
 ----------
 Module: sigs.k8s.io/randfill
