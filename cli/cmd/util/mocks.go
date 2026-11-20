@@ -36,6 +36,46 @@ func (_m *MockSignalSource) EXPECT() *MockSignalSource_Expecter {
 	return &MockSignalSource_Expecter{mock: &_m.Mock}
 }
 
+// Force provides a mock function for the type MockSignalSource
+func (_mock *MockSignalSource) Force(sig os.Signal) {
+	_mock.Called(sig)
+	return
+}
+
+// MockSignalSource_Force_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Force'
+type MockSignalSource_Force_Call struct {
+	*mock.Call
+}
+
+// Force is a helper method to define mock.On call
+//   - sig os.Signal
+func (_e *MockSignalSource_Expecter) Force(sig any) *MockSignalSource_Force_Call {
+	return &MockSignalSource_Force_Call{Call: _e.mock.On("Force", sig)}
+}
+
+func (_c *MockSignalSource_Force_Call) Run(run func(sig os.Signal)) *MockSignalSource_Force_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 os.Signal
+		if args[0] != nil {
+			arg0 = args[0].(os.Signal)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockSignalSource_Force_Call) Return() *MockSignalSource_Force_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *MockSignalSource_Force_Call) RunAndReturn(run func(sig os.Signal)) *MockSignalSource_Force_Call {
+	_c.Run(run)
+	return _c
+}
+
 // Notify provides a mock function for the type MockSignalSource
 func (_mock *MockSignalSource) Notify(c chan<- os.Signal) {
 	_mock.Called(c)
