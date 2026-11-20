@@ -5,6 +5,7 @@ package argocd
 
 import (
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -29,7 +30,7 @@ var _ = Describe("AppInstaller getPcAppsValues", func() {
 			SkipSteps: skipSteps,
 		})
 
-		values, err := install.getPcAppsValues()
+		values, err := install.getPcAppsValues(&bom.Config{})
 		Expect(err).NotTo(HaveOccurred())
 
 		return values

@@ -293,7 +293,7 @@ func (i *AppInstaller) SyncVaultSecret(ctx context.Context) error {
 // InstallPCApps creates or updates the pc-applications app-of-apps ArgoCD
 // Application using the chart version from the supplied installer BOM.
 func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config) error {
-	values, err := i.getPcAppsValues()
+	values, err := i.getPcAppsValues(bomConfig)
 	if err != nil {
 		return err
 	}
@@ -317,9 +317,9 @@ func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config)
 	return nil
 }
 
-// getPcAppsValues derives the pc-applications values from the config and merges its pcApps block
-// over them. The --pc-apps-values files are applied on top at install.
-func (i *AppInstaller) getPcAppsValues() (files.ChartValues, error) {
+// getPcAppsValues derives the pc-applications values from the config and the BOM (image pre-pull)
+// and merges its pcApps block over them. The --pc-apps-values files are applied on top at install.
+func (i *AppInstaller) getPcAppsValues(bomConfig *bom.Config) (files.ChartValues, error) {
 	clusterConfigValues, err := pcapps.ClusterConfigPcAppsValues(&i.cfg.Config, i.cfg.Vault)
 	if err != nil {
 		return nil, fmt.Errorf("configuring cluster-config application: %w", err)
@@ -340,6 +340,7 @@ func (i *AppInstaller) getPcAppsValues() (files.ChartValues, error) {
 	values = util.DeepMergeMaps(values, clusterConfigValues)
 	values = util.DeepMergeMaps(values, falcoValues)
 	values = util.DeepMergeMaps(values, installerChartValues)
+	values = util.DeepMergeMaps(values, pcapps.ImagePrePullPcAppsValues(&i.cfg.Config, bomConfig))
 	values = util.DeepMergeMaps(values, i.cfg.Config.PcApps)
 
 	return values, nil
