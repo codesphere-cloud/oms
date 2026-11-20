@@ -93,6 +93,17 @@ k8s-workers:
 		Expect(written.Metadata.Name).To(Equal("codesphere-dc1"))
 	})
 
+	It("forwards the requested pod limit into the generated worker configuration", func() {
+		expectInventoryRead(inventory)
+
+		generator.Opts.MaxPods = 250
+
+		expectConfigWritten()
+
+		Expect(generator.Generate(mockPM, mockK0s, outputPath)).To(Equal(outputPath))
+		Expect(written.Spec.Hosts[1].Environment).To(HaveKeyWithValue("KUBELET_EXTRA_ARGS", "--node-ip=10.0.1.1 --max-pods=250"))
+	})
+
 	It("replaces the hosts of the Ansible inventory with the ones given in the options", func() {
 		expectInventoryRead(inventory)
 

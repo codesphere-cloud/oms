@@ -27,6 +27,8 @@ type K0sctlConfigOpts struct {
 	SSHKeyPath    string
 	Force         bool
 	NoDownload    bool
+	// MaxPods limits pods per worker node. Zero preserves the kubelet default.
+	MaxPods int
 	// Airgap uploads the airgap image bundle to the nodes and stops k0s from pulling images.
 	Airgap bool
 	// AirgapBundlePath is the airgap image bundle to upload. Empty uses the OMS cache.
@@ -101,6 +103,7 @@ func (g *K0sctlConfigGenerator) Generate(pm PackageManager, k0s K0sManager, outp
 		SSHKeyPath:       sshKeyPath,
 		K0sBinaryPath:    k0sBinaryPath,
 		AirgapBundlePath: airgapBundlePath,
+		MaxPods:          g.Opts.MaxPods,
 	}
 
 	return g.writeK0sctlConfig(config, k0sctlOptions, outputPath)

@@ -154,6 +154,7 @@ type CodesphereEnvironment struct {
 	MultiDC     bool   `json:"multi_dc"`
 	SingleVM    bool   `json:"single_vm,omitempty"`
 	MachineType string `json:"machine_type,omitempty"`
+	MaxPods     int    `json:"max_pods,omitempty"`
 	// HostOS is the operating system the VMs boot. Existing VMs keep the one they were created with.
 	HostOS HostOS `json:"host_os,omitempty"`
 	// DataCenters holds the per-data-center state. It always has at least one entry.

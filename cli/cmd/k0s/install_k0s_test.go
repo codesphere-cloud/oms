@@ -76,6 +76,28 @@ var _ = Describe("InstallK0sCmd", func() {
 		})
 	})
 
+	Context("single-node pod limits", func() {
+		It("passes a requested pod limit to kubelet and restarts the replaced service", func() {
+			c.Opts.MaxPods = 250
+			Expect(c.SingleNodeInstallArgs()).To(Equal([]string{
+				"install", "controller", "--single", "--enable-worker", "--no-taints=true",
+				"--kubelet-extra-args=--max-pods=250", "--force", "--start",
+			}))
+		})
+
+		It("keeps the original service arguments when no pod limit is requested", func() {
+			Expect(c.SingleNodeInstallArgs()).To(Equal([]string{
+				"install", "controller", "--single", "--enable-worker", "--no-taints=true",
+			}))
+		})
+
+		It("rejects a negative pod limit before creating clients", func() {
+			c.Opts.Single = true
+			c.Opts.MaxPods = -1
+			Expect(c.RunE(nil, nil)).To(MatchError(ContainSubstring("--max-pods must be greater than zero")))
+		})
+	})
+
 	Context("K0sControllerUnitInstalled method", func() {
 		const unitPath = "/etc/systemd/system/k0scontroller.service"
 
@@ -89,6 +111,27 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockFileWriter.EXPECT().ReadFile(unitPath).Return([]byte("[Unit]\nDescription=k0s\n[Service]\nExecStart=/usr/local/bin/k0s controller --single\n"), nil)
 
 			Expect(c.K0sControllerUnitInstalled(unitPath)).To(BeTrue())
+		})
+
+		It("reuses the service when its kubelet pod limit matches", func() {
+			c.Opts.MaxPods = 250
+
+			mockFileWriter.EXPECT().ReadFile(unitPath).Return([]byte("ExecStart=/usr/local/bin/k0s controller --single '--kubelet-extra-args=--max-pods=250'\n"), nil)
+			Expect(c.K0sControllerUnitInstalled(unitPath)).To(BeTrue())
+		})
+
+		It("reinstalls an existing service that lacks the requested pod limit", func() {
+			c.Opts.MaxPods = 250
+
+			mockFileWriter.EXPECT().ReadFile(unitPath).Return([]byte("ExecStart=/usr/local/bin/k0s controller --single\n"), nil)
+			Expect(c.K0sControllerUnitInstalled(unitPath)).To(BeFalse())
+		})
+
+		It("reinstalls when a different pod limit shares the requested numeric prefix", func() {
+			c.Opts.MaxPods = 25
+
+			mockFileWriter.EXPECT().ReadFile(unitPath).Return([]byte("ExecStart=/usr/local/bin/k0s controller --single --kubelet-extra-args=--max-pods=250\n"), nil)
+			Expect(c.K0sControllerUnitInstalled(unitPath)).To(BeFalse())
 		})
 
 		It("removes a unit cut off before its ExecStart line and reports it as not installed", func() {
@@ -147,6 +190,21 @@ var _ = Describe("InstallK0sCmd", func() {
 		It("rejects --yes with --config", func() {
 			Expect(installK0sCmd.ParseFlags([]string{"--config", "k0sctl.yaml", "--yes"})).To(Succeed())
 			Expect(installK0sCmd.ValidateFlagGroups()).To(MatchError(ContainSubstring("yes")))
+		})
+
+		It("accepts a pod limit with a multi-node install-config", func() {
+			Expect(installK0sCmd.ParseFlags([]string{"--install-config", "cluster.yaml", "--max-pods", "250"})).To(Succeed())
+			Expect(installK0sCmd.ValidateFlagGroups()).To(Succeed())
+		})
+
+		It("rejects overriding the pod limit of a supplied k0sctl config", func() {
+			Expect(installK0sCmd.ParseFlags([]string{"--config", "k0sctl.yaml", "--max-pods", "250"})).To(Succeed())
+			Expect(installK0sCmd.ValidateFlagGroups()).To(MatchError(ContainSubstring("max-pods")))
+		})
+
+		It("rejects an explicit zero pod limit before installing k0s", func() {
+			Expect(installK0sCmd.ParseFlags([]string{"--single", "--max-pods", "0"})).To(Succeed())
+			Expect(installK0sCmd.RunE(installK0sCmd, nil)).To(MatchError(ContainSubstring("--max-pods must be greater than zero")))
 		})
 
 		It("accepts flags that still apply with --config", func() {

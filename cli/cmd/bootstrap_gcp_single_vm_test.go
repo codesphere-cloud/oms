@@ -234,6 +234,31 @@ var _ = Describe("Single-node GCP bootstrap options", func() {
 		Expect(command.CodesphereEnv.RootDiskSize).To(Equal(int64(50)))
 	})
 
+	It("defaults the single node to 250 pods", func() {
+		Expect(command.CodesphereEnv.MaxPods).To(Equal(250))
+	})
+
+	It("accepts a custom single-node pod limit", func() {
+		Expect(command.cmd.ParseFlags([]string{"--max-pods", "200"})).To(Succeed())
+		Expect(command.prepareBootstrapOptions()).To(Succeed())
+		Expect(command.validateSingleVMOptions()).To(Succeed())
+		Expect(command.CodesphereEnv.MaxPods).To(Equal(200))
+	})
+
+	It("rejects a zero single-node pod limit", func() {
+		Expect(command.cmd.ParseFlags([]string{"--max-pods", "0"})).To(Succeed())
+		Expect(command.validateSingleVMOptions()).To(MatchError(ContainSubstring("--max-pods must be greater than zero")))
+	})
+
+	It("rejects a negative single-node pod limit", func() {
+		Expect(command.cmd.ParseFlags([]string{"--max-pods", "-1"})).To(Succeed())
+		Expect(command.validateSingleVMOptions()).To(MatchError(ContainSubstring("--max-pods must be greater than zero")))
+	})
+
+	It("keeps the pod limit flag scoped to single-node GCP", func() {
+		Expect(newBootstrapGcpCmd(nil).cmd.Flags().Lookup("max-pods")).To(BeNil())
+	})
+
 	It("preserves an explicit larger single-VM disk size", func() {
 		Expect(command.cmd.Flags().Set("root-disk-size", "100")).To(Succeed())
 		Expect(command.prepareBootstrapOptions()).To(Succeed())

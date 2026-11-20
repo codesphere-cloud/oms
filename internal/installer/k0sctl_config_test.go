@@ -14,6 +14,24 @@ import (
 
 var _ = Describe("K0sctlConfig", func() {
 	Describe("GenerateK0sctlConfig", func() {
+		It("sets the pod limit only on nodes running a worker while preserving their node IP", func() {
+			config := newTestConfig("dc", true, "10.0.0.1", "10.0.0.2")
+			config.Kubernetes.Workers = []files.K8sNode{{IPAddress: "10.0.0.2"}, {IPAddress: "10.0.0.3"}}
+
+			generated, err := installer.GenerateK0sctlConfig(config, installer.K0sctlOptions{MaxPods: 250})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(generated.Spec.Hosts).To(HaveLen(3))
+			Expect(generated.Spec.Hosts[0].Environment).To(HaveKeyWithValue("KUBELET_EXTRA_ARGS", "--node-ip=10.0.0.1"))
+			Expect(generated.Spec.Hosts[1].Environment).To(HaveKeyWithValue("KUBELET_EXTRA_ARGS", "--node-ip=10.0.0.2 --max-pods=250"))
+			Expect(generated.Spec.Hosts[2].Environment).To(HaveKeyWithValue("KUBELET_EXTRA_ARGS", "--node-ip=10.0.0.3 --max-pods=250"))
+		})
+
+		It("rejects a negative pod limit", func() {
+			config := newTestConfig("dc", true, "10.0.0.1")
+			_, err := installer.GenerateK0sctlConfig(config, installer.K0sctlOptions{MaxPods: -1})
+			Expect(err).To(MatchError(ContainSubstring("--max-pods must be greater than zero")))
+		})
+
 		Context("with valid install-config", func() {
 			It("should generate k0sctl config with control plane nodes", func() {
 				installConfig := newTestConfig("test-dc", true, "10.0.1.10", "10.0.1.11", "10.0.1.12")

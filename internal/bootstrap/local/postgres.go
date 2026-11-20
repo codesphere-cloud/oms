@@ -23,7 +23,9 @@ import (
 )
 
 const (
-	cnpgReleaseName         = "cnpg"
+	// Managed-service NetworkPolicies and the Barman setup expect the TS installer's operator identity.
+	cnpgReleaseName         = "postgres-operator"
+	cnpgOperatorNamespace   = "postgres-operator"
 	cnpgDatabaseClusterName = "masterdata"
 	cnpgDatabaseName        = "masterdata"
 	cnpgDatabaseVersion     = "15.14"
@@ -54,7 +56,7 @@ func (b *LocalBootstrapper) InstallCloudNativePGHelmChart() error {
 	// installed using the chart name and version from the BOM.
 	return b.installPrerequisiteChart(prerequisiteChartConfig{
 		Name: cnpgReleaseName, Chart: path.Base(chart.Name()), RepoURL: repoURL,
-		TargetRevision: chart.Tag(), Namespace: codesphereNamespace,
+		TargetRevision: chart.Tag(), Namespace: cnpgOperatorNamespace,
 		Values: map[string]interface{}{
 			// Values for the upstream chart are nested below its dependency name.
 			"cloudnative-pg": map[string]interface{}{
