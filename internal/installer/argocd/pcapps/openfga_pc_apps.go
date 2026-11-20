@@ -6,6 +6,7 @@ package pcapps
 
 import (
 	"log"
+	"slices"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
@@ -15,6 +16,11 @@ import (
 // Its content is synced out of the installation vault by the chart's own ExternalSecret, so
 // oms only has to name it.
 const openFgaPresharedKeysSecret = "openfga-preshared-keys"
+
+// cnpgClustersStorageClass is the Ceph RBD class with reclaim policy Retain that the PC
+// installer creates with rook-external-cluster (storageClassCnpgClusters in the monorepo's
+// script-lib), so the database volumes survive a deleted CNPG Cluster.
+const cnpgClustersStorageClass = "codesphere-rbd-cnpg-clusters"
 
 // OpenFgaPcAppsValues derives the pc-applications values for OpenFGA. They are the *base* of
 // the pc-apps values: an explicit `pcApps` block in config.yaml and any --pc-apps-values file
@@ -36,8 +42,8 @@ func OpenFgaPcAppsValues(config *files.RootConfig, vault *files.InstallVault) fi
 		chartValues["openfga"] = files.ChartValues{"authn": authn}
 	}
 
-	if backup := backupValues(config.Codesphere.OpenfgaBackups); backup != nil {
-		chartValues["postgres"] = files.ChartValues{"backup": backup}
+	if postgres := postgresValues(config); postgres != nil {
+		chartValues["postgres"] = postgres
 	}
 
 	if len(chartValues) > 0 {
@@ -83,6 +89,41 @@ func authnValues(config *files.RootConfig, vault *files.InstallVault) files.Char
 			"keysSecret": openFgaPresharedKeysSecret,
 		},
 	}
+}
+
+// postgresValues configures the OpenFGA database: its backups and, where the installation
+// has it, the retaining storage class. Returns nil when there is nothing to set.
+func postgresValues(config *files.RootConfig) files.ChartValues {
+	postgres := files.ChartValues{}
+
+	if backup := backupValues(config.Codesphere.OpenfgaBackups); backup != nil {
+		postgres["backup"] = backup
+	}
+
+	if hasCnpgClustersStorageClass(config) {
+		postgres["storage"] = files.ChartValues{"storageClass": cnpgClustersStorageClass}
+	}
+
+	if len(postgres) == 0 {
+		return nil
+	}
+
+	return postgres
+}
+
+// hasCnpgClustersStorageClass mirrors when the PC installer installs rook-external-cluster,
+// which creates the class: unless the component is disabled or workspaces live on PVCs.
+// Elsewhere the class does not exist and the database volumes would never bind.
+func hasCnpgClustersStorageClass(config *files.RootConfig) bool {
+	if rook := config.Cluster.RookExternalCluster; rook != nil && !rook.Enabled {
+		return false
+	}
+
+	// The installer still reads the deprecated experiments.
+	pvcStorage := config.Codesphere.IsEnabled(files.WorkspacePVCStorageFlag) ||
+		slices.Contains(config.Codesphere.Experiments, files.WorkspacePVCStorageFlag) //nolint:staticcheck
+
+	return !pvcStorage
 }
 
 // backupValues configures the CNPG backups of the OpenFGA database. Schedule and retention are
