@@ -168,8 +168,12 @@ func readArgoCDBOM(pm installer.PackageManager, opts *InstallCodesphereOpts) (*b
 		return nil, fmt.Errorf("failed to read the package BOM: %w", err)
 	}
 
-	if err := csapps.ValidateBOM(installerBOM); err != nil {
-		return nil, fmt.Errorf("the package cannot be deployed through ArgoCD: %w", err)
+	if _, ok := installerBOM.GetChart(csapps.CsAppsComponent); !ok {
+		return nil, fmt.Errorf("%s chart not found in the package BOM", csapps.CsAppsComponent)
+	}
+
+	if _, ok := installerBOM.GetChart(csapps.CodesphereComponent); !ok {
+		return nil, fmt.Errorf("%s chart not found in the package BOM", csapps.CodesphereComponent)
 	}
 
 	return installerBOM, nil

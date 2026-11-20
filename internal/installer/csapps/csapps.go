@@ -17,23 +17,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// BOM components holding the charts Install deploys.
 const (
-	csAppsComponent     = "cs-applications"
-	csUmbrellaComponent = "codesphere"
+	CsAppsComponent     = "cs-applications"
+	CodesphereComponent = "codesphere"
+)
+
+const (
 	codesphereNamespace = "codesphere"
 	defaultReleaseName  = "codesphere"
 )
-
-// ValidateBOM returns an error unless csBom has the charts Install deploys.
-func ValidateBOM(csBom *bom.Config) error {
-	for _, component := range []string{csAppsComponent, csUmbrellaComponent} {
-		if _, ok := csBom.GetChart(component); !ok {
-			return fmt.Errorf("%s chart not found in BOM", component)
-		}
-	}
-
-	return nil
-}
 
 // Install applies the cs-applications Application of the release cfg configures, and waits until
 // ArgoCD has deployed all sub applications with the values built from cfg and they are healthy.
@@ -54,7 +47,7 @@ func Install(
 	parentAppName := parentAppNameFor(cfg)
 
 	parentApp, err := installer.NewAppOfAppsFromBom(kubeClient, csBom, installer.AppOfAppsConfig{
-		Component:      csAppsComponent,
+		Component:      CsAppsComponent,
 		Name:           parentAppName,
 		ReleaseName:    release,
 		Namespace:      argocd.DefaultNamespace,
@@ -64,7 +57,7 @@ func Install(
 		DeleteResourcesWithApp: true,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to initialize the %s installer: %w", csAppsComponent, err)
+		return fmt.Errorf("failed to initialize the %s installer: %w", CsAppsComponent, err)
 	}
 
 	if err := parentApp.Install(ctx); err != nil {
@@ -89,9 +82,9 @@ func Install(
 // values reach a sub application only through csApps; for permanent config for a new app, extend
 // the config appropriately.
 func parentAppValues(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName string) (map[string]any, error) {
-	chart, ok := csBom.GetChart(csUmbrellaComponent)
+	chart, ok := csBom.GetChart(CodesphereComponent)
 	if !ok {
-		return nil, fmt.Errorf("%s chart not found in BOM", csUmbrellaComponent)
+		return nil, fmt.Errorf("%s chart not found in BOM", CodesphereComponent)
 	}
 
 	codesphereValues, err := values.Build(cfg, csBom)
@@ -106,7 +99,7 @@ func parentAppValues(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName s
 		"namespace": codesphereNamespace,
 		"global":    global,
 		"applications": map[string]any{
-			csUmbrellaComponent: map[string]any{
+			CodesphereComponent: map[string]any{
 				"enabled":      true,
 				"version":      chart.Tag(),
 				"valuesObject": codesphereValues,
@@ -133,7 +126,7 @@ func parentAppValues(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName s
 }
 
 func parentAppNameFor(cfg *files.RootConfig) string {
-	return releaseName(cfg) + "-" + csAppsComponent
+	return releaseName(cfg) + "-" + CsAppsComponent
 }
 
 // releaseName names the Codesphere Helm release and the release's Applications. Dev clusters set

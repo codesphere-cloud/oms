@@ -260,25 +260,3 @@ var _ = Describe("Install", func() {
 			NotTo(Succeed())
 	})
 })
-
-var _ = Describe("ValidateBOM", func() {
-	It("BOM with both charts -> no error", func() {
-		Expect(csapps.ValidateBOM(bomWithCharts())).To(Succeed())
-	})
-
-	It("BOM without a cs-applications chart -> error naming it", func() {
-		b := bomWithCharts()
-		delete(b.Components, "cs-applications")
-
-		Expect(csapps.ValidateBOM(b)).To(MatchError("cs-applications chart not found in BOM"))
-	})
-
-	It("BOM without a Codesphere chart -> error naming it", func() {
-		b := bomWithCharts()
-		codesphere := b.Components["codesphere"]
-		codesphere.Files = nil
-		b.Components["codesphere"] = codesphere
-
-		Expect(csapps.ValidateBOM(b)).To(MatchError("codesphere chart not found in BOM"))
-	})
-})
