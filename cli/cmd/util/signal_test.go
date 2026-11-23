@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"syscall"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -61,8 +62,8 @@ var _ = Describe("NewSignalContext", func() {
 		}).Once()
 	})
 
-	It("is cancelled on the first signal, restores default handling and says how to force", func() {
-		source.EXPECT().Stop(mock.Anything).Return()
+	It("is cancelled on the first signal and says how to force", func() {
+		source.EXPECT().Stop(mock.Anything).Return().Once()
 
 		ctx, stop := util.NewSignalContext(context.Background(), source, out)
 		defer stop()
@@ -72,7 +73,27 @@ var _ = Describe("NewSignalContext", func() {
 		<-ctx.Done()
 
 		Expect(ctx.Err()).To(MatchError(context.Canceled))
-		Expect(out.String()).To(Equal("Interrupt received, stopping. Press Ctrl-C again to force.\n"))
+		Eventually(out.String).Should(Equal("Interrupt received, stopping. Press Ctrl-C again to force.\n"))
+	})
+
+	It("forces the stop with the second signal", func() {
+		forced := make(chan os.Signal, 1)
+
+		source.EXPECT().Stop(mock.Anything).Return()
+		source.EXPECT().Force(syscall.SIGTERM).Run(func(sig os.Signal) {
+			forced <- sig
+		}).Once()
+
+		ctx, stop := util.NewSignalContext(context.Background(), source, out)
+		defer stop()
+
+		signals <- os.Interrupt
+
+		<-ctx.Done()
+
+		signals <- syscall.SIGTERM
+
+		Eventually(forced).Should(Receive(Equal(syscall.SIGTERM)))
 	})
 
 	It("prints nothing when stopped without a signal", func() {

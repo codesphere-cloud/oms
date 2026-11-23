@@ -299,9 +299,9 @@ License URL: https://github.com/cloudnative-pg/machinery/blob/v0.5.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
-Version: v1.67.0
+Version: v1.68.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.67.0/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.68.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -1181,9 +1181,9 @@ License URL: https://github.com/robfig/cron/blob/bc59245fe10e/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20261116061331-5f0de5f55ee9
+Version: v0.0.0-20261117155431-d2b7705e6526
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/5f0de5f55ee9/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/d2b7705e6526/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate

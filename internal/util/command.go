@@ -26,6 +26,24 @@ func RunCommand(ctx context.Context, command string, args []string, cmdDir strin
 	return nil
 }
 
+// RunCommandInOwnGroup works like RunCommand, but runs the command in its own process group, so it only
+// gets the single SIGINT from cancelling ctx and not also the terminal's Ctrl-C. See system.RunInOwnGroup.
+func RunCommandInOwnGroup(ctx context.Context, command string, args []string, cmdDir string) error {
+	cmd := exec.CommandContext(ctx, command, args...)
+	if cmdDir != "" {
+		cmd.Dir = cmdDir
+	}
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := system.RunInOwnGroup(cmd); err != nil {
+		return fmt.Errorf("command failed with exit status: %w", err)
+	}
+
+	return nil
+}
+
 // RunCommandWithOutput runs a command and returns its stdout as a string.
 // Stderr is still forwarded to os.Stderr for visibility.
 func RunCommandWithOutput(ctx context.Context, command string, args []string, cmdDir string) (string, error) {

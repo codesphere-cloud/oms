@@ -411,9 +411,10 @@ func (g *InstallConfig) collectCodesphereConfig(prompter prompt.Prompter) {
 
 	g.Config.Codesphere.Domain = g.collectString(prompter, "Main Codesphere domain", defaultDomain)
 	g.Config.Codesphere.WorkspaceHostingBaseDomain = g.collectString(prompter, "Workspace base domain (*.domain should point to public gateway)", defaultWorkspaceDomain)
-	g.Config.Codesphere.PublicIP = g.collectString(prompter, "Primary public IP for workspaces", "")
+	g.Config.Codesphere.PublicIP = g.collectString(prompter, "Public IP custom domains' A records point to (public gateway IP)", g.Config.Codesphere.PublicIP)
 	g.Config.Codesphere.CustomDomains.CNameBaseDomain = g.collectString(prompter, "Custom domain CNAME base", defaultCustomDomain)
 	g.Config.Codesphere.DNSServers = g.collectStringSlice(prompter, "DNS servers (comma-separated)", defaultDNSServers)
+	g.collectSSHWorkspaceProxyConfig(prompter)
 
 	log.Println("\n=== Workspace Plans Configuration ===")
 
@@ -467,6 +468,24 @@ func (g *InstallConfig) collectCodesphereConfig(prompter prompt.Prompter) {
 
 	g.collectOpenBaoConfig(prompter)
 	g.collectOpenfgaBackupsConfig(prompter)
+}
+
+func (g *InstallConfig) collectSSHWorkspaceProxyConfig(prompter prompt.Prompter) {
+	service := g.Config.Codesphere.EnsureSSHWorkspaceProxyService()
+	service.Type = g.collectChoice(prompter, "SSH workspace proxy service type", files.SSHWorkspaceProxyServiceTypes, service.ServiceType())
+
+	nodePort := 0
+	if service.IsNodePort() {
+		nodePort = g.collectInt(prompter, "SSH workspace proxy node port", service.ServiceNodePort())
+	}
+
+	loadBalancerIP := ""
+	if service.IsLoadBalancer() {
+		loadBalancerIP = g.collectString(prompter, "SSH workspace proxy load balancer IP (empty to let the load balancer choose)", service.LoadBalancerIP)
+	}
+
+	service.NodePort = nodePort
+	service.LoadBalancerIP = loadBalancerIP
 }
 
 func (g *InstallConfig) collectOpenfgaBackupsConfig(prompter prompt.Prompter) {

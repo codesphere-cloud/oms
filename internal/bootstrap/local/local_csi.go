@@ -31,17 +31,26 @@ func (b *LocalBootstrapper) InstallLocalCSIProvisioner() error {
 		RepoURL:        repoURL,
 		TargetRevision: localCSIVersion,
 		Namespace:      localCSINamespace,
-		Values: map[string]interface{}{
-			"storageClass": map[string]interface{}{
-				"name":      localStorageClassName,
-				"isDefault": true,
-			},
-		},
+		Values:         b.localCSIChartValues(),
 	}); err != nil {
 		return err
 	}
 
 	return b.setLocalStorageClassDefault()
+}
+
+func (b *LocalBootstrapper) localCSIChartValues() map[string]interface{} {
+	values := map[string]interface{}{
+		"storageClass": map[string]interface{}{
+			"name":      localStorageClassName,
+			"isDefault": true,
+		},
+	}
+	if b.Env.K0s {
+		values["nfsCSI"] = map[string]interface{}{"kubeletDir": "/var/lib/k0s/kubelet"}
+	}
+
+	return values
 }
 
 func (b *LocalBootstrapper) setLocalStorageClassDefault() error {

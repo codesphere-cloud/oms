@@ -5,6 +5,7 @@ package installer_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -58,5 +59,66 @@ var _ = Describe("Codesphere installer", func() {
 		err := ci.Install(context.Background(), packageManager, configManager, nil, "linux", "amd64")
 
 		Expect(err).To(MatchError(ContainSubstring("postgres.serverAddress must not be set when postgres.mode is 'install'")))
+	})
+
+	Describe("public IP validation", func() {
+		var (
+			configManager  *installer.MockConfigManager
+			packageManager *installer.MockPackageManager
+		)
+
+		BeforeEach(func() {
+			configManager = installer.NewMockConfigManager(GinkgoT())
+			packageManager = installer.NewMockPackageManager(GinkgoT())
+		})
+
+		install := func(ci *installer.CodesphereInstaller, publicIP string) error {
+			GinkgoHelper()
+
+			ci.ConfigPath = "config.yaml"
+			config := files.RootConfig{Codesphere: files.CodesphereConfig{PublicIP: publicIP}}
+			configManager.EXPECT().ParseConfigYaml("config.yaml").Return(config, nil)
+
+			return ci.Install(context.Background(), packageManager, configManager, nil, "linux", "amd64")
+		}
+
+		// Package extraction is the first step after validation, so reaching it shows validation passed.
+		expectExtraction := func() {
+			packageManager.EXPECT().Extract(false, false).Return(errors.New("extract failed"))
+		}
+
+		// The config profiles default to 127.0.0.1, so a generated config that was never edited hits this.
+		It("rejects an unreachable public IP before extracting the package", func() {
+			err := install(&installer.CodesphereInstaller{}, "127.0.0.1")
+
+			Expect(err).To(MatchError(files.ErrPublicIPUnreachable))
+			Expect(err).To(MatchError(ContainSubstring("invalid codesphere configuration")))
+		})
+
+		It("rejects a missing public IP before extracting the package", func() {
+			Expect(install(&installer.CodesphereInstaller{}, "")).To(MatchError(files.ErrPublicIPRequired))
+		})
+
+		It("extracts the package when the public IP is reachable", func() {
+			expectExtraction()
+
+			Expect(install(&installer.CodesphereInstaller{}, "203.0.113.10")).To(MatchError(ContainSubstring("extract failed")))
+		})
+
+		It("does not require a public IP when the codesphere step is skipped", func() {
+			expectExtraction()
+
+			ci := &installer.CodesphereInstaller{SkipSteps: []string{installer.CodesphereStep}}
+
+			Expect(install(ci, "")).To(MatchError(ContainSubstring("extract failed")))
+		})
+
+		It("allows the loopback placeholder for local component installs", func() {
+			expectExtraction()
+
+			ci := &installer.CodesphereInstaller{LocalComponents: true}
+
+			Expect(install(ci, "127.0.0.1")).To(MatchError(ContainSubstring("extract failed")))
+		})
 	})
 })

@@ -147,13 +147,19 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.StepTimer))
 	defer stlog.PrintSummary()
 
-	icg, err := installer.NewInstallConfigManager("plain", "")
+	fw := intutil.NewFilesystemWriter()
+
+	ageKey, err := util.ResolveVaultAgeKey(fw, c.CodesphereEnv.SecretsFilePath, c.CodesphereEnv.AgeKey, c.CodesphereEnv.RecoverConfig)
 	if err != nil {
-		return fmt.Errorf("failed to initialize conig manager: %w", err)
+		return fmt.Errorf("failed to open vault %s: %w", c.CodesphereEnv.SecretsFilePath, err)
+	}
+
+	icg, err := installer.NewAutoInstallConfigManager(ageKey)
+	if err != nil {
+		return fmt.Errorf("failed to initialize config manager: %w", err)
 	}
 
 	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
-	fw := intutil.NewFilesystemWriter()
 	portalClient := portal.NewPortalClient(ctx)
 
 	githubClient, err := github.NewGitHubClient(ctx, c.CodesphereEnv.GitHubPAT)

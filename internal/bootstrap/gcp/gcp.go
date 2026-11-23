@@ -102,7 +102,8 @@ type GCPBootstrapper struct {
 	Time      util.Time
 	GCPClient GCPClientManager
 	// Environment
-	Env *CodesphereEnvironment
+	Env               *CodesphereEnvironment
+	vaultTransferCopy string
 	// SSH command runner
 	NodeClient         node.NodeClient
 	PortalClient       portal.Portal
@@ -229,6 +230,7 @@ type CodesphereEnvironment struct {
 	InstallVaultPath          string              `json:"-"`
 	InstallVaultPrivKey       string              `json:"-"`
 	SecretsFilePath           string              `json:"-"`
+	AgeKey                    string              `json:"-"`
 	InstallConfig             *files.RootConfig   `json:"-"`
 	Secrets                   *files.InstallVault `json:"-"`
 
@@ -429,7 +431,7 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	}
 
 	if b.Env.WriteConfig {
-		err = b.writeDataCenterConfig(b.primaryDC())
+		err = b.WritePrimaryDataCenterConfig()
 		if err != nil {
 			return err
 		}

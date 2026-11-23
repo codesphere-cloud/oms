@@ -170,23 +170,11 @@ func (b *GCPBootstrapper) ensureSingleVMPackage() error {
 func (b *GCPBootstrapper) singleVMConfig(config files.RootConfig) files.RootConfig {
 	config.Codesphere.Domain = "cs." + b.Env.BaseDomain
 	config.Codesphere.WorkspaceHostingBaseDomain = "ws." + b.Env.BaseDomain
-	config.Codesphere.PublicIP = b.Env.Jumpbox.GetExternalIP()
+	config.Codesphere.PublicIP = b.primaryDC().PublicGatewayIP
 	config.Codesphere.CustomDomains.CNameBaseDomain = config.Codesphere.WorkspaceHostingBaseDomain
 	config.Cluster.Gateway.ServiceType = "ClusterIP"
 	config.Cluster.PublicGateway.ServiceType = "ClusterIP"
-	config.PcApps = util.DeepMergeMaps(config.PcApps, files.ChartValues{
-		"applications": map[string]any{
-			"ssh-workspace-proxy": map[string]any{
-				"enabled": true,
-				"valuesObject": map[string]any{
-					"service": map[string]any{
-						"enabled": true,
-						"type":    "ClusterIP",
-					},
-				},
-			},
-		},
-	})
+	config.Codesphere.EnsureSSHWorkspaceProxyService().Type = "ClusterIP"
 
 	return config
 }
