@@ -154,7 +154,9 @@ func (k *K0sctl) Apply(configPath string, k0sctlPath string, force bool) error {
 
 	log.Printf("Running k0sctl apply with config: %s", configPath)
 
-	err := util.RunCommand(k.context(), k0sctlPath, args, "")
+	// In its own process group, k0sctl gets a single SIGINT on cancellation and runs its clean-up. Sharing
+	// oms' group, a terminal Ctrl-C would reach it twice, which k0sctl treats as a forced exit.
+	err := util.RunCommandInOwnGroup(k.context(), k0sctlPath, args, "")
 	if err != nil {
 		return fmt.Errorf("k0sctl apply failed: %w", err)
 	}
@@ -177,7 +179,7 @@ func (k *K0sctl) Reset(configPath string, k0sctlPath string) error {
 
 	args := []string{"reset", "--config", configPath, "--force"}
 
-	err := util.RunCommand(k.context(), k0sctlPath, args, "")
+	err := util.RunCommandInOwnGroup(k.context(), k0sctlPath, args, "")
 	if err != nil {
 		return fmt.Errorf("k0sctl reset failed: %w", err)
 	}
