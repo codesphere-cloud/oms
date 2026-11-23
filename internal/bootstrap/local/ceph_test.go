@@ -75,31 +75,40 @@ var _ = Describe("Ceph", func() {
 	})
 
 	Describe("RGW user specs", func() {
-		It("creates the admin-ops user without the admin flag and never reconciles it", func() {
+		It("creates the admin-ops user without the admin flag or an op mask, and never reconciles it", func() {
 			args := rgwUserCreateArgs(rgwAdminUserSpec)
 			Expect(args).To(ContainElements("user", "create", "--uid", rgwAdminUserName, "--caps", rgwAdminUserCaps))
 			Expect(args).NotTo(ContainElement("--admin"))
+			Expect(args).NotTo(ContainElement("--op-mask"))
 			Expect(rgwAdminUserSpec.reconcile).To(BeFalse())
 		})
 
-		It("creates the backup user with buckets=read and the admin flag", func() {
+		It("creates the backup user with buckets=read, the admin flag and a read-only op mask", func() {
 			args := rgwUserCreateArgs(rgwBackupUserSpec)
 			Expect(args[:2]).To(Equal([]string{"user", "create"}))
 			Expect(args).To(ContainElements("--uid", "sre-s3-backup", "--caps", "buckets=read", "--admin"))
+			Expect(args).To(ContainElements("--op-mask", "read"))
 			Expect(args).To(ContainElements("--rgw-realm", rgwRealmName, "--rgw-zonegroup", rgwZoneGroupName, "--rgw-zone", rgwZoneName))
 			Expect(args[len(args)-2:]).To(Equal([]string{"--format", "json"}))
 		})
 
-		It("reconciles an existing backup user's caps and admin flag", func() {
+		It("reconciles an existing backup user: op mask and admin flag in one call, then caps", func() {
 			calls := rgwUserReconcileArgs(rgwBackupUserSpec)
 			Expect(calls).To(HaveLen(2))
-			Expect(calls[0][:6]).To(Equal([]string{"caps", "add", "--uid", "sre-s3-backup", "--caps", "buckets=read"}))
-			Expect(calls[1][:5]).To(Equal([]string{"user", "modify", "--uid", "sre-s3-backup", "--admin"}))
+			Expect(calls[0][:7]).To(Equal([]string{"user", "modify", "--uid", "sre-s3-backup", "--admin", "--op-mask", "read"}))
+			Expect(calls[1][:6]).To(Equal([]string{"caps", "add", "--uid", "sre-s3-backup", "--caps", "buckets=read"}))
 		})
 
-		It("never gives the backup user the admin-ops caps", func() {
-			Expect(rgwBackupUserCaps).NotTo(ContainSubstring("users="))
-			Expect(rgwBackupUserCaps).NotTo(ContainSubstring("buckets=*"))
+		// The admin flag grants read, write and delete on every bucket. The
+		// only thing keeping the backup user read-only is the op mask, so no
+		// spec may set one without the other. What RGW does with the two is
+		// checked on a cluster (see the PR), not here.
+		It("never sets the admin flag without a read-only op mask", func() {
+			for _, spec := range []rgwUserSpec{rgwAdminUserSpec, rgwBackupUserSpec} {
+				if spec.admin {
+					Expect(spec.opMask).To(Equal("read"), "spec %q", spec.uid)
+				}
+			}
 		})
 	})
 
