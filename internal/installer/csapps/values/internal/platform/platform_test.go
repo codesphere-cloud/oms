@@ -101,6 +101,14 @@ var _ = Describe("Values", func() {
 		Expect(err).To(MatchError(ContainSubstring("image team-service not found in BOM")))
 	})
 
+	It("error-page-server image missing from the BOM -> no error_page_server service", func() {
+		values, err := platform.Values(testImages(withImage("error-page-server", "")))
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(values.Services.Images).NotTo(HaveKey("error_page_server"))
+		Expect(values.Services.Images).To(HaveKey("team_service"))
+	})
+
 	It("router image missing from the BOM -> error", func() {
 		_, err := platform.Values(testImages(withImage("nginx", "")))
 		Expect(err).To(MatchError(ContainSubstring("image nginx not found in BOM")))

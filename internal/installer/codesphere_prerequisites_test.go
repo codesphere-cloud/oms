@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -45,7 +46,8 @@ var _ = Describe("EnsureCodespherePrerequisites", func() {
 		service := &corev1.Service{}
 		Expect(kubeClient.Get(context.Background(), ctrlclient.ObjectKey{Name: "error-page-server", Namespace: "codesphere"}, service)).To(Succeed())
 		Expect(service.Spec.Ports).To(HaveLen(1))
-		Expect(service.Spec.Ports[0].Port).To(Equal(int32(8080)))
+		Expect(service.Spec.Ports[0].Port).To(Equal(int32(8083)))
+		Expect(service.Spec.Ports[0].Name).To(Equal("web"))
 	})
 
 	It("leaves existing resources untouched", func() {
@@ -72,6 +74,68 @@ var _ = Describe("EnsureCodespherePrerequisites", func() {
 		service := &corev1.Service{}
 		Expect(kubeClient.Get(context.Background(), ctrlclient.ObjectKey{Name: "error-page-server", Namespace: "codesphere"}, service)).To(Succeed())
 		Expect(service.Spec.Ports[0].Port).To(Equal(int32(9090)))
+	})
+
+	Describe("placeholder of an older OMS", func() {
+		legacyService := func(annotations map[string]string) *corev1.Service {
+			return &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "error-page-server",
+					Namespace:   "codesphere",
+					Annotations: annotations,
+				},
+				Spec: corev1.ServiceSpec{
+					Ports:    []corev1.ServicePort{{Port: 8080, TargetPort: intstr.FromInt32(8080)}},
+					Selector: map[string]string{"app": "error-page-server"},
+				},
+			}
+		}
+
+		getService := func(kubeClient ctrlclient.Client) *corev1.Service {
+			service := &corev1.Service{}
+			Expect(kubeClient.Get(context.Background(), ctrlclient.ObjectKey{Name: "error-page-server", Namespace: "codesphere"}, service)).To(Succeed())
+
+			return service
+		}
+
+		It("unnamed port 8080, unmanaged -> moves to port 8083 named web", func() {
+			kubeClient := newPrerequisitesClient(legacyService(nil))
+
+			Expect(installer.EnsureCodespherePrerequisites(context.Background(), kubeClient)).To(Succeed())
+
+			service := getService(kubeClient)
+			Expect(service.Spec.Ports).To(HaveLen(1))
+			Expect(service.Spec.Ports[0].Name).To(Equal("web"))
+			Expect(service.Spec.Ports[0].Port).To(Equal(int32(8083)))
+			Expect(service.Spec.Ports[0].TargetPort).To(Equal(intstr.FromInt32(8083)))
+			Expect(service.Spec.Selector).To(HaveKeyWithValue("app", "error-page-server"))
+		})
+
+		It("managed by Helm -> unchanged", func() {
+			kubeClient := newPrerequisitesClient(legacyService(map[string]string{"meta.helm.sh/release-name": "codesphere"}))
+
+			Expect(installer.EnsureCodespherePrerequisites(context.Background(), kubeClient)).To(Succeed())
+
+			Expect(getService(kubeClient).Spec.Ports[0].Port).To(Equal(int32(8080)))
+		})
+
+		It("managed by ArgoCD -> unchanged", func() {
+			kubeClient := newPrerequisitesClient(legacyService(map[string]string{"argocd.argoproj.io/tracking-id": "error-page-server-main:/Service:codesphere/error-page-server"}))
+
+			Expect(installer.EnsureCodespherePrerequisites(context.Background(), kubeClient)).To(Succeed())
+
+			Expect(getService(kubeClient).Spec.Ports[0].Port).To(Equal(int32(8080)))
+		})
+
+		It("patch fails -> error", func() {
+			kubeClient := newPrerequisitesClientWithInterceptors(interceptor.Funcs{
+				Patch: func(context.Context, ctrlclient.WithWatch, ctrlclient.Object, ctrlclient.Patch, ...ctrlclient.PatchOption) error {
+					return fmt.Errorf("kubectl error")
+				},
+			}, legacyService(nil))
+
+			Expect(installer.EnsureCodespherePrerequisites(context.Background(), kubeClient)).To(MatchError(ContainSubstring("failed to migrate dummy error-page-server service to port 8083")))
+		})
 	})
 
 	It("reports namespace creation failures", func() {
