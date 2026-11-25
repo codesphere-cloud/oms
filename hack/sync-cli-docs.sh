@@ -23,14 +23,36 @@ if [[ ! -d "$reference" ]]; then
   exit 1
 fi
 
-mkdir -p "$target"
-# Remove obsolete commands only from the generator-owned section.
-for stale in "$target"/oms*.md; do
-  if [[ ! -f "$source_dir/${stale##*/}" ]]; then
-    rm -- "$stale"
+# Compare the whole reference without its generated version notes. Retain the
+# published version unless command content, pages, or sidebar metadata changed.
+reference_changed=false
+for page in "$source_dir"/oms*.md "$source_dir/_category_.json"; do
+  name=${page##*/}
+  if [[ ! -f "$target/$name" ]] || ! cmp -s \
+    <(sed '/^Generated from OMS version `[^`]*`\.$/d' "$page") \
+    <(sed '/^Generated from OMS version `[^`]*`\.$/d' "$target/$name"); then
+    reference_changed=true
+    break
   fi
 done
-cp -- "$source_dir"/oms*.md "$source_dir/_category_.json" "$target/"
+for stale in "$target"/oms*.md; do
+  if [[ ! -f "$source_dir/${stale##*/}" ]]; then
+    reference_changed=true
+  fi
+done
+
+if "$reference_changed"; then
+  mkdir -p "$target"
+  # Remove obsolete commands only from the generator-owned section.
+  for stale in "$target"/oms*.md; do
+    if [[ ! -f "$source_dir/${stale##*/}" ]]; then
+      rm -- "$stale"
+    fi
+  done
+  cp -- "$source_dir"/oms*.md "$source_dir/_category_.json" "$target/"
+else
+  echo 'CLI reference unchanged apart from version; keeping the published version.'
+fi
 
 if [[ -f "$reference/oms-commands.mdx" ]]; then
   sed -i 's|\[github.com/codesphere-cloud/oms/tree/main/docs\](https://github.com/codesphere-cloud/oms/tree/main/docs)|[OMS CLI reference](./oms-cli/oms.md)|g' \
