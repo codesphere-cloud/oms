@@ -22,11 +22,9 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -74,6 +72,8 @@ type LocalBootstrapper struct {
 	ageRecipient string
 	// ageKeyPath is the filesystem path to the age private key file.
 	ageKeyPath string
+	// envAgeKeyFile is the key file materialized from SOPS_AGE_KEY; removed when Bootstrap returns.
+	envAgeKeyFile string
 	// helmClient installs prerequisite operators before the dependencies phase.
 	helmClient         installer.HelmClient
 	installerBundleDir string
@@ -100,6 +100,7 @@ type CodesphereEnvironment struct {
 	ExistingConfigUsed   bool                `json:"-"`
 	InstallConfigPath    string              `json:"-"`
 	SecretsFilePath      string              `json:"-"`
+	AgeKey               string              `json:"-"`
 	InstallConfig        *files.RootConfig   `json:"-"`
 	Vault                *files.InstallVault `json:"-"`
 	K0s                  bool                `json:"-"`
@@ -126,8 +127,11 @@ func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kube
 	}
 }
 
-func (b *LocalBootstrapper) Bootstrap() error {
-	err := b.stlog.Step("Ensure install config", b.EnsureInstallConfig)
+// Bootstrap prepares the local cluster and runs the Codesphere installer against it.
+func (b *LocalBootstrapper) Bootstrap() (err error) {
+	defer func() { err = errors.Join(err, b.removeEnvAgeKeyFile()) }()
+
+	err = b.stlog.Step("Ensure install config", b.EnsureInstallConfig)
 	if err != nil {
 		return fmt.Errorf("failed to ensure install config: %w", err)
 	}
@@ -267,7 +271,7 @@ func (b *LocalBootstrapper) storageClassName() string {
 func (b *LocalBootstrapper) EnsureNamespaces() error {
 	for _, ns := range []string{codesphereSystemNamespace, codesphereNamespace, files.WorkspacesNamespace} {
 		namespace := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{Name: ns},
+			Name: ns,
 		}
 
 		// Mark the workspaces namespace as owned by the cluster-config Helm
@@ -293,18 +297,16 @@ func (b *LocalBootstrapper) EnsureNamespaces() error {
 	// The nginx ingress controller references this service as a default backend;
 	// without it the controller pods fail to start.
 	errorPageSvc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "error-page-server",
-			Namespace: codesphereNamespace,
-			Labels: map[string]string{
-				"app.kubernetes.io/managed-by":   "Helm",
-				"meta.helm.sh/release-name":      "codesphere",
-				"meta.helm.sh/release-namespace": codesphereNamespace,
-			},
-			Annotations: map[string]string{
-				"meta.helm.sh/release-name":      "codesphere",
-				"meta.helm.sh/release-namespace": codesphereNamespace,
-			},
+		Name:      "error-page-server",
+		Namespace: codesphereNamespace,
+		Labels: map[string]string{
+			"app.kubernetes.io/managed-by":   "Helm",
+			"meta.helm.sh/release-name":      "codesphere",
+			"meta.helm.sh/release-namespace": codesphereNamespace,
+		},
+		Annotations: map[string]string{
+			"meta.helm.sh/release-name":      "codesphere",
+			"meta.helm.sh/release-namespace": codesphereNamespace,
 		},
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeClusterIP,
@@ -331,10 +333,8 @@ func (b *LocalBootstrapper) CreateCephAdminSecrets() error {
 
 	for _, ns := range []string{codesphereNamespace, files.WorkspacesNamespace} {
 		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "ceph-admin-credentials",
-				Namespace: ns,
-			},
+			Name:      "ceph-admin-credentials",
+			Namespace: ns,
 		}
 
 		_, err := controllerutil.CreateOrUpdate(b.ctx, b.kubeClient, secret, func() error {
@@ -367,10 +367,8 @@ func (b *LocalBootstrapper) SyncCephMonEndpoints() error {
 
 	for _, ns := range []string{codesphereNamespace, files.WorkspacesNamespace} {
 		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "ceph-mon-endpoints",
-				Namespace: ns,
-			},
+			Name:      "ceph-mon-endpoints",
+			Namespace: ns,
 		}
 
 		_, err := controllerutil.CreateOrUpdate(b.ctx, b.kubeClient, cm, func() error {
@@ -456,8 +454,8 @@ func (b *LocalBootstrapper) readServiceCIDRFromK8s() (serviceCIDR string, err er
 
 	for _, container := range apiServerPod.Spec.Containers {
 		for _, arg := range container.Command {
-			if strings.HasPrefix(arg, "--service-cluster-ip-range=") {
-				serviceCIDR = strings.TrimPrefix(arg, "--service-cluster-ip-range=")
+			if after, ok := strings.CutPrefix(arg, "--service-cluster-ip-range="); ok {
+				serviceCIDR = after
 				break
 			}
 		}
@@ -491,8 +489,8 @@ func (b *LocalBootstrapper) readServiceCIDRFromProc() (serviceCIDR string, err e
 
 		if strings.Contains(cmdline, "kube-apiserver") {
 			// Arguments in /proc/PID/cmdline are null-terminated
-			args := strings.Split(cmdline, "\x00")
-			for _, arg := range args {
+			args := strings.SplitSeq(cmdline, "\x00")
+			for arg := range args {
 				if strings.HasPrefix(arg, "--service-cluster-ip-range=") {
 					serviceCIDR = strings.Split(arg, "=")[1]
 					return
@@ -591,7 +589,7 @@ func (b *LocalBootstrapper) loadVaultForConfigTemplating() error {
 		return nil
 	}
 
-	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+	if err := b.icg.LoadVaultFromFileOrCreate(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file for config templating: %w", err)
 	}
 
@@ -604,7 +602,7 @@ func (b *LocalBootstrapper) EnsureSecrets() error {
 		return nil
 	}
 
-	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+	if err := b.icg.LoadVaultFromFileOrCreate(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file: %w", err)
 	}
 
@@ -614,16 +612,41 @@ func (b *LocalBootstrapper) EnsureSecrets() error {
 }
 
 func (b *LocalBootstrapper) ResolveAgeKey() error {
-	recipient, keyPath, err := sops.ResolveAgeKey("", filepath.Dir(b.Env.SecretsFilePath))
+	dir := filepath.Dir(b.Env.SecretsFilePath)
+
+	recipient, keyPath, err := sops.ResolveAgeKey(b.Env.AgeKey, dir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve age key: %w", err)
+	}
+
+	// An empty path means the key came from SOPS_AGE_KEY, but the installer needs a key file.
+	if keyPath == "" {
+		keyPath, err = sops.MaterializeEnvAgeKey(b.fw, dir)
+		if err != nil {
+			return fmt.Errorf("failed to write the age key for the installer: %w", err)
+		}
+
+		b.envAgeKeyFile = keyPath
 	}
 
 	b.ageRecipient = recipient
 
 	b.ageKeyPath = keyPath
-	if keyPath != "" {
-		fmt.Printf("Using age key: %s\n", keyPath)
+	fmt.Printf("Using age key: %s\n", keyPath)
+
+	return nil
+}
+
+func (b *LocalBootstrapper) removeEnvAgeKeyFile() error {
+	keyPath := b.envAgeKeyFile
+	if keyPath == "" {
+		return nil
+	}
+
+	b.envAgeKeyFile = ""
+
+	if err := b.fw.Remove(keyPath); err != nil {
+		return fmt.Errorf("failed to remove materialized age key file %s: %w", keyPath, err)
 	}
 
 	return nil
@@ -694,7 +717,7 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	setLocalClusterComponents(b.Env.InstallConfig)
 
 	b.Env.InstallConfig.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{
-		Enabled: b.Env.StorageEngine != StorageEngineLocal,
+		Enabled: new(b.Env.StorageEngine != StorageEngineLocal),
 	}
 	if b.Env.StorageEngine != StorageEngineLocal {
 		cephMonHosts, err := b.ReadCephMonHosts()
@@ -833,7 +856,7 @@ func (b *LocalBootstrapper) configureStorageValues() {
 		b.Env.InstallConfig.ManagedServiceBackends.S3 = &files.S3ManagedServiceConfig{}
 	}
 
-	b.Env.InstallConfig.ManagedServiceBackends.S3.Enabled = ptr.To(false)
+	b.Env.InstallConfig.ManagedServiceBackends.S3.Enabled = new(false)
 
 	b.Env.InstallConfig.Codesphere.ManagedServices = slices.DeleteFunc(b.Env.InstallConfig.Codesphere.ManagedServices, func(service files.ManagedServiceConfig) bool {
 		return service.Name == "s3"
@@ -894,8 +917,8 @@ func (b *LocalBootstrapper) addCephSecretsToVault(vault *files.InstallVault) {
 	vault.SetSecret(files.SecretEntry{Name: "cephFsId", Fields: &files.SecretFields{Password: creds.FSID}})
 	vault.SetSecret(files.SecretEntry{Name: "cephfsAdmin", Fields: &files.SecretFields{Username: creds.CephfsAdmin.Entity, Password: creds.CephfsAdmin.Key}})
 	vault.SetSecret(files.SecretEntry{Name: "cephfsAdminCodesphere", Fields: &files.SecretFields{Username: creds.CephfsAdminCodesphere.Entity, Password: creds.CephfsAdminCodesphere.Key}})
-	vault.SetSecret(files.SecretEntry{Name: "rgwAdminAccessKey", Fields: &files.SecretFields{Password: creds.RGWAdmin.AccessKey}})
-	vault.SetSecret(files.SecretEntry{Name: "rgwAdminSecretKey", Fields: &files.SecretFields{Password: creds.RGWAdmin.SecretKey}})
+	vault.SetSecret(files.SecretEntry{Name: files.SecretRgwAdminAccessKey, Fields: &files.SecretFields{Password: creds.RGWAdmin.AccessKey}})
+	vault.SetSecret(files.SecretEntry{Name: files.SecretRgwAdminSecretKey, Fields: &files.SecretFields{Password: creds.RGWAdmin.SecretKey}})
 	vault.SetSecret(files.SecretEntry{Name: "csiRbdNode", Fields: &files.SecretFields{Username: creds.CSIRBDNode.Entity, Password: creds.CSIRBDNode.Key}})
 	vault.SetSecret(files.SecretEntry{Name: "csiRbdProvisioner", Fields: &files.SecretFields{Username: creds.CSIRBDProvisioner.Entity, Password: creds.CSIRBDProvisioner.Key}})
 	vault.SetSecret(files.SecretEntry{Name: "csiCephfsNode", Fields: &files.SecretFields{Username: creds.CSICephFSNode.Entity, Password: creds.CSICephFSNode.Key}})

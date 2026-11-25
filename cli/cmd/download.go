@@ -15,6 +15,7 @@ type DownloadCmd struct {
 	cmd *cobra.Command
 }
 
+// AddDownloadCmd registers the download command and its subcommands on the root command.
 func AddDownloadCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	download := DownloadCmd{
 		cmd: &cobra.Command{

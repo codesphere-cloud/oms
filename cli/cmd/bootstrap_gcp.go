@@ -40,7 +40,7 @@ type BootstrapGcpCmd struct {
 }
 
 // RunE is the starting point for the bootstrap command that executes the bootstrap logic.
-func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, args []string) error {
+func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, _ []string) error {
 	err := c.BootstrapGcp()
 	if err != nil {
 		return fmt.Errorf("failed to bootstrap: %w", err)
@@ -148,21 +148,27 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.StepTimer))
 	defer stlog.PrintSummary()
 
-	icg, err := installer.NewInstallConfigManager("plain", "")
+	fw := intutil.NewFilesystemWriter()
+
+	ageKey, err := util.ResolveVaultAgeKey(fw, c.CodesphereEnv.SecretsFilePath, c.CodesphereEnv.AgeKey, c.CodesphereEnv.RecoverConfig)
 	if err != nil {
-		return fmt.Errorf("failed to initialize conig manager: %w", err)
+		return fmt.Errorf("failed to open vault %s: %w", c.CodesphereEnv.SecretsFilePath, err)
+	}
+
+	icg, err := installer.NewAutoInstallConfigManager(ageKey)
+	if err != nil {
+		return fmt.Errorf("failed to initialize config manager: %w", err)
 	}
 
 	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
-	fw := intutil.NewFilesystemWriter()
-	portalClient := portal.NewPortalClient()
+	portalClient := portal.NewPortalClient(ctx)
 
 	githubClient, err := github.NewGitHubClient(ctx, c.CodesphereEnv.GitHubPAT)
 	if err != nil {
 		return fmt.Errorf("failed to create github client: %w", err)
 	}
 
-	sshClient := node.NewSSHNodeClient(c.SSHQuiet)
+	sshClient := node.NewSSHNodeClient(ctx, c.SSHQuiet)
 	if c.CodesphereEnv.SingleVM {
 		sshClient.RegistryPassword = c.CodesphereEnv.GitHubPAT
 	}

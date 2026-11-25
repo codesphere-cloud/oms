@@ -6,8 +6,10 @@ package gcp
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
@@ -15,6 +17,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
@@ -119,7 +122,7 @@ func (b *GCPBootstrapper) ensureInstallConfig(dc *datacenter.DataCenter) error {
 }
 
 func (b *GCPBootstrapper) loadVaultForConfigTemplating(dc *datacenter.DataCenter) error {
-	if err := dc.ConfigManager.LoadVaultFromUnecryptedFile(dc.SecretsFilePath); err != nil {
+	if err := dc.ConfigManager.LoadVaultFromFileOrCreate(dc.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault from file: %w", err)
 	}
 
@@ -190,9 +193,9 @@ func (b *GCPBootstrapper) recoverVault(dc *datacenter.DataCenter) error {
 	return nil
 }
 
-// UpdateInstallConfig writes the bootstrapped infrastructure into the primary data center's
-// install config. Secondary data centers go through updateInstallConfig directly, after their
-// config and vault have been derived from the primary's.
+// UpdateInstallConfig applies the environment to the primary data center's install config and
+// vault, writes both locally and uploads them to the jumpbox. Secondary data centers go through
+// updateInstallConfig directly, after their config and vault have been derived from the primary's.
 func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	if err := b.ensureDataCenters(); err != nil {
 		return err
@@ -385,11 +388,13 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	dc.InstallConfig.Codesphere.CustomDomains = files.CustomDomainsConfig{
 		CNameBaseDomain: dc.WorkspaceHostingBaseDomain,
 	}
-	if b.Env.MultiDC {
-		dc.InstallConfig.Codesphere.PublicIP = dc.PublicGatewayIP
-	} else {
-		dc.InstallConfig.Codesphere.PublicIP = dc.ControlPlaneNodes[1].GetExternalIP()
+	// Custom domains' A records point to the public gateway, like the workspace domain does. The
+	// k0s nodes have no external IP, so they cannot serve as the public IP.
+	if dc.PublicGatewayIP == "" {
+		return fmt.Errorf("data center %d has no public gateway IP for codesphere.publicIp", dc.ID)
 	}
+
+	dc.InstallConfig.Codesphere.PublicIP = dc.PublicGatewayIP
 
 	dc.InstallConfig.Codesphere.DNSServers = []string{"8.8.8.8"}
 	dc.InstallConfig.Codesphere.DeployConfig = bootstrap.DefaultCodesphereDeployConfig()
@@ -565,16 +570,70 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
+	return b.copyConfigAndVaultToJumpbox(dc)
+}
+
+func (b *GCPBootstrapper) copyConfigAndVaultToJumpbox(dc *datacenter.DataCenter) error {
+	vaultTransferPath, err := b.vaultTransferPath(dc)
+	if err != nil {
+		return err
+	}
+
 	// CopyFile creates the destination directory, so a secondary data center's secrets
 	// directory does not need to exist yet.
-	err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, dc.InstallConfigPath, dc.RemoteConfigPath)
-	if err != nil {
+	if err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, dc.InstallConfigPath, dc.RemoteConfigPath); err != nil {
 		return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
 	}
 
-	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, dc.SecretsFilePath, dc.RemoteVaultPath())
-	if err != nil {
+	if err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, vaultTransferPath, dc.RemoteVaultPath()); err != nil {
 		return fmt.Errorf("failed to copy secrets file to jumpbox: %w", err)
+	}
+
+	return nil
+}
+
+// vaultTransferPath returns the local vault file to upload to the jumpbox. An encrypted vault is
+// uploaded as a plaintext copy, which the jumpbox re-encrypts with its own key; the copy is
+// recorded for removeVaultTransferCopy. The format is detected per data center, since a primary
+// and a secondary vault may differ.
+func (b *GCPBootstrapper) vaultTransferPath(dc *datacenter.DataCenter) (string, error) {
+	encrypted, err := vault.IsEncryptedFile(b.fw, dc.SecretsFilePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to detect vault type of data center %d: %w", dc.ID, err)
+	}
+
+	if !encrypted {
+		return dc.SecretsFilePath, nil
+	}
+
+	transferPath, err := b.fw.CreateTemp(filepath.Dir(dc.SecretsFilePath), filepath.Base(dc.SecretsFilePath)+".plain*")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary vault transfer file: %w", err)
+	}
+
+	b.vaultTransferCopy = transferPath
+
+	if err := dc.ConfigManager.WriteUnencryptedVault(transferPath, true); err != nil {
+		return "", errors.Join(
+			fmt.Errorf("failed to write unencrypted vault for jumpbox transfer: %w", err),
+			b.removeVaultTransferCopy(),
+		)
+	}
+
+	return transferPath, nil
+}
+
+// removeVaultTransferCopy reports a failed removal because the file holds every secret in the clear.
+func (b *GCPBootstrapper) removeVaultTransferCopy() error {
+	transferPath := b.vaultTransferCopy
+	if transferPath == "" {
+		return nil
+	}
+
+	b.vaultTransferCopy = ""
+
+	if err := b.fw.Remove(transferPath); err != nil {
+		return fmt.Errorf("failed to remove unencrypted vault transfer file %s: %w", transferPath, err)
 	}
 
 	return nil
@@ -767,22 +826,24 @@ func (b *GCPBootstrapper) skipInstallerStep(dc *datacenter.DataCenter, step stri
 	}
 }
 
+// applySSHProxyServiceDefaults serves the SSH proxy on its reserved external IP, which needs a
+// LoadBalancer service pinned to that IP. Annotations configured in the install config are kept.
+func applySSHProxyServiceDefaults(dc *datacenter.DataCenter) {
+	service := dc.InstallConfig.Codesphere.EnsureSSHWorkspaceProxyService()
+	service.Type = "LoadBalancer"
+	service.LoadBalancerIP = dc.SSHProxyIP
+
+	if service.Annotations == nil {
+		service.Annotations = map[string]string{}
+	}
+
+	service.Annotations["cloud.google.com/load-balancer-ipv4"] = dc.SSHProxyIP
+}
+
 func (b *GCPBootstrapper) applyPcAppsDefaults(dc *datacenter.DataCenter) {
+	applySSHProxyServiceDefaults(dc)
 	dc.InstallConfig.PcApps = util.DeepMergeMaps(dc.InstallConfig.PcApps, files.ChartValues{
 		"applications": map[string]any{
-			"ssh-workspace-proxy": map[string]any{
-				"enabled": true,
-				"valuesObject": map[string]any{
-					"service": map[string]any{
-						"enabled":        true,
-						"type":           "LoadBalancer",
-						"loadBalancerIP": dc.SSHProxyIP,
-						"annotations": map[string]any{
-							"cloud.google.com/load-balancer-ipv4": dc.SSHProxyIP,
-						},
-					},
-				},
-			},
 			"rabbitmq-operator": map[string]any{
 				"enabled": true,
 			},
@@ -808,7 +869,19 @@ func (b *GCPBootstrapper) applyPcAppsDefaults(dc *datacenter.DataCenter) {
 			},
 		},
 	})
+
+	if util.InstallVersionAtLeast(b.Env.InstallVersion, clickhouseMinInstallVersion) {
+		dc.InstallConfig.PcApps = util.DeepMergeMaps(dc.InstallConfig.PcApps, files.ChartValues{
+			"applications": map[string]any{
+				"ms-backend-clickhouse": map[string]any{
+					"enabled": true,
+				},
+			},
+		})
+	}
 }
+
+const clickhouseMinInstallVersion = "v1.117.0"
 
 func (b *GCPBootstrapper) applyManagedServiceDefaults(dc *datacenter.DataCenter) {
 	if dc.InstallConfig.Codesphere.ManagedServices == nil {
@@ -825,6 +898,10 @@ func (b *GCPBootstrapper) applyManagedServiceDefaults(dc *datacenter.DataCenter)
 
 		if util.InstallVersionAtLeast(b.Env.InstallVersion, "v1.106.0") {
 			ms = append(ms, files.ManagedServiceConfig{Name: "url-shortener", SchemaVersion: "v0"})
+		}
+
+		if util.InstallVersionAtLeast(b.Env.InstallVersion, clickhouseMinInstallVersion) {
+			ms = append(ms, files.ManagedServiceConfig{Name: "clickhouse", SchemaVersion: "v0"})
 		}
 
 		dc.InstallConfig.Codesphere.ManagedServices = ms
@@ -1043,7 +1120,7 @@ func (b *GCPBootstrapper) EnsureSecrets() error {
 }
 
 func (b *GCPBootstrapper) ensureSecrets(dc *datacenter.DataCenter) error {
-	if err := dc.ConfigManager.LoadVaultFromUnecryptedFile(dc.SecretsFilePath); err != nil {
+	if err := dc.ConfigManager.LoadVaultFromFileOrCreate(dc.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file: %w", err)
 	}
 
@@ -1067,18 +1144,38 @@ func (b *GCPBootstrapper) EncryptVault() error {
 	return b.encryptVault(b.primaryDC())
 }
 
+// encryptVault encrypts the uploaded plaintext vault on the jumpbox. The ciphertext is written to
+// a temporary file and swapped in, so no plaintext copy is kept: a backup left by earlier OMS
+// versions is removed, and on failure the plaintext vault is removed too. The local vault stays
+// authoritative and is uploaded again on the next run.
 func (b *GCPBootstrapper) encryptVault(dc *datacenter.DataCenter) error {
-	err := b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("cp %s{,.bak}", dc.RemoteVaultPath()))
+	vaultPath := dc.RemoteVaultPath()
+	encryptedPath := vaultPath + ".enc"
+
+	err := b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf(
+		"sops --encrypt --age $(age-keygen -y %s) --output %s %s && mv %s %s",
+		dc.RemoteAgeKeyPath(), encryptedPath, vaultPath, encryptedPath, vaultPath))
 	if err != nil {
-		return fmt.Errorf("failed backup vault on jumpbox: %w", err)
+		return b.removePlaintextVault(fmt.Errorf("failed to encrypt vault on jumpbox: %w", err), vaultPath, encryptedPath)
 	}
 
-	err = b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("sops --encrypt --in-place --age $(age-keygen -y %s) %s", dc.RemoteAgeKeyPath(), dc.RemoteVaultPath()))
+	err = b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("rm -f %s.bak", vaultPath))
 	if err != nil {
-		return fmt.Errorf("failed to encrypt vault on jumpbox: %w", err)
+		return fmt.Errorf("failed to remove plaintext vault backup from jumpbox: %w", err)
 	}
 
 	return nil
+}
+
+// removePlaintextVault removes the vault files left on the jumpbox after a failed encryption,
+// so the secrets are not kept there in plaintext.
+func (b *GCPBootstrapper) removePlaintextVault(encryptErr error, paths ...string) error {
+	err := b.Env.Jumpbox.RunSSHCommand("root", "rm -f "+strings.Join(paths, " "))
+	if err != nil {
+		return errors.Join(encryptErr, fmt.Errorf("failed to remove plaintext vault from jumpbox: %w", err))
+	}
+
+	return encryptErr
 }
 
 // decryptVault creates an unencrypted copy of the data center's vault in dst on the jumpbox.
@@ -1102,10 +1199,23 @@ func (b *GCPBootstrapper) decryptVault(dc *datacenter.DataCenter, dst string) er
 	return nil
 }
 
+// WritePrimaryDataCenterConfig writes the primary data center's install config and vault and
+// places them, with the vault encrypted, on the jumpbox.
+func (b *GCPBootstrapper) WritePrimaryDataCenterConfig() error {
+	if err := b.ensureDataCenters(); err != nil {
+		return err
+	}
+
+	return b.writeDataCenterConfig(b.primaryDC())
+}
+
 // writeDataCenterConfig writes the data center's install config and vault, then places the
-// encrypted vault and its age identity on the jumpbox.
-func (b *GCPBootstrapper) writeDataCenterConfig(dc *datacenter.DataCenter) error {
-	err := b.stlog.Step(dc.StepName("Update install config"), func() error {
+// encrypted vault and its age identity on the jumpbox. The plaintext transfer copy is removed
+// last, so a failed removal never keeps the jumpbox vault in plaintext.
+func (b *GCPBootstrapper) writeDataCenterConfig(dc *datacenter.DataCenter) (err error) {
+	defer func() { err = errors.Join(err, b.removeVaultTransferCopy()) }()
+
+	err = b.stlog.Step(dc.StepName("Update install config"), func() error {
 		return b.updateInstallConfig(dc)
 	})
 	if err != nil {

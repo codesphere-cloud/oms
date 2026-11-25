@@ -69,6 +69,9 @@ codesphere:
     key: key-pem
   sshWorkspaceProxy:
     baseDomain: ssh.example.com
+    service:
+      type: NodePort
+      nodePort: 30022
   vpnLeftPeerId: peer-1
   customDomains:
     cNameBaseDomain: custom.example.com

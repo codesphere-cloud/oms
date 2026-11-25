@@ -4,6 +4,7 @@
 package installer_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 
@@ -38,7 +39,7 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 			os.Stdin = stdin
 
 			DeferCleanup(func() { os.Stdin = oldStdin; Expect(stdin.Close()).To(Succeed()) })
-			Expect(manager.CollectInteractively()).To(Succeed())
+			Expect(manager.CollectInteractively(context.Background())).To(Succeed())
 			Expect(cfg.Operations.Codesphere).To(Equal(expected))
 			Expect(cfg.Operations.Skip).To(Equal([]string{"ceph"}))
 		},
@@ -52,7 +53,7 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 			err := manager.ApplyProfile("dev")
 			Expect(err).ToNot(HaveOccurred())
 
-			err = manager.CollectInteractively()
+			err = manager.CollectInteractively(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 
 			config := manager.GetInstallConfig()
@@ -82,7 +83,7 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 
 			DeferCleanup(func() { os.Stdin = oldStdin; _ = os.Remove(stdin.Name()) })
 
-			err = manager.CollectInteractively()
+			err = manager.CollectInteractively(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 
 			config = manager.GetInstallConfig()
@@ -92,6 +93,78 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 			Expect(config.Cluster.MetalLB.Pools[0].Name).To(Equal("existing-pool"))
 			Expect(config.Cluster.MetalLB.Pools[0].IPAddresses).To(Equal([]string{"10.0.0.1-10.0.0.5"}))
 		})
+
+		It("should default the SSH workspace proxy service to a LoadBalancer", func() {
+			Expect(manager.ApplyProfile(installer.PROFILE_DEV)).To(Succeed())
+
+			// An empty stdin resolves every prompt to its default value.
+			stdin, err := os.Open(os.DevNull)
+			Expect(err).NotTo(HaveOccurred())
+
+			oldStdin := os.Stdin
+			os.Stdin = stdin
+
+			DeferCleanup(func() { os.Stdin = oldStdin; Expect(stdin.Close()).To(Succeed()) })
+
+			Expect(manager.CollectInteractively(context.Background())).To(Succeed())
+			Expect(manager.GetInstallConfig().Codesphere.SSHWorkspaceProxy.ServiceConfig()).To(Equal(&files.SSHWorkspaceProxyServiceConfig{Type: "LoadBalancer"}))
+		})
+
+		It("should preserve an existing SSH workspace proxy load balancer IP as prompt default", func() {
+			Expect(manager.ApplyProfile(installer.PROFILE_DEV)).To(Succeed())
+			// The node port only applies to NodePort services and is dropped for a LoadBalancer.
+			manager.GetInstallConfig().Codesphere.SSHWorkspaceProxy = &files.SSHWorkspaceProxyConfig{
+				Service: &files.SSHWorkspaceProxyServiceConfig{Type: "LoadBalancer", NodePort: 31022, LoadBalancerIP: "203.0.113.22"},
+			}
+
+			// An empty stdin resolves every prompt to its default value.
+			stdin, err := os.Open(os.DevNull)
+			Expect(err).NotTo(HaveOccurred())
+
+			oldStdin := os.Stdin
+			os.Stdin = stdin
+
+			DeferCleanup(func() { os.Stdin = oldStdin; Expect(stdin.Close()).To(Succeed()) })
+
+			Expect(manager.CollectInteractively(context.Background())).To(Succeed())
+			Expect(manager.GetInstallConfig().Codesphere.SSHWorkspaceProxy.ServiceConfig()).To(Equal(&files.SSHWorkspaceProxyServiceConfig{Type: "LoadBalancer", LoadBalancerIP: "203.0.113.22"}))
+		})
+
+		It("should preserve an existing SSH workspace proxy node port as prompt default", func() {
+			Expect(manager.ApplyProfile(installer.PROFILE_DEV)).To(Succeed())
+			manager.GetInstallConfig().Codesphere.SSHWorkspaceProxy = &files.SSHWorkspaceProxyConfig{
+				Service: &files.SSHWorkspaceProxyServiceConfig{Type: "NodePort", NodePort: 31022},
+			}
+
+			// An empty stdin resolves every prompt to its default value.
+			stdin, err := os.Open(os.DevNull)
+			Expect(err).NotTo(HaveOccurred())
+
+			oldStdin := os.Stdin
+			os.Stdin = stdin
+
+			DeferCleanup(func() { os.Stdin = oldStdin; Expect(stdin.Close()).To(Succeed()) })
+
+			Expect(manager.CollectInteractively(context.Background())).To(Succeed())
+			Expect(manager.GetInstallConfig().Codesphere.SSHWorkspaceProxy.ServiceConfig()).To(Equal(&files.SSHWorkspaceProxyServiceConfig{Type: "NodePort", NodePort: 31022}))
+		})
+
+		It("should preserve the existing Codesphere public IP as prompt default", func() {
+			Expect(manager.ApplyProfile(installer.PROFILE_DEV)).To(Succeed())
+			manager.GetInstallConfig().Codesphere.PublicIP = "203.0.113.10"
+
+			// An empty stdin resolves every prompt to its default value.
+			stdin, err := os.Open(os.DevNull)
+			Expect(err).NotTo(HaveOccurred())
+
+			oldStdin := os.Stdin
+			os.Stdin = stdin
+
+			DeferCleanup(func() { os.Stdin = oldStdin; Expect(stdin.Close()).To(Succeed()) })
+
+			Expect(manager.CollectInteractively(context.Background())).To(Succeed())
+			Expect(manager.GetInstallConfig().Codesphere.PublicIP).To(Equal("203.0.113.10"))
+		})
 	})
 
 	Describe("Prompter", func() {
@@ -99,7 +172,7 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 
 		Context("Non-interactive mode", func() {
 			BeforeEach(func() {
-				prompter = prompt.NewPrompter(false)
+				prompter = prompt.NewPrompter(context.Background(), false)
 			})
 
 			It("should return default string value", func() {
@@ -152,7 +225,7 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 		It("should have common configuration properties", func() {
 			err := manager.ApplyProfile("prod")
 			Expect(err).ToNot(HaveOccurred())
-			err = manager.CollectInteractively()
+			err = manager.CollectInteractively(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 
 			config := manager.GetInstallConfig()

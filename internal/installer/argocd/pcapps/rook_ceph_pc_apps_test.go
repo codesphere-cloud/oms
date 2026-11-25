@@ -13,18 +13,39 @@ import (
 )
 
 var _ = Describe("RookCephPcAppsValues", func() {
-	// The csi block of the rook-ceph application in the rendered values.
+	// The csi block of the upstream Rook sub-chart inside the rook-ceph application's chart values.
 	csiValues := func(values files.ChartValues) files.ChartValues {
 		apps, ok := values["applications"].(files.ChartValues)
 		Expect(ok).To(BeTrue(), "expected an applications map")
 
-		rookCeph, ok := apps["rook-ceph"].(files.ChartValues)
+		rookCephApp, ok := apps["rook-ceph"].(files.ChartValues)
 		Expect(ok).To(BeTrue(), "expected a rook-ceph application")
 
-		csi, ok := rookCeph["csi"].(files.ChartValues)
+		valuesObject, ok := rookCephApp["valuesObject"].(files.ChartValues)
+		Expect(ok).To(BeTrue(), "expected a valuesObject block")
+
+		rookSubChart, ok := valuesObject["rook-ceph"].(files.ChartValues)
+		Expect(ok).To(BeTrue(), "expected a rook-ceph sub-chart block")
+
+		csi, ok := rookSubChart["csi"].(files.ChartValues)
 		Expect(ok).To(BeTrue(), "expected a csi block")
 
 		return csi
+	}
+
+	// pcApps values that set the CSI kubelet dir the way the workaround in the install config does.
+	pcAppsWithKubeletDir := func(kubeletDir string) files.ChartValues {
+		return files.ChartValues{
+			"applications": files.ChartValues{
+				"rook-ceph": files.ChartValues{
+					"valuesObject": files.ChartValues{
+						"rook-ceph": files.ChartValues{
+							"csi": files.ChartValues{"kubeletDirPath": kubeletDir},
+						},
+					},
+				},
+			},
+		}
 	}
 
 	It("returns nil when ceph.csiKubeletDir is not set", func() {
@@ -41,10 +62,10 @@ var _ = Describe("RookCephPcAppsValues", func() {
 		Expect(values).To(BeNil())
 	})
 
-	It("passes ceph.csiKubeletDir to the rook-ceph application", func() {
+	It("passes ceph.csiKubeletDir to the upstream Rook sub-chart of the rook-ceph application", func() {
 		inputConfig := &files.RootConfig{
 			Ceph: files.CephConfig{
-				CsiKubeletDir: "/var/lib/k0s/kubelet",
+				CsiKubeletDir: "/custom/kubelet",
 			},
 			PcApps: files.ChartValues{
 				"applications": files.ChartValues{
@@ -55,7 +76,7 @@ var _ = Describe("RookCephPcAppsValues", func() {
 
 		values := pcapps.RookCephPcAppsValues(inputConfig)
 
-		Expect(csiValues(values)).To(Equal(files.ChartValues{"kubeletDirPath": "/var/lib/k0s/kubelet"}))
+		Expect(csiValues(values)).To(Equal(files.ChartValues{"kubeletDirPath": "/custom/kubelet"}))
 	})
 
 	Context("when the pcApps block also configures rook-ceph", func() {
@@ -64,13 +85,7 @@ var _ = Describe("RookCephPcAppsValues", func() {
 				Ceph: files.CephConfig{
 					CsiKubeletDir: "/var/lib/k0s/kubelet",
 				},
-				PcApps: files.ChartValues{
-					"applications": files.ChartValues{
-						"rook-ceph": files.ChartValues{
-							"csi": files.ChartValues{"kubeletDirPath": "/custom/kubelet"},
-						},
-					},
-				},
+				PcApps: pcAppsWithKubeletDir("/custom/kubelet"),
 			}
 
 			values := util.DeepMergeMaps(pcapps.RookCephPcAppsValues(inputConfig), inputConfig.PcApps)
@@ -80,13 +95,7 @@ var _ = Describe("RookCephPcAppsValues", func() {
 
 		It("applies the pcApps kubeletDirPath without ceph.csiKubeletDir", func() {
 			inputConfig := &files.RootConfig{
-				PcApps: files.ChartValues{
-					"applications": files.ChartValues{
-						"rook-ceph": files.ChartValues{
-							"csi": files.ChartValues{"kubeletDirPath": "/custom/kubelet"},
-						},
-					},
-				},
+				PcApps: pcAppsWithKubeletDir("/custom/kubelet"),
 			}
 
 			values := util.DeepMergeMaps(pcapps.RookCephPcAppsValues(inputConfig), inputConfig.PcApps)

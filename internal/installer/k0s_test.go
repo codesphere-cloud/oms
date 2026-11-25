@@ -4,6 +4,7 @@
 package installer_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -39,13 +40,13 @@ var _ = Describe("K0s", func() {
 		workDir = filepath.Join(tempDir, "oms-workdir")
 		k0sPath = filepath.Join(workDir, "k0s-v1.29.1+k0s.0-amd64")
 
-		k0s = installer.NewK0s(mockHttp, mockEnv, mockFileWriter)
+		k0s = installer.NewK0s(context.Background(), mockHttp, mockEnv, mockFileWriter)
 		k0sImpl = k0s.(*installer.K0s)
 	})
 
 	Describe("NewK0s", func() {
 		It("creates a new K0s with correct parameters", func() {
-			newK0s := installer.NewK0s(mockHttp, mockEnv, mockFileWriter)
+			newK0s := installer.NewK0s(context.Background(), mockHttp, mockEnv, mockFileWriter)
 			Expect(newK0s).ToNot(BeNil())
 
 			// Type assertion to access fields
@@ -58,7 +59,7 @@ var _ = Describe("K0s", func() {
 		})
 
 		It("implements K0sManager interface", func() {
-			var manager = installer.NewK0s(mockHttp, mockEnv, mockFileWriter)
+			var manager = installer.NewK0s(context.Background(), mockHttp, mockEnv, mockFileWriter)
 			Expect(manager).ToNot(BeNil())
 		})
 	})

@@ -9,7 +9,9 @@ import (
 )
 
 // RookCephPcAppsValues derives the pc-applications values for rook-ceph from the ceph block in the config.yaml,
-// so distributions with a non-default kubelet root (e.g. k0s) get working CSI mounts.
+// so distributions with a non-default kubelet root get working CSI mounts.
+// The Codesphere rook-ceph chart wraps upstream Rook as the `rook-ceph` sub-chart, so the CSI settings have to be
+// nested below the chart values (`valuesObject`) of the application and the sub-chart name.
 // They are the base of the pc-apps values: an explicit `pcApps` block in config.yaml and any --pc-apps-values file
 // still override them.
 // Returns nil when no related value is set, leaving the chart default's untouched.
@@ -21,8 +23,12 @@ func RookCephPcAppsValues(config *files.RootConfig) files.ChartValues {
 	return files.ChartValues{
 		"applications": files.ChartValues{
 			"rook-ceph": files.ChartValues{
-				"csi": files.ChartValues{
-					"kubeletDirPath": config.Ceph.CsiKubeletDir,
+				"valuesObject": files.ChartValues{
+					"rook-ceph": files.ChartValues{
+						"csi": files.ChartValues{
+							"kubeletDirPath": config.Ceph.CsiKubeletDir,
+						},
+					},
 				},
 			},
 		},

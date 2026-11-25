@@ -223,7 +223,9 @@ func AddInstallCodespherePlatformCmd(codesphere *cobra.Command, opts *InstallCod
 	addCodesphereViaArgoCDFlag(platform.cmd, opts)
 
 	util.AddCmd(codesphere, platform.cmd)
-	platform.cmd.RunE = util.CancelOnSignal(platform.Run)
+	platform.cmd.RunE = func(cmd *cobra.Command, _ []string) error {
+		return platform.Run(cmd.Context())
+	}
 }
 
 // addCodesphereViaArgoCDFlag adds the flag only to the commands that deploy Codesphere.

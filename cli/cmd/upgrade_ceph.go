@@ -14,6 +14,7 @@ type UpgradeCephCmd struct {
 	cmd *cobra.Command
 }
 
+// AddUpgradeCephCmd registers the ceph command on the upgrade command.
 func AddUpgradeCephCmd(upgrade *cobra.Command) {
 	ceph := UpgradeCephCmd{
 		cmd: &cobra.Command{

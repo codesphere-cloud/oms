@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -26,6 +25,7 @@ type ExtendBaseimageCmd struct {
 	Env  env.Env
 }
 
+// ExtendBaseimageOpts holds the flags of the extend baseimage command.
 type ExtendBaseimageOpts struct {
 	*util.GlobalOptions
 	Package    string
@@ -34,14 +34,15 @@ type ExtendBaseimageOpts struct {
 	Force      bool
 }
 
-func (c *ExtendBaseimageCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE extends the base image from the package.
+func (c *ExtendBaseimageCmd) RunE(cmd *cobra.Command, _ []string) error {
 	if c.Opts.Package == "" {
 		return errors.New("required option package not set")
 	}
 
 	workdir := c.Env.GetOmsWorkdir()
 	pm := installer.NewPackage(workdir, c.Opts.Package)
-	im := system.NewImage(context.Background())
+	im := system.NewImage(cmd.Context())
 
 	err := c.ExtendBaseimage(pm, im)
 	if err != nil {
@@ -51,6 +52,7 @@ func (c *ExtendBaseimageCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
+// AddExtendBaseimageCmd registers the baseimage command on the extend command.
 func AddExtendBaseimageCmd(extend *cobra.Command, opts *util.GlobalOptions) {
 	baseimage := ExtendBaseimageCmd{
 		cmd: &cobra.Command{
@@ -75,6 +77,7 @@ func AddExtendBaseimageCmd(extend *cobra.Command, opts *util.GlobalOptions) {
 	baseimage.cmd.RunE = baseimage.RunE
 }
 
+// ExtendBaseimage extracts the package, generates a Dockerfile based on the selected base image and loads that image into the local Docker daemon.
 func (c *ExtendBaseimageCmd) ExtendBaseimage(pm installer.PackageManager, im system.ImageManager) error {
 	err := pm.Extract(c.Opts.Force, c.Opts.Verbose)
 	if err != nil {

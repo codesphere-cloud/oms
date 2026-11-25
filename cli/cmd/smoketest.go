@@ -15,6 +15,7 @@ type SmoketestCmd struct {
 	cmd *cobra.Command
 }
 
+// AddSmoketestCmd registers the smoketest command and its subcommands on the root command.
 func AddSmoketestCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	smoketest := SmoketestCmd{
 		cmd: &cobra.Command{

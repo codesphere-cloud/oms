@@ -100,7 +100,7 @@ var _ = Describe("EnsureCodespherePackage", func() {
 		GinkgoT().Setenv("OMS_PORTAL_API", server.URL)
 		GinkgoT().Setenv("OMS_PORTAL_API_KEY", "test-key")
 
-		client := portal.NewPortalClient()
+		client := portal.NewPortalClient(context.Background())
 
 		result, err := portal.EnsureCodespherePackage(context.Background(), client, workdir, version, "", artifact, true)
 		if succeeds {

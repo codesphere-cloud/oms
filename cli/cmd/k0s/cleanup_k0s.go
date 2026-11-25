@@ -6,6 +6,7 @@ package k0s
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -19,6 +20,7 @@ import (
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
@@ -40,13 +42,13 @@ type CleanupK0sOpts struct {
 }
 
 // RunE removes k0s from all nodes of the install-config via SSH
-func (c *CleanupK0sCmd) RunE(_ *cobra.Command, _ []string) error {
+func (c *CleanupK0sCmd) RunE(cmd *cobra.Command, _ []string) error {
 	config, err := installer.LoadManagedInstallConfig(c.Opts.InstallConfig)
 	if err != nil {
 		return fmt.Errorf("failed to clean up k0s: %w", err)
 	}
 
-	nodeClient := node.NewSSHNodeClient(!c.Opts.Verbose)
+	nodeClient := node.NewSSHNodeClient(cmd.Context(), !c.Opts.Verbose)
 
 	var nodes []*node.Node
 	for _, ip := range installer.K0sCleanupNodeIPs(config) {
@@ -59,7 +61,7 @@ func (c *CleanupK0sCmd) RunE(_ *cobra.Command, _ []string) error {
 		})
 	}
 
-	return c.CleanupK0s(nodes)
+	return c.CleanupK0s(cmd.Context(), nodes)
 }
 
 // AddCleanupCmd adds the k0s cleanup command to the given cleanup command
@@ -103,13 +105,14 @@ func AddCleanupCmd(cleanup *cobra.Command, opts *util.GlobalOptions) {
 
 // CleanupK0s removes k0s from all given nodes and reboots them afterwards. A failing node does
 // not stop the cleanup of the others; all failures are returned together and failed nodes are
-// not rebooted.
-func (c *CleanupK0sCmd) CleanupK0s(nodes []*node.Node) error {
+// not rebooted. Once ctx is cancelled no further node is cleaned up or rebooted; a command
+// already running on a node finishes, as the SSH client cannot abort it.
+func (c *CleanupK0sCmd) CleanupK0s(ctx context.Context, nodes []*node.Node) error {
 	if len(nodes) == 0 {
 		return fmt.Errorf("install-config does not contain any Kubernetes nodes")
 	}
 
-	if err := c.confirmCleanup(nodes); err != nil {
+	if err := c.confirmCleanup(ctx, nodes); err != nil {
 		return err
 	}
 
@@ -119,6 +122,10 @@ func (c *CleanupK0sCmd) CleanupK0s(nodes []*node.Node) error {
 	)
 
 	for _, n := range nodes {
+		if err := ctx.Err(); err != nil {
+			return cancelledCleanupError(err, errs)
+		}
+
 		log.Printf("Cleaning up k0s on %s...", n.GetName())
 
 		if err := n.RunSSHCommand("root", installer.K0sCleanupScript()); err != nil {
@@ -131,6 +138,10 @@ func (c *CleanupK0sCmd) CleanupK0s(nodes []*node.Node) error {
 
 	if !c.Opts.SkipReboot {
 		for _, n := range cleaned {
+			if err := ctx.Err(); err != nil {
+				return cancelledCleanupError(err, errs)
+			}
+
 			log.Printf("Rebooting %s...", n.GetName())
 
 			if err := n.RunSSHCommand("root", installer.K0sRebootCommand); err != nil {
@@ -152,7 +163,12 @@ func (c *CleanupK0sCmd) CleanupK0s(nodes []*node.Node) error {
 	return nil
 }
 
-func (c *CleanupK0sCmd) confirmCleanup(nodes []*node.Node) error {
+// cancelledCleanupError reports the cancellation together with the node failures before it.
+func cancelledCleanupError(cause error, errs []error) error {
+	return errors.Join(append([]error{fmt.Errorf("k0s cleanup cancelled, remaining nodes were not touched: %w", cause)}, errs...)...)
+}
+
+func (c *CleanupK0sCmd) confirmCleanup(ctx context.Context, nodes []*node.Node) error {
 	if c.Opts.Force {
 		return nil
 	}
@@ -169,7 +185,7 @@ func (c *CleanupK0sCmd) confirmCleanup(nodes []*node.Node) error {
 
 	log.Println("Type 'yes' to continue: ")
 
-	confirmation, err := bufio.NewReader(c.ConfirmReader).ReadString('\n')
+	confirmation, err := bufio.NewReader(prompt.NewContextReader(ctx, c.ConfirmReader)).ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {
 		return fmt.Errorf("failed to read confirmation: %w", err)
 	}

@@ -299,9 +299,9 @@ License URL: https://github.com/cloudnative-pg/machinery/blob/v0.5.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
-Version: v1.63.0
+Version: v1.68.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.63.0/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.68.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -839,9 +839,9 @@ License URL: https://github.com/jbenet/go-context/blob/d14ea06fba99/LICENSE
  
 ----------
 Module: github.com/jedib0t/go-pretty/v6
-Version: v6.8.3
+Version: v6.9.2
 License: MIT
-License URL: https://github.com/jedib0t/go-pretty/blob/v6.8.3/LICENSE
+License URL: https://github.com/jedib0t/go-pretty/blob/v6.9.2/LICENSE
  
 ----------
 Module: github.com/jmoiron/sqlx
@@ -1168,6 +1168,12 @@ License: BSD-2-Clause
 License URL: https://github.com/redis/go-redis/blob/v9.20.1/LICENSE
  
 ----------
+Module: github.com/rivo/uniseg
+Version: v0.4.7
+License: MIT
+License URL: https://github.com/rivo/uniseg/blob/v0.4.7/LICENSE.txt
+ 
+----------
 Module: github.com/robfig/cron/v3
 Version: v3.0.2-0.20210106135023-bc59245fe10e
 License: MIT
@@ -1175,9 +1181,9 @@ License URL: https://github.com/robfig/cron/blob/bc59245fe10e/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20261110222044-6616e13419c9
+Version: v0.0.0-20261117155431-d2b7705e6526
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/6616e13419c9/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/d2b7705e6526/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
@@ -1457,9 +1463,9 @@ License URL: https://github.com/yaml/go-yaml/blob/v3.0.6/LICENSE
  
 ----------
 Module: golang.org/x/crypto
-Version: v0.58.0
+Version: v0.59.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/crypto/+/v0.58.0:LICENSE
+License URL: https://cs.opensource.google/go/x/crypto/+/v0.59.0:LICENSE
  
 ----------
 Module: golang.org/x/mod/semver
@@ -1499,9 +1505,9 @@ License URL: https://cs.opensource.google/go/x/term/+/v0.48.0:LICENSE
  
 ----------
 Module: golang.org/x/text
-Version: v0.43.0
+Version: v0.44.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/text/+/v0.43.0:LICENSE
+License URL: https://cs.opensource.google/go/x/text/+/v0.44.0:LICENSE
  
 ----------
 Module: golang.org/x/time/rate
@@ -1517,15 +1523,15 @@ License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
  
 ----------
 Module: google.golang.org/api
-Version: v0.312.0
+Version: v0.315.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.312.0/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.315.0/LICENSE
  
 ----------
 Module: google.golang.org/api/internal/third_party/uritemplates
-Version: v0.312.0
+Version: v0.315.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.312.0/internal/third_party/uritemplates/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.315.0/internal/third_party/uritemplates/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis

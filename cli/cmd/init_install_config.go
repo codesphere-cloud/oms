@@ -4,6 +4,8 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -18,6 +20,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// InitInstallConfigCmd implements the init install-config command.
 type InitInstallConfigCmd struct {
 	cmd                   *cobra.Command
 	Opts                  *InitInstallConfigOpts
@@ -26,6 +29,7 @@ type InitInstallConfigCmd struct {
 	generatedAgeRecipient string
 }
 
+// InitInstallConfigOpts holds the flags of the init install-config command.
 type InitInstallConfigOpts struct {
 	*util.GlobalOptions
 
@@ -104,7 +108,12 @@ type InitInstallConfigOpts struct {
 	CodesphereWorkspacePlanName            string
 	CodesphereWorkspacePlanMaxReplicas     int
 
-	CodesphereOpenBaoUri      string
+	SSHWorkspaceProxyServiceType           string
+	SSHWorkspaceProxyServiceNodePort       int
+	SSHWorkspaceProxyServiceLoadBalancerIP string
+	SSHWorkspaceProxyServiceAnnotations    map[string]string
+
+	CodesphereOpenBaoURI      string
 	CodesphereOpenBaoEngine   string
 	CodesphereOpenBaoUser     string
 	CodesphereOpenBaoPassword string
@@ -118,7 +127,8 @@ type InitInstallConfigOpts struct {
 	OpenfgaBackupsSecretAccessKey string
 }
 
-func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE creates the install config manager for the configured vault type and generates the install config.
+func (c *InitInstallConfigCmd) RunE(cmd *cobra.Command, _ []string) error {
 	vaultType, err := vault.ParseType(c.Opts.VaultType)
 	if err != nil {
 		return fmt.Errorf("failed to parse vault type %s: %w", c.Opts.VaultType, err)
@@ -135,7 +145,7 @@ func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialize config manager: %w", err)
 	}
 
-	return c.InitInstallConfig(icg)
+	return c.InitInstallConfig(cmd.Context(), icg)
 }
 
 // generateMissingAgeKey is called for a SOPS vault without a configured age key. It
@@ -178,6 +188,7 @@ func missingAgeKeyError(operation string) error {
 		"or use --vault-type plain. CAUTION: --vault-type plain stores unencrypted secrets on disk, do not use it in production", operation)
 }
 
+// AddInitInstallConfigCmd registers the install-config command on the init command.
 func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	c := InitInstallConfigCmd{
 		cmd: &cobra.Command{
@@ -262,9 +273,23 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	c.cmd.Flags().StringVar(&c.Opts.ACMEDNS01Provider, "acme-dns01-provider", "", "DNS provider for DNS-01 solver (e.g., cloudflare)")
 
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereDomain, "domain", "", "Main Codesphere domain")
+	c.cmd.Flags().StringVar(&c.Opts.CodespherePublicIP, "public-ip", "", "Public IP that custom domains' A records point to (public gateway IP)")
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereWorkspaceHostingBaseDomain, "workspace-hosting-base-domain", "", "Workspace hosting base domain")
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereCustomDomainsCNameBaseDomain, "custom-domains-cname-base-domain", "", "Custom domains CNAME base domain")
+	c.cmd.Flags().StringSliceVar(&c.Opts.CodesphereDNSServers, "dns-servers", []string{}, "DNS servers (comma-separated)")
+
+	// SSH workspace proxy
+	c.cmd.Flags().StringVar(&c.Opts.SSHWorkspaceProxyServiceType, "ssh-proxy-service-type", files.DefaultSSHWorkspaceProxyServiceType,
+		fmt.Sprintf("Kubernetes service type of the SSH workspace proxy (%s)", strings.Join(files.SSHWorkspaceProxyServiceTypes, ", ")))
+	c.cmd.Flags().IntVar(&c.Opts.SSHWorkspaceProxyServiceNodePort, "ssh-proxy-node-port", files.DefaultSSHWorkspaceProxyNodePort,
+		"Node port of the SSH workspace proxy service (only for service type NodePort)")
+	c.cmd.Flags().StringVar(&c.Opts.SSHWorkspaceProxyServiceLoadBalancerIP, "ssh-proxy-load-balancer-ip", "",
+		"Fixed IP of the SSH workspace proxy load balancer (only for service type LoadBalancer)")
+	c.cmd.Flags().StringToStringVar(&c.Opts.SSHWorkspaceProxyServiceAnnotations, "ssh-proxy-service-annotations", nil,
+		"Annotations of the SSH workspace proxy service, e.g. to pin a cloud or MetalLB load balancer IP (key=value, comma-separated)")
 
 	// OpenBao
-	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoUri, "openbao-uri", "", "URI for OpenBao (e.g., https://openbao.example.com)")
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoURI, "openbao-uri", "", "URI for OpenBao (e.g., https://openbao.example.com)")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoEngine, "openbao-engine", "cs-secrets-engine", "Engine for OpenBao")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoUser, "openbao-user", "admin", "Username for OpenBao authentication")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoPassword, "openbao-password", "", "Password for OpenBao authentication")
@@ -285,7 +310,9 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	util.AddCmd(init, c.cmd)
 }
 
-func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigManager) error {
+// InitInstallConfig generates the install config, asking for it interactively when requested.
+// An interrupt (ctx cancelled) ends the interactive collection at the next question.
+func (c *InitInstallConfigCmd) InitInstallConfig(ctx context.Context, icg installer.InstallConfigManager) error {
 	if c.Opts.CodesphereHash != "" && c.Opts.CodesphereVersion == "" {
 		return fmt.Errorf("--codesphere-hash requires --codesphere-version")
 	}
@@ -315,7 +342,7 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 	}
 
 	if c.Opts.Interactive {
-		err = icg.CollectInteractively()
+		err = icg.CollectInteractively(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to collect configuration interactively: %w", err)
 		}
@@ -335,6 +362,8 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 
 		c.printWarningsMessage(validationWarnings)
 	}
+
+	warnIfPublicIPUnreachable(icg.GetInstallConfig())
 
 	if err := icg.GenerateSecrets(); err != nil {
 		return fmt.Errorf("failed to generate secrets: %w", err)
@@ -373,6 +402,18 @@ func (c *InitInstallConfigCmd) printWarningsMessage(warnings []string) {
 	log.Println(strings.Repeat("!", 70))
 	log.Println("The configuration files will be generated.")
 	log.Println("Please review and fix the issues in the generated files before use!")
+}
+
+// warnIfPublicIPUnreachable flags a public IP that `install codesphere` will reject, such as the
+// 127.0.0.1 placeholder the profiles default to. It only warns because local component installs
+// legitimately keep the placeholder.
+func warnIfPublicIPUnreachable(config *files.RootConfig) {
+	err := config.Codesphere.ValidateReachablePublicIP()
+	if !errors.Is(err, files.ErrPublicIPUnreachable) {
+		return
+	}
+
+	log.Printf("WARNING: %v. 'oms install codesphere' rejects it unless --local-components is set; update it with 'oms update install-config --public-ip'.\n", err)
 }
 
 func (c *InitInstallConfigCmd) printSuccessMessage(warningCount int) {
@@ -430,6 +471,8 @@ func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) 
 	if len(errors) > 0 {
 		return fmt.Errorf("install config validation failed: %s", strings.Join(errors, ", "))
 	}
+
+	warnIfPublicIPUnreachable(icg.GetInstallConfig())
 
 	if c.Opts.VaultFile != "" {
 		log.Printf("Reading vault file: %s\n", c.Opts.VaultFile)
@@ -674,6 +717,18 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		config.Codesphere.DNSServers = c.Opts.CodesphereDNSServers
 	}
 
+	sshProxyService := config.Codesphere.EnsureSSHWorkspaceProxyService()
+	sshProxyService.Type = c.Opts.SSHWorkspaceProxyServiceType
+	sshProxyService.LoadBalancerIP = c.Opts.SSHWorkspaceProxyServiceLoadBalancerIP
+
+	if sshProxyService.IsNodePort() {
+		sshProxyService.NodePort = c.Opts.SSHWorkspaceProxyServiceNodePort
+	}
+
+	if len(c.Opts.SSHWorkspaceProxyServiceAnnotations) > 0 {
+		sshProxyService.Annotations = c.Opts.SSHWorkspaceProxyServiceAnnotations
+	}
+
 	if c.Opts.CodesphereWorkspaceImageBomRef != "" {
 		if config.Codesphere.WorkspaceImages == nil {
 			config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{}
@@ -684,12 +739,12 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		}
 	}
 
-	if c.Opts.CodesphereOpenBaoUri != "" {
+	if c.Opts.CodesphereOpenBaoURI != "" {
 		if config.Codesphere.OpenBao == nil {
 			config.Codesphere.OpenBao = &files.OpenBaoConfig{}
 		}
 
-		config.Codesphere.OpenBao.URI = c.Opts.CodesphereOpenBaoUri
+		config.Codesphere.OpenBao.URI = c.Opts.CodesphereOpenBaoURI
 		config.Codesphere.OpenBao.Engine = c.Opts.CodesphereOpenBaoEngine
 
 		config.Codesphere.OpenBao.User = c.Opts.CodesphereOpenBaoUser

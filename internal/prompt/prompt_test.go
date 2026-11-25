@@ -5,6 +5,7 @@ package prompt
 
 import (
 	"bufio"
+	"context"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -14,14 +15,14 @@ import (
 var _ = Describe("Prompter", func() {
 	Describe("NewPrompter", func() {
 		It("creates a non-interactive prompter", func() {
-			p := NewPrompter(false)
+			p := NewPrompter(context.Background(), false)
 			Expect(p).NotTo(BeNil())
 			Expect(p.interactive).To(BeFalse())
 			Expect(p.reader).NotTo(BeNil())
 		})
 
 		It("creates an interactive prompter", func() {
-			p := NewPrompter(true)
+			p := NewPrompter(context.Background(), true)
 			Expect(p).NotTo(BeNil())
 			Expect(p.interactive).To(BeTrue())
 			Expect(p.reader).NotTo(BeNil())
@@ -31,13 +32,13 @@ var _ = Describe("Prompter", func() {
 	Describe("String", func() {
 		Context("non-interactive mode", func() {
 			It("returns default value without prompting", func() {
-				p := NewPrompter(false)
+				p := NewPrompter(context.Background(), false)
 				result := p.String("Enter value", "default")
 				Expect(result).To(Equal("default"))
 			})
 
 			It("returns empty string when no default", func() {
-				p := NewPrompter(false)
+				p := NewPrompter(context.Background(), false)
 				result := p.String("Enter value", "")
 				Expect(result).To(Equal(""))
 			})
@@ -79,7 +80,7 @@ var _ = Describe("Prompter", func() {
 	Describe("Int", func() {
 		Context("non-interactive mode", func() {
 			It("returns default value without prompting", func() {
-				p := NewPrompter(false)
+				p := NewPrompter(context.Background(), false)
 				result := p.Int("Enter number", 42)
 				Expect(result).To(Equal(42))
 			})
@@ -131,14 +132,14 @@ var _ = Describe("Prompter", func() {
 	Describe("StringSlice", func() {
 		Context("non-interactive mode", func() {
 			It("returns default value without prompting", func() {
-				p := NewPrompter(false)
+				p := NewPrompter(context.Background(), false)
 				defaultVal := []string{"one", "two", "three"}
 				result := p.StringSlice("Enter values", defaultVal)
 				Expect(result).To(Equal(defaultVal))
 			})
 
 			It("returns empty slice when no default", func() {
-				p := NewPrompter(false)
+				p := NewPrompter(context.Background(), false)
 				result := p.StringSlice("Enter values", []string{})
 				Expect(result).To(Equal([]string{}))
 			})
@@ -201,13 +202,13 @@ var _ = Describe("Prompter", func() {
 	Describe("Bool", func() {
 		Context("non-interactive mode", func() {
 			It("returns default true without prompting", func() {
-				p := NewPrompter(false)
+				p := NewPrompter(context.Background(), false)
 				result := p.Bool("Enable feature", true)
 				Expect(result).To(BeTrue())
 			})
 
 			It("returns default false without prompting", func() {
-				p := NewPrompter(false)
+				p := NewPrompter(context.Background(), false)
 				result := p.Bool("Enable feature", false)
 				Expect(result).To(BeFalse())
 			})
@@ -249,7 +250,7 @@ var _ = Describe("Prompter", func() {
 	Describe("Choice", func() {
 		Context("non-interactive mode", func() {
 			It("returns default value without prompting", func() {
-				p := NewPrompter(false)
+				p := NewPrompter(context.Background(), false)
 				choices := []string{"option1", "option2", "option3"}
 				result := p.Choice("Select option", choices, "option2")
 				Expect(result).To(Equal("option2"))

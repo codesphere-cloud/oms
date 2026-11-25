@@ -41,17 +41,23 @@ type SmoketestCodesphereCmd struct {
 	Opts *teststeps.SmoketestCodesphereOpts
 }
 
-func (c *SmoketestCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE creates the Codesphere API client and runs the smoke test. The client is bound to the
+// --timeout deadline, so an in-flight API request is stopped once the deadline passes. Workspace
+// cleanup uses the client's cleanup connection, which ignores that deadline.
+func (c *SmoketestCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	c.Opts.Verbose = c.GlobalOptions.Verbose
 
-	client, err := codesphere.NewClient(c.Opts.BaseURL, c.Opts.Token)
+	ctx, cancel := context.WithTimeout(cmd.Context(), c.Opts.Timeout)
+	defer cancel()
+
+	client, err := codesphere.NewClient(ctx, c.Opts.BaseURL, c.Opts.Token)
 	if err != nil {
 		return fmt.Errorf("failed to create Codesphere client: %w", err)
 	}
 
 	c.Opts.Client = client
 
-	return c.RunSmoketest()
+	return c.RunSmoketest(ctx)
 }
 
 func AddSmoketestCmd(parent *cobra.Command, opts *util.GlobalOptions) {
@@ -113,8 +119,10 @@ func AddSmoketestCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	util.AddCmd(parent, c.cmd)
 }
 
-func (c *SmoketestCodesphereCmd) RunSmoketest() (err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), c.Opts.Timeout)
+// RunSmoketest runs the selected steps within the configured timeout. The workspace cleanup is
+// not bound to that timeout, so a timed-out run still deletes its workspace.
+func (c *SmoketestCodesphereCmd) RunSmoketest(ctx context.Context) (err error) {
+	stepCtx, cancel := context.WithTimeout(ctx, c.Opts.Timeout)
 	defer cancel()
 
 	availableStepsMap := make(map[string]teststeps.SmokeTestStep)
@@ -150,7 +158,7 @@ func (c *SmoketestCodesphereCmd) RunSmoketest() (err error) {
 		}
 
 		if workspaceID != 0 && shouldDelete {
-			deleteErr := deleteStep.Run(context.Background(), c.Opts, &workspaceID)
+			deleteErr := deleteStep.Run(context.WithoutCancel(ctx), c.Opts, &workspaceID)
 			if deleteErr != nil {
 				if err == nil {
 					err = deleteErr
@@ -170,7 +178,7 @@ func (c *SmoketestCodesphereCmd) RunSmoketest() (err error) {
 			continue
 		}
 
-		if err = step.Run(ctx, c.Opts, &workspaceID); err != nil {
+		if err = step.Run(stepCtx, c.Opts, &workspaceID); err != nil {
 			return err
 		}
 	}

@@ -14,7 +14,7 @@ Environment variables:
   OMS_GIT_PASSWORD       Optional Git password/token for ArgoCD repository access.
   OMS_PORTAL_API_KEY     OMS portal API key for installer downloads with --install-version.
   OMS_PORTAL_API         Portal API URL (default: https://oms-portal.codesphere.com/api).
-  OMS_WORKDIR            Installer working directory (default: ./oms-workdir).
+  OMS_WORKDIR            Installer working directory (default: oms-workdir).
   KUBECONFIG             Kubeconfig file(s); uses the current context (default: ~/.kube/config).
   HELM_DRIVER            Helm release storage driver (default: secret).
   XDG_CONFIG_HOME       Overrides the config directory searched for sops/age/keys.txt.
@@ -26,6 +26,7 @@ oms beta bootstrap-local [flags]
 ### Options
 
 ```
+      --age-key string                       Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)
       --base-domain string                   Base domain for Codesphere (default "cs.local")
       --ceph-device-filter string            Regular expression selecting Ceph block devices by name
       --ceph-device-path-filter string       Regular expression selecting Ceph block devices by path

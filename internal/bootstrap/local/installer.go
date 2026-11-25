@@ -41,7 +41,7 @@ func (b *LocalBootstrapper) DownloadInstallerPackage() (string, error) {
 		return "", fmt.Errorf("resolve installer package version: %w", err)
 	}
 
-	filename, err := portal.EnsureCodespherePackage(b.ctx, portal.NewPortalClient(), b.Env.InstallDir, version, b.Env.InstallConfig.Operations.Codesphere.Hash, installerArtifactFilename, false)
+	filename, err := portal.EnsureCodespherePackage(b.ctx, portal.NewPortalClient(b.ctx), b.Env.InstallDir, version, b.Env.InstallConfig.Operations.Codesphere.Hash, installerArtifactFilename, false)
 	if err != nil {
 		return "", fmt.Errorf("prepare installer package: %w", err)
 	}

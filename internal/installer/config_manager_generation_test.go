@@ -66,7 +66,7 @@ var _ = Describe("Generated install config round-trip", func() {
 				"reloaded config for profile %s is invalid: %v", profile, reloadedWarnings)
 
 			// Reload the (unencrypted) vault and validate all required secrets exist.
-			Expect(reloaded.LoadVaultFromUnecryptedFile(vaultPath)).To(Succeed())
+			Expect(reloaded.LoadVaultFromFileOrCreate(vaultPath)).To(Succeed())
 			Expect(reloaded.ValidateVault()).To(BeEmpty(),
 				"vault for profile %s is invalid: %v", profile, reloaded.ValidateVault())
 		},

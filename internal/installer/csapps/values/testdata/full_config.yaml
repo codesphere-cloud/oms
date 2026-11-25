@@ -108,6 +108,9 @@ codesphere:
       -----END CERTIFICATE-----
   sshWorkspaceProxy:
     baseDomain: ssh.example.com
+    service:
+      type: NodePort
+      nodePort: 30022
   vpnLeftPeerId: vpn.example.com
   customDomains:
     cNameBaseDomain: custom.example.com

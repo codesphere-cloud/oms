@@ -9,10 +9,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// ListCmd groups the list subcommands.
 type ListCmd struct {
 	cmd *cobra.Command
 }
 
+// AddListCmd registers the list command and its subcommands on the root command.
 func AddListCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	list := ListCmd{
 		cmd: &cobra.Command{

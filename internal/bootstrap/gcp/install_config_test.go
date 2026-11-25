@@ -5,8 +5,9 @@ package gcp_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strings"
+	"io/fs"
 
 	"cloud.google.com/go/resourcemanager/apiv3/resourcemanagerpb"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
@@ -26,6 +27,28 @@ import (
 	grpcstatus "google.golang.org/grpc/status"
 )
 
+// encryptedLocalVault is a vault with SOPS metadata, which is all the format detection inspects.
+var encryptedLocalVault = []byte("secrets: []\nsops:\n    age: []\n")
+
+// expectLocalVaults serves reads of the local vault files listed in vaults, keyed by path. A path
+// listed without content reports a missing vault, which is treated like a plaintext one. Other
+// paths are left to the test's own ReadFile expectations.
+func expectLocalVaults(fw *util.MockFileIO, vaults map[string][]byte) {
+	isLocalVault := func(path string) bool {
+		_, ok := vaults[path]
+
+		return ok
+	}
+
+	fw.EXPECT().ReadFile(mock.MatchedBy(isLocalVault)).RunAndReturn(func(path string) ([]byte, error) {
+		if data := vaults[path]; data != nil {
+			return data, nil
+		}
+
+		return nil, fs.ErrNotExist
+	}).Maybe()
+}
+
 var _ = Describe("Installconfig & Secrets", func() {
 	var (
 		nodeClient *node.MockNodeClient
@@ -41,6 +64,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 		mockGitHubClient *github.MockGitHubClient
 
 		bs *gcp.GCPBootstrapper
+
+		localVaults map[string][]byte
 	)
 
 	JustBeforeEach(func() {
@@ -69,6 +94,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 		icg = installer.NewMockInstallConfigManager(GinkgoT())
 		gc = gcp.NewMockGCPClientManager(GinkgoT())
 		fw = util.NewMockFileIO(GinkgoT())
+		localVaults = map[string][]byte{"fake-secret": nil, "fake-secret-dc2": nil}
+		expectLocalVaults(fw, localVaults)
 		mockPortalClient = portal.NewMockPortal(GinkgoT())
 		mockGitHubClient = github.NewMockGitHubClient(GinkgoT())
 		stlog = bootstrap.NewStepLogger(false)
@@ -121,7 +148,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				csEnv.InstallVersion, csEnv.InstallHash, csEnv.InstallLocal = version, hash, local
 				csEnv.RegistryType = gcp.RegistryTypeArtifactRegistry
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&cfg)
 
@@ -153,7 +180,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 			})
 			It("uses existing when config file exists", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -163,7 +190,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 			It("loads existing vault before existing config for templating", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -195,7 +222,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				It("overwrites an existing config", func() {
 					fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-					icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+					icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 					icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 					icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -208,7 +235,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 		Describe("Invalid cases", func() {
 			It("returns error when config file exists but fails to load", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(fmt.Errorf("bad format"))
 
 				err := bs.EnsureInstallConfig()
@@ -303,7 +330,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 					fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-					icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+					icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 					icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(fmt.Errorf("bad format"))
 
 					err := bs.EnsureInstallConfig()
@@ -318,7 +345,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 	Describe("EnsureSecrets", func() {
 		Describe("Valid EnsureSecrets", func() {
 			It("loads existing secrets file", func() {
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 				err := bs.EnsureSecrets()
@@ -326,7 +353,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 			})
 
 			It("skips when secrets file missing", func() {
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 				err := bs.EnsureSecrets()
@@ -336,7 +363,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 		Describe("Invalid cases", func() {
 			It("returns error when secrets file load fails", func() {
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(fmt.Errorf("load error"))
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(fmt.Errorf("load error"))
 
 				err := bs.EnsureSecrets()
 				Expect(err).To(HaveOccurred())
@@ -395,6 +422,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 			icg.EXPECT().GetVault().Return(vault).Maybe()
 
 			csEnv.GitHubAppName = "fake-app-name"
+			csEnv.PublicGatewayIP = "2.2.2.2"
 		})
 		Describe("Valid UpdateInstallConfig", func() {
 			It("updates config and writes files", func() {
@@ -418,15 +446,13 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(bs.Env.InstallConfig.Codesphere.OpenfgaBackups).To(BeNil())
 
 				applications := bs.Env.InstallConfig.PcApps["applications"].(map[string]interface{})
-				sshProxy := applications["ssh-workspace-proxy"].(map[string]interface{})
-				Expect(sshProxy["enabled"]).To(Equal(true))
-				sshProxyValues := sshProxy["valuesObject"].(map[string]interface{})
-				sshProxyService := sshProxyValues["service"].(map[string]interface{})
-				Expect(sshProxyService["enabled"]).To(Equal(true))
-				Expect(sshProxyService["type"]).To(Equal("LoadBalancer"))
-				Expect(sshProxyService["loadBalancerIP"]).To(Equal("3.3.3.3"))
-				sshProxyAnnotations := sshProxyService["annotations"].(map[string]interface{})
-				Expect(sshProxyAnnotations["cloud.google.com/load-balancer-ipv4"]).To(Equal("3.3.3.3"))
+				// The install enables the SSH proxy itself (see pcapps.SSHWorkspaceProxyPcAppsValues).
+				Expect(applications).NotTo(HaveKey("ssh-workspace-proxy"))
+				Expect(bs.Env.InstallConfig.Codesphere.SSHWorkspaceProxy.ServiceConfig()).To(Equal(&files.SSHWorkspaceProxyServiceConfig{
+					Type:           "LoadBalancer",
+					LoadBalancerIP: "3.3.3.3",
+					Annotations:    map[string]string{"cloud.google.com/load-balancer-ipv4": "3.3.3.3"},
+				}))
 
 				Expect(applications["kubevirt-operator"].(map[string]interface{})["enabled"]).To(Equal(true))
 				Expect(applications["kubevirt-cr"].(map[string]interface{})["enabled"]).To(Equal(true))
@@ -440,6 +466,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(bs.Env.InstallConfig.DataCenters).To(BeEmpty())
 				Expect(bs.Env.InstallConfig.DefaultDataCenterID).To(BeZero())
 				Expect(bs.Env.InstallConfig.Codesphere.Domain).To(Equal("cs.example.com"))
+				// Custom domains' A records point to the public gateway; the k0s nodes have no external IP.
+				Expect(bs.Env.InstallConfig.Codesphere.PublicIP).To(Equal("2.2.2.2"))
 				Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal(map[string]bool{}))
 				Expect(bs.Env.InstallConfig.Codesphere.Internal).To(Equal(gcp.DefaultInternalFlags))
 				Expect(bs.Env.InstallConfig.Codesphere.Preview).To(Equal(util.StringSliceToBoolMap(gcp.DefaultPreviewFlags)))
@@ -462,6 +490,47 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				Expect(bs.Env.InstallConfig.Codesphere.OpenBao).To(BeNil())
 			})
+
+			Context("with an encrypted local vault", func() {
+				BeforeEach(func() {
+					localVaults["fake-secret"] = encryptedLocalVault
+
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret.plain-1234", true).Return(nil)
+					fw.EXPECT().CreateTemp(".", "fake-secret.plain*").Return("fake-secret.plain-1234", nil)
+				})
+
+				It("transfers a unique plaintext vault copy", func() {
+					nodeClient.EXPECT().CopyFile(mock.Anything, "fake-config-file", "/etc/codesphere/config.yaml").Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, "fake-secret.plain-1234", "/etc/codesphere/secrets/prod.vault.yaml").Return(nil)
+
+					Expect(bs.UpdateInstallConfig()).To(Succeed())
+				})
+
+				It("reports a plaintext transfer copy that could not be removed, after encrypting the vault", func() {
+					fw.EXPECT().Remove("fake-secret.plain-1234").Return(errors.New("permission denied"))
+
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+					nodeClient.EXPECT().HasFile(mock.Anything, "/etc/codesphere/secrets/age_key.txt").Return(true)
+
+					var commands []string
+
+					nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).RunAndReturn(
+						func(_ *node.Node, _, command string) error {
+							commands = append(commands, command)
+
+							return nil
+						})
+
+					err := bs.WritePrimaryDataCenterConfig()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to remove unencrypted vault transfer file"))
+					Expect(commands).To(ContainElement(ContainSubstring("sops --encrypt")))
+				})
+			})
+
 			It("uses the configured datacenter name", func() {
 				csEnv.DatacenterName = "staging"
 
@@ -475,6 +544,25 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(bs.Env.InstallConfig.Datacenter.Name).To(Equal("staging"))
+			})
+			It("keeps configured SSH proxy annotations next to the reserved IP", func() {
+				csEnv.SSHProxyIP = "3.3.3.3"
+				csEnv.InstallConfig.Codesphere.SSHWorkspaceProxy = &files.SSHWorkspaceProxyConfig{
+					Service: &files.SSHWorkspaceProxyServiceConfig{Annotations: map[string]string{"team": "platform"}},
+				}
+
+				icg.EXPECT().GenerateSecrets().Return(nil)
+				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+				Expect(bs.UpdateInstallConfig()).To(Succeed())
+
+				Expect(bs.Env.InstallConfig.Codesphere.SSHWorkspaceProxy.ServiceConfig().Annotations).To(Equal(map[string]string{
+					"team":                                "platform",
+					"cloud.google.com/load-balancer-ipv4": "3.3.3.3",
+				}))
 			})
 			It("sets the codesphere registry independently of the registry server", func() {
 				csEnv.ContainerRegistryURL = "ghcr.io"
@@ -1261,6 +1349,14 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(err).To(MatchError(ContainSubstring("codesphere registry password is not set")))
 			})
 
+			// A resumed bootstrap restores the gateway IP from its infra file, which may predate it.
+			It("fails when the data center has no public gateway IP", func() {
+				csEnv.PublicGatewayIP = ""
+
+				err := bs.UpdateInstallConfig()
+				Expect(err).To(MatchError(ContainSubstring("data center 1 has no public gateway IP")))
+			})
+
 			It("fails when GenerateSecrets fails", func() {
 				icg.EXPECT().GenerateSecrets().Return(fmt.Errorf("generate error"))
 
@@ -1475,15 +1571,16 @@ var _ = Describe("Installconfig & Secrets", func() {
 	})
 
 	Describe("EncryptVault", func() {
-		Describe("Valid EncryptVault", func() {
-			It("encrypts vault using sops", func() {
-				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
-					return strings.HasPrefix(cmd, "cp ")
-				})).Return(nil)
+		const (
+			encryptCommand         = "sops --encrypt --age $(age-keygen -y /etc/codesphere/secrets/age_key.txt) --output /etc/codesphere/secrets/prod.vault.yaml.enc /etc/codesphere/secrets/prod.vault.yaml && mv /etc/codesphere/secrets/prod.vault.yaml.enc /etc/codesphere/secrets/prod.vault.yaml"
+			removeBackupCommand    = "rm -f /etc/codesphere/secrets/prod.vault.yaml.bak"
+			removePlaintextCommand = "rm -f /etc/codesphere/secrets/prod.vault.yaml /etc/codesphere/secrets/prod.vault.yaml.enc"
+		)
 
-				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
-					return strings.Contains(cmd, "sops --encrypt")
-				})).Return(nil)
+		Describe("Valid EncryptVault", func() {
+			It("encrypts the vault without keeping a plaintext backup", func() {
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", encryptCommand).Return(nil)
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", removeBackupCommand).Return(nil)
 
 				err := bs.EncryptVault()
 				Expect(err).NotTo(HaveOccurred())
@@ -1491,28 +1588,32 @@ var _ = Describe("Installconfig & Secrets", func() {
 		})
 
 		Describe("Invalid cases", func() {
-			It("fails when backup vault command fails", func() {
-				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
-					return strings.HasPrefix(cmd, "cp ")
-				})).Return(fmt.Errorf("backup error"))
-
-				err := bs.EncryptVault()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed backup vault on jumpbox"))
-			})
-
-			It("fails when sops encrypt command fails", func() {
-				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
-					return strings.HasPrefix(cmd, "cp ")
-				})).Return(nil)
-
-				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
-					return strings.Contains(cmd, "sops --encrypt")
-				})).Return(fmt.Errorf("encrypt error"))
+			It("removes the plaintext vault when sops encrypt fails", func() {
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", encryptCommand).Return(fmt.Errorf("encrypt error"))
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", removePlaintextCommand).Return(nil)
 
 				err := bs.EncryptVault()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to encrypt vault on jumpbox"))
+			})
+
+			It("reports a plaintext vault that could not be removed after a failed encryption", func() {
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", encryptCommand).Return(fmt.Errorf("encrypt error"))
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", removePlaintextCommand).Return(fmt.Errorf("rm error"))
+
+				err := bs.EncryptVault()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to encrypt vault on jumpbox"))
+				Expect(err.Error()).To(ContainSubstring("failed to remove plaintext vault from jumpbox"))
+			})
+
+			It("keeps the encrypted vault when the old backup cannot be removed", func() {
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", encryptCommand).Return(nil)
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", removeBackupCommand).Return(fmt.Errorf("rm error"))
+
+				err := bs.EncryptVault()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to remove plaintext vault backup from jumpbox"))
 			})
 		})
 	})

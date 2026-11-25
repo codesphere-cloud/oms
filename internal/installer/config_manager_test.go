@@ -355,6 +355,32 @@ var _ = Describe("ConfigManager", func() {
 			})
 		})
 
+		Context("ssh workspace proxy validation", func() {
+			It("should reject an invalid service type", func() {
+				configManager.Config.Codesphere.SSHWorkspaceProxy = &files.SSHWorkspaceProxyConfig{
+					Service: &files.SSHWorkspaceProxyServiceConfig{Type: "ExternalName"},
+				}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring("invalid codesphere.sshWorkspaceProxy.service.type")))
+			})
+
+			It("should reject a load balancer IP for a NodePort service", func() {
+				configManager.Config.Codesphere.SSHWorkspaceProxy = &files.SSHWorkspaceProxyConfig{
+					Service: &files.SSHWorkspaceProxyServiceConfig{Type: "NodePort", LoadBalancerIP: "203.0.113.22"},
+				}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring("loadBalancerIP requires service type LoadBalancer")))
+			})
+
+			It("should accept a valid service", func() {
+				configManager.Config.Codesphere.SSHWorkspaceProxy = &files.SSHWorkspaceProxyConfig{
+					Service: &files.SSHWorkspaceProxyServiceConfig{Type: "NodePort", NodePort: 30022},
+				}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).ToNot(ContainElement(ContainSubstring("sshWorkspaceProxy")))
+			})
+		})
+
 		Context("openfga backups validation", func() {
 			It("should require destinationPath and endpointURL when enabled", func() {
 				configManager.Config.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{
@@ -627,7 +653,8 @@ var _ = Describe("ConfigManager", func() {
 						ControlPlanes:       []files.K8sNode{{IPAddress: "10.50.0.2"}},
 					},
 					Codesphere: files.CodesphereConfig{
-						Domain: "codesphere.example.com",
+						Domain:   "codesphere.example.com",
+						PublicIP: "203.0.113.10",
 					},
 				}
 			})
@@ -635,6 +662,22 @@ var _ = Describe("ConfigManager", func() {
 			It("should return no errors", func() {
 				errors := configManager.ValidateInstallConfig()
 				Expect(errors).To(BeEmpty())
+			})
+
+			It("requires the Codesphere public IP", func() {
+				configManager.Config.Codesphere.PublicIP = ""
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).To(ConsistOf(ContainSubstring("codesphere.publicIp is required")))
+			})
+
+			It("rejects an invalid Codesphere public IP", func() {
+				configManager.Config.Codesphere.PublicIP = "not-an-ip"
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).To(ConsistOf("invalid codesphere.publicIp: not-an-ip"))
 			})
 		})
 	})
@@ -950,5 +993,46 @@ var _ = Describe("ConfigManager", func() {
 				Expect(err).ToNot(HaveOccurred(), "cert/key should match in re-written vault")
 			})
 		})
+	})
+})
+
+// Bootstrap vault loading guards against "vault file prod.vault.yaml is SOPS-encrypted, but
+// vault type is plain", which broke bootstrapping with a vault from `oms init install-config`.
+var _ = Describe("Bootstrap vault loading", func() {
+	var (
+		vaultPath string
+		ageKey    string
+	)
+
+	BeforeEach(func() {
+		vaultPath, ageKey = writeVaultFile(GinkgoT().TempDir(), &files.InstallVault{Secrets: []files.SecretEntry{
+			{Name: "registryPassword", Fields: &files.SecretFields{Password: "ghcr-token"}},
+		}})
+	})
+
+	It("loads an existing SOPS-encrypted vault with the auto backend", func() {
+		manager, err := installer.NewAutoInstallConfigManager(ageKey)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(manager.LoadVaultFromFileOrCreate(vaultPath)).To(Succeed())
+		Expect(manager.GetVault().GetSecret("registryPassword").Fields.Password).To(Equal("ghcr-token"))
+	})
+
+	It("re-encrypts a loaded SOPS vault when it is written back", func() {
+		manager, err := installer.NewAutoInstallConfigManager(ageKey)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(manager.LoadVaultFromFileOrCreate(vaultPath)).To(Succeed())
+
+		manager.GetVault().SetSecret(files.SecretEntry{Name: "extra", Fields: &files.SecretFields{Password: "value"}})
+		Expect(manager.WriteVault(vaultPath, false)).To(Succeed())
+
+		raw, err := os.ReadFile(vaultPath)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(raw)).To(ContainSubstring("sops"))
+
+		reloaded, err := installer.NewAutoInstallConfigManager(ageKey)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(reloaded.LoadVaultFromFileOrCreate(vaultPath)).To(Succeed())
+		Expect(reloaded.GetVault().GetSecret("extra").Fields.Password).To(Equal("value"))
 	})
 })
