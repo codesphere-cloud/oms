@@ -98,5 +98,13 @@ var _ = Describe("AppInstaller getPcAppsValues", func() {
 			Expect(application("rgw-load-balancer")).To(Equal(files.ChartValues{"enabled": false}))
 			Expect(application("ms-backend-s3")).ToNot(HaveKey("enabled"))
 		})
+
+		It("keeps postgres-operator and barman-cloud-plugin on whatever steps are skipped", func() {
+			skipSteps = []string{installer.MsBackendsStep}
+			config.Operations = &files.OperationsConfig{Skip: []string{installer.SetUpClusterStep}}
+
+			Expect(application("postgres-operator")).ToNot(HaveKey("enabled"))
+			Expect(application("barman-cloud-plugin")).ToNot(HaveKey("enabled"))
+		})
 	})
 })

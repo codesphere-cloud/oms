@@ -341,6 +341,8 @@ func (i *AppInstaller) getPcAppsValues(bomConfig *bom.Config) (files.ChartValues
 	values = util.DeepMergeMaps(values, clusterConfigValues)
 	values = util.DeepMergeMaps(values, falcoValues)
 	values = util.DeepMergeMaps(values, installerChartValues)
+	values = util.DeepMergeMaps(values, pcapps.PostgresOperatorPcAppsValues(&i.cfg.Config))
+	values = util.DeepMergeMaps(values, pcapps.BarmanCloudPluginPcAppsValues(&i.cfg.Config))
 	values = util.DeepMergeMaps(values, pcapps.ImagePrePullPcAppsValues(&i.cfg.Config, bomConfig))
 	values = util.DeepMergeMaps(values, errorPageServerValues)
 	values = util.DeepMergeMaps(values, i.cfg.Config.PcApps)
