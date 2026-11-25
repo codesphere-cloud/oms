@@ -83,7 +83,7 @@ jobs:
       id-token: write
     # pull_request runs have no inputs, so fall back to the defaults.
     with:
-      project_prefix: manual
+      project_prefix: testing
       oms_version: ${{ inputs.oms_version || '' }}
       install_version: ${{ inputs.install_version || '' }}
       airgapped: ${{ inputs.airgapped || false }}
