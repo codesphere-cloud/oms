@@ -4,14 +4,27 @@
 package pcapps
 
 import (
+	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 const (
+	// RgwLoadBalancer is the key of the rgw-load-balancer chart under `applications` in the pc-applications values.
+	RgwLoadBalancer = "rgw-load-balancer"
+
 	rookCephNamespace    = "rook-ceph"
 	inClusterRgwEndpoint = Rgw + "." + rookCephNamespace + ".svc.cluster.local"
 )
+
+// RgwLoadBalancerPcAppsValues derives the pc-applications values for the rgw load balancer:
+// `enabled: false` when the config does not ask for it or the run skips the set-up-cluster step,
+// otherwise the endpoints it forwards to with the override of cluster.rgwLoadBalancer on top.
+func RgwLoadBalancerPcAppsValues(config *files.RootConfig, skipSteps []string) files.ChartValues {
+	installed := stepRuns(config, skipSteps, installer.SetUpClusterStep) && rgwLoadBalancerInstalled(config)
+
+	return applicationValues(RgwLoadBalancer, installed, rgwLoadBalancerValues(config))
+}
 
 // rgwLoadBalancerInstalled mirrors setUpCluster in codesphere-monorepo
 // packages/script-lib/src/ts/private-cloud/cluster.ts.
