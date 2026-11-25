@@ -60,7 +60,8 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 
 	// If the codesphere step is skipped we don't want to update the secret that is the source for ESO.
 	// We use ESO with `refreshPolicy: OnChange` which would result in a long lived drift between source and target secret which might be confusing for debugging and could cause problems if we ever switch the refreshPolicy or trigger a manual sync.
-	if !installer.IsStepSkipped(cfg, opts.SkipSteps, installer.CodesphereStep) {
+	codesphereSkipped := installer.IsStepSkipped(cfg, opts.SkipSteps, installer.CodesphereStep)
+	if !codesphereSkipped {
 		if err := ensureVaultSecret(ctx, opts, cfg); err != nil {
 			return err
 		}
@@ -70,7 +71,7 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		}
 	}
 
-	viaArgoCD := opts.CodesphereViaArgoCD && !installer.IsStepSkipped(cfg, opts.SkipSteps, installer.CodesphereStep)
+	viaArgoCD := opts.CodesphereViaArgoCD && !codesphereSkipped
 
 	workdir := env.GetOmsWorkdir()
 
@@ -90,9 +91,9 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 
 		// ci.Install migrates the database before the ArgoCD deploy, so a BOM the deploy
 		// cannot use must stop the install here.
-		installerBOM, err = readArgoCDBOM(pm, opts)
+		installerBOM, err = csapps.ReadBOM(pm, opts.Force, opts.Verbose)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to read the BOM for the ArgoCD deploy: %w", err)
 		}
 
 		kubeClient, err = newKubeClient(opts, cfg)
@@ -155,28 +156,6 @@ func newKubeClient(opts *InstallCodesphereOpts, cfg files.RootConfig) (client.Cl
 	}
 
 	return kubeClient, nil
-}
-
-// readArgoCDBOM reads the package BOM and checks it has the charts the ArgoCD deploy needs.
-func readArgoCDBOM(pm installer.PackageManager, opts *InstallCodesphereOpts) (*bom.Config, error) {
-	if err := pm.ExtractDependency(bom.Filename, opts.Force, opts.Verbose); err != nil {
-		return nil, fmt.Errorf("failed to extract the package BOM: %w", err)
-	}
-
-	installerBOM, err := bom.Parse(pm.GetDependencyPath(bom.Filename))
-	if err != nil {
-		return nil, fmt.Errorf("failed to read the package BOM: %w", err)
-	}
-
-	if _, ok := installerBOM.GetChart(csapps.CsAppsComponent); !ok {
-		return nil, fmt.Errorf("%s chart not found in the package BOM", csapps.CsAppsComponent)
-	}
-
-	if _, ok := installerBOM.GetChart(csapps.CodesphereComponent); !ok {
-		return nil, fmt.Errorf("%s chart not found in the package BOM", csapps.CodesphereComponent)
-	}
-
-	return installerBOM, nil
 }
 
 // ensureVaultSecret writes the vault Secret even though the dependencies phase already wrote

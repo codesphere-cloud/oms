@@ -20,8 +20,8 @@ import (
 
 // BOM components holding the charts Install deploys.
 const (
-	CsAppsComponent     = "cs-applications"
-	CodesphereComponent = "codesphere"
+	csAppsComponent     = "cs-applications"
+	codesphereComponent = "codesphere"
 )
 
 const (
@@ -48,7 +48,7 @@ func Install(
 	parentAppName := parentAppNameFor(cfg)
 
 	parentApp, err := installer.NewAppOfAppsFromBom(kubeClient, csBom, installer.AppOfAppsConfig{
-		Component:      CsAppsComponent,
+		Component:      csAppsComponent,
 		Name:           parentAppName,
 		ReleaseName:    release,
 		Namespace:      argocd.DefaultNamespace,
@@ -58,7 +58,7 @@ func Install(
 		DeleteResourcesWithApp: true,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to initialize the %s installer: %w", CsAppsComponent, err)
+		return fmt.Errorf("failed to initialize the %s installer: %w", csAppsComponent, err)
 	}
 
 	if err := parentApp.Install(ctx); err != nil {
@@ -83,9 +83,9 @@ func Install(
 // values reach a sub application only through csApps; for permanent config for a new app, extend
 // the config appropriately.
 func parentAppValues(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName string) (map[string]any, error) {
-	chart, ok := csBom.GetChart(CodesphereComponent)
+	chart, ok := csBom.GetChart(codesphereComponent)
 	if !ok {
-		return nil, fmt.Errorf("%s chart not found in BOM", CodesphereComponent)
+		return nil, fmt.Errorf("%s chart not found in BOM", codesphereComponent)
 	}
 
 	codesphereValues, err := values.Build(cfg, csBom)
@@ -108,7 +108,7 @@ func parentAppValues(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName s
 		"namespace": codesphereNamespace,
 		"global":    global,
 		"applications": map[string]any{
-			CodesphereComponent: map[string]any{
+			codesphereComponent: map[string]any{
 				"enabled":      true,
 				"version":      chart.Tag(),
 				"valuesObject": codesphereValues,
@@ -135,7 +135,7 @@ func parentAppValues(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName s
 }
 
 func parentAppNameFor(cfg *files.RootConfig) string {
-	return releaseName(cfg) + "-" + CsAppsComponent
+	return releaseName(cfg) + "-" + csAppsComponent
 }
 
 // releaseName names the Codesphere Helm release and the release's Applications. Dev clusters set
