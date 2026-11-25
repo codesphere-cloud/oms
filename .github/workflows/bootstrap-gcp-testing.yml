@@ -86,7 +86,7 @@ jobs:
       project_prefix: testing
       oms_version: ${{ inputs.oms_version || '' }}
       install_version: ${{ inputs.install_version || '' }}
-      airgapped: ${{ inputs.airgapped || false }}
-      rhel: ${{ inputs.rhel || false }}
-      prevent_destroy: ${{ inputs.prevent_destroy || false }}
+      airgapped: ${{ inputs.airgapped || true }}
+      rhel: ${{ inputs.rhel || true }}
+      prevent_destroy: ${{ inputs.prevent_destroy || true }}
       ttl: ${{ inputs.ttl || '2h' }}
