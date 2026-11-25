@@ -30,6 +30,9 @@ oms init k0s-config [flags]
 # Generate a k0sctl config into the OMS workdir
 $ oms init k0s-config --install-config <path>
 
+# Generate a k0sctl config with a limit of 250 pods per worker node
+$ oms init k0s-config --install-config <path> --max-pods 250
+
 # Generate a k0sctl config at the given path
 $ oms init k0s-config --install-config <path> --output <path>
 
@@ -64,6 +67,7 @@ $ oms init k0s-config --install-config <path> --airgapped --path <bundle>
   -f, --force[=true|false]         Force extracting k0s from the package even if it was extracted before
   -h, --help[=true|false]          help for k0s-config
       --install-config string      Path to Codesphere install-config file
+      --max-pods int               Maximum pods per worker node (omit to keep the kubelet default)
       --no-download[=true|false]   Do not upload a k0s binary, the nodes download k0s themselves
   -o, --output string              Output file path for the k0sctl config (default: k0sctl-config-<datacenter>.yaml in the OMS workdir)
   -p, --package string             Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from

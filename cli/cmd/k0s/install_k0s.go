@@ -56,6 +56,14 @@ type InstallK0sOpts struct {
 
 // RunE validates the options and installs k0s with the real package, k0s and k0sctl implementations.
 func (c *InstallK0sCmd) RunE(cmd *cobra.Command, _ []string) error {
+	if c.Opts.MaxPods < 0 {
+		return fmt.Errorf("--max-pods must be greater than zero when specified")
+	}
+
+	if cmd != nil && cmd.Flags().Changed("max-pods") && c.Opts.MaxPods == 0 {
+		return fmt.Errorf("--max-pods must be greater than zero when specified")
+	}
+
 	if c.Opts.Single && (c.Opts.InstallConfig != "" || c.Opts.K0sctlConfig != "") {
 		return fmt.Errorf("--install-config and --config cannot be used with --single")
 	}
@@ -94,6 +102,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 			Alternatively, apply a k0sctl config created with 'oms init k0s-config' with --config.`),
 			Example: util.FormatExamples("install k0s", []packageio.Example{
 				{Cmd: "--install-config <path>", Desc: "Path to Codesphere install-config file to generate k0s config from"},
+				{Cmd: "--install-config <path> --max-pods 250", Desc: "Install k0s with a limit of 250 pods per worker node"},
 				{Cmd: "--install-config <path> --yes", Desc: "Overwrite a previously generated k0sctl config without asking"},
 				{Cmd: "--config <path>", Desc: "Path to an existing k0sctl config to apply"},
 				{Cmd: "--version <version>", Desc: "Version of k0s to install (e.g., v1.36.5+k0s.0)"},
@@ -120,6 +129,8 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Yes, "yes", "y", false, "Overwrite an existing generated k0sctl config without asking")
 
 	k0s.cmd.Flags().BoolVar(&k0s.Opts.Single, "single", false, "Install a single-node controller and worker on this machine")
+	k0s.cmd.Flags().IntVar(&k0s.Opts.MaxPods, "max-pods", 0, "Maximum pods per worker node; changing it restarts k0s")
+	k0s.cmd.MarkFlagsMutuallyExclusive("config", "max-pods")
 
 	k0s.cmd.Flags().StringVar(&k0s.Opts.Vault, "vault", "", "Path to prod.vault.yaml to save the kubeconfig into (optional)")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.VaultPrivKey, "vault-priv-key", "", "Path to the age private key to decrypt the vault (optional, for SOPS-encrypted vaults)")
@@ -280,7 +291,8 @@ const k0sControllerUnitPath = "/etc/systemd/system/k0scontroller.service"
 // K0sControllerUnitInstalled reports whether `k0s install controller` already wrote the systemd unit
 // at unitPath. k0s creates the unit empty and fills it shortly after, so an interrupted install can
 // leave an empty or incomplete unit behind. A unit without an ExecStart= line is removed and reported
-// as missing so the install is retried.
+// as missing so the install is retried. A requested pod limit must also match
+// the installed service before the existing registration can be reused.
 func (c *InstallK0sCmd) K0sControllerUnitInstalled(unitPath string) (bool, error) {
 	content, err := c.FileWriter.ReadFile(unitPath)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -292,7 +304,18 @@ func (c *InstallK0sCmd) K0sControllerUnitInstalled(unitPath string) (bool, error
 	}
 
 	if strings.Contains(string(content), "ExecStart=") {
-		return true, nil
+		if c.Opts.MaxPods == 0 {
+			return true, nil
+		}
+
+		requested := fmt.Sprintf("--kubelet-extra-args=--max-pods=%d", c.Opts.MaxPods)
+		for _, field := range strings.Fields(string(content)) {
+			if strings.Trim(field, "\"'") == requested {
+				return true, nil
+			}
+		}
+
+		return false, nil
 	}
 
 	if err := c.FileWriter.Remove(unitPath); err != nil {
@@ -300,6 +323,17 @@ func (c *InstallK0sCmd) K0sControllerUnitInstalled(unitPath string) (bool, error
 	}
 
 	return false, nil
+}
+
+// SingleNodeInstallArgs builds the service registration command, including a
+// restart when a requested kubelet limit requires replacing an existing unit.
+func (c *InstallK0sCmd) SingleNodeInstallArgs() []string {
+	args := []string{"install", "controller", "--single", "--enable-worker", "--no-taints=true"}
+	if c.Opts.MaxPods > 0 {
+		args = append(args, fmt.Sprintf("--kubelet-extra-args=--max-pods=%d", c.Opts.MaxPods), "--force", "--start")
+	}
+
+	return args
 }
 
 func (c *InstallK0sCmd) installSingle(ctx context.Context, pm installer.PackageManager, k0s installer.K0sManager) error {
@@ -347,7 +381,7 @@ func (c *InstallK0sCmd) installSingle(ctx context.Context, pm installer.PackageM
 		// Ctrl-C it already gets the terminal's SIGINT. A second one from the cancellation could stop
 		// it mid-write and leave an incomplete unit. The step only takes a moment.
 		installCtx := context.WithoutCancel(ctx)
-		if out, err := exec.CommandContext(installCtx, installedPath, "install", "controller", "--single", "--enable-worker", "--no-taints=true").CombinedOutput(); err != nil {
+		if out, err := exec.CommandContext(installCtx, installedPath, c.SingleNodeInstallArgs()...).CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to install k0s controller: %w: %s", err, strings.TrimSpace(string(out)))
 		}
 	}

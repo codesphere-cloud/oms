@@ -11,6 +11,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/codesphere-cloud/oms/cli/cmd/k0s"
@@ -77,6 +78,24 @@ var _ = Describe("InitK0sConfigCmd", func() {
 		mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
 		mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 	}
+
+	It("registers a pod limit for generated multi-node configurations", func() {
+		parent := &cobra.Command{Use: "init"}
+		k0s.AddInitK0sConfigCmd(parent, &util.GlobalOptions{})
+		command, _, err := parent.Find([]string{"k0s-config"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(command.ParseFlags([]string{"--control-plane", "10.0.0.1", "--max-pods", "250"})).To(Succeed())
+		Expect(command.Flags().GetInt("max-pods")).To(Equal(250))
+	})
+
+	It("rejects an explicit zero pod limit before creating clients", func() {
+		parent := &cobra.Command{Use: "init"}
+		k0s.AddInitK0sConfigCmd(parent, &util.GlobalOptions{})
+		command, _, err := parent.Find([]string{"k0s-config"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(command.ParseFlags([]string{"--max-pods", "0"})).To(Succeed())
+		Expect(command.RunE(command, nil)).To(MatchError(ContainSubstring("--max-pods must be greater than zero")))
+	})
 
 	It("writes the k0sctl config to the OMS workdir by default", func() {
 		setupWorkdirMocks()

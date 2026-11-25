@@ -37,7 +37,11 @@ type InitK0sConfigOpts struct {
 }
 
 // RunE generates the k0sctl config with the real package, k0s and filesystem implementations.
-func (c *InitK0sConfigCmd) RunE(_ *cobra.Command, _ []string) error {
+func (c *InitK0sConfigCmd) RunE(cmd *cobra.Command, _ []string) error {
+	if c.Opts.MaxPods < 0 || (cmd != nil && cmd.Flags().Changed("max-pods") && c.Opts.MaxPods == 0) {
+		return fmt.Errorf("--max-pods must be greater than zero when specified")
+	}
+
 	ctx := c.cmd.Context()
 	hw := portal.NewHTTPWrapper(ctx)
 	pm := installer.NewPackage(c.Env.GetOmsWorkdir(), c.Opts.Package)
@@ -70,6 +74,7 @@ func AddInitK0sConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 			bundle to every node that runs a worker and stops k0s from pulling images.`),
 			Example: util.FormatExamples("init k0s-config", []packageio.Example{
 				{Cmd: "--install-config <path>", Desc: "Generate a k0sctl config into the OMS workdir"},
+				{Cmd: "--install-config <path> --max-pods 250", Desc: "Generate a k0sctl config with a limit of 250 pods per worker node"},
 				{Cmd: "--install-config <path> --output <path>", Desc: "Generate a k0sctl config at the given path"},
 				{Cmd: "--ansible-inventory <path> --datacenter-name <name>", Desc: "Generate a k0sctl config for the Kubernetes hosts of an Ansible inventory"},
 				{Cmd: "--control-plane 10.0.0.1 --worker 10.0.0.2,10.0.0.3 --datacenter-name <name>", Desc: "Generate a k0sctl config for the given node IPs"},
@@ -94,6 +99,7 @@ func AddInitK0sConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringVarP(&k0sConfig.Opts.Version, "version", "v", installer.DefaultK0sVersion, "Version of k0s to install")
 	flags.StringVarP(&k0sConfig.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from")
 	flags.StringVar(&k0sConfig.Opts.SSHKeyPath, "ssh-key-path", "", "SSH private key path for remote installation")
+	flags.IntVar(&k0sConfig.Opts.MaxPods, "max-pods", 0, "Maximum pods per worker node (omit to keep the kubelet default)")
 	flags.BoolVarP(&k0sConfig.Opts.Force, "force", "f", false, "Force extracting k0s from the package even if it was extracted before")
 	flags.BoolVar(&k0sConfig.Opts.NoDownload, "no-download", false, "Do not upload a k0s binary, the nodes download k0s themselves")
 	flags.BoolVar(&k0sConfig.Opts.Airgap, "airgapped", false, "Generate a config for installing k0s without internet access from the airgap image bundle")

@@ -21,6 +21,9 @@ const singleVMConfigPath = "/root/codesphere/config.yaml"
 const singleVMConfigTemplatePath = "/root/codesphere/config-template.yaml"
 const singleVMVaultPath = "/root/codesphere/prod.vault.yaml"
 
+// DefaultSingleVMMaxPods leaves room for platform services and test workspaces on one node.
+const DefaultSingleVMMaxPods = 250
+
 // BootstrapSingleVM provisions one VM and runs the local Codesphere installer there.
 // It deliberately uses the local bootstrap's Rook and CloudNativePG setup instead of the
 // multi-host GCP bootstrap's dedicated Ceph and PostgreSQL machines.
@@ -307,7 +310,17 @@ func (b *GCPBootstrapper) loadSingleVMBaseConfig() (files.RootConfig, error) {
 }
 
 func (b *GCPBootstrapper) installSingleVMK0s() error {
-	if err := b.Env.Jumpbox.RunSSHCommand("root", "oms install k0s --single"); err != nil {
+	maxPods := b.Env.MaxPods
+	if maxPods == 0 {
+		maxPods = DefaultSingleVMMaxPods
+	}
+
+	if maxPods < 1 {
+		return fmt.Errorf("--max-pods must be greater than zero")
+	}
+
+	command := fmt.Sprintf("oms install k0s --single --max-pods %d", maxPods)
+	if err := b.Env.Jumpbox.RunSSHCommand("root", command); err != nil {
 		return fmt.Errorf("failed to install single-node k0s: %w", err)
 	}
 

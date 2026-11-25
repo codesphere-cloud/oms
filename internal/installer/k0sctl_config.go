@@ -60,6 +60,8 @@ type K0sctlOptions struct {
 	K0sBinaryPath string
 	// AirgapBundlePath is the image bundle that k0sctl uploads to the worker nodes.
 	AirgapBundlePath string
+	// MaxPods limits pods per worker node. Zero preserves the kubelet default.
+	MaxPods int
 }
 
 type K0sctlSSH struct {
@@ -116,6 +118,10 @@ func (k *K0sctlSpec) addUniqueK0sctlHost(node files.K8sNode, role string, instal
 		},
 	}
 
+	if runsWorker && options.MaxPods > 0 {
+		host.Environment["KUBELET_EXTRA_ARGS"] += fmt.Sprintf(" --max-pods=%d", options.MaxPods)
+	}
+
 	if options.K0sBinaryPath != "" {
 		host.UploadBinary = true
 		host.K0sBinaryPath = options.K0sBinaryPath
@@ -130,6 +136,10 @@ func (k *K0sctlSpec) addUniqueK0sctlHost(node files.K8sNode, role string, instal
 
 // GenerateK0sctlConfig generates a k0sctl configuration from a Codesphere install-config
 func GenerateK0sctlConfig(installConfig *files.RootConfig, options K0sctlOptions) (*K0sctlConfig, error) {
+	if options.MaxPods < 0 {
+		return nil, fmt.Errorf("--max-pods must be greater than zero when specified")
+	}
+
 	if installConfig == nil {
 		return nil, fmt.Errorf("installConfig cannot be nil")
 	}

@@ -278,8 +278,20 @@ var _ = Describe("Single VM configuration", func() {
 	})
 
 	It("installs single-node k0s", func() {
-		nodeClient.EXPECT().RunCommand(n, "root", "oms install k0s --single").Return(nil).Once()
+		nodeClient.EXPECT().RunCommand(n, "root", "oms install k0s --single --max-pods 250").Return(nil).Once()
 		Expect(b.installSingleVMK0s()).To(Succeed())
+	})
+
+	It("forwards a custom pod limit to the single-node k0s installer", func() {
+		b.Env.MaxPods = 200
+
+		nodeClient.EXPECT().RunCommand(n, "root", "oms install k0s --single --max-pods 200").Return(nil).Once()
+		Expect(b.installSingleVMK0s()).To(Succeed())
+	})
+
+	It("rejects a negative pod limit before running a remote command", func() {
+		b.Env.MaxPods = -1
+		Expect(b.installSingleVMK0s()).To(MatchError(ContainSubstring("--max-pods must be greater than zero")))
 	})
 
 	It("forwards the selected storage engine", func() {

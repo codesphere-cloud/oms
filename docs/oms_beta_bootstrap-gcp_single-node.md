@@ -31,6 +31,7 @@ oms beta bootstrap-gcp single-node [flags]
       --install-local string             Install Codesphere from local package (default: none)
       --install-version string           Codesphere version to install (default: none)
       --machine-type string              GCP machine type override for all VMs (default: role-specific sizes; e2-standard-8 for a single VM)
+      --max-pods int                     Maximum number of pods on the single node (default 250)
       --os string                        Operating system of all VMs (options: rhel-9, ubuntu). rhel-9 boots RHEL 9.6 with Extended Update Support, which GCP bills as a premium image. Existing VMs keep their OS (default "ubuntu")
       --priv-key string                  Age private key for --vault (or use the age key environment variable)
       --project-name string              Unique GCP Project Name (required)
