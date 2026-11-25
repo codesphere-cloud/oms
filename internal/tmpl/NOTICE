@@ -881,39 +881,39 @@ License URL: https://github.com/kevinburke/ssh_config/blob/v1.6.0/LICENSE
  
 ----------
 Module: github.com/klauspost/compress
-Version: v1.20.1
+Version: v1.20.2
 License: MIT
-License URL: https://github.com/klauspost/compress/blob/v1.20.1/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.20.2/LICENSE
  
 ----------
 Module: github.com/klauspost/compress
-Version: v1.20.1
+Version: v1.20.2
 License: Apache-2.0
-License URL: https://github.com/klauspost/compress/blob/v1.20.1/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.20.2/LICENSE
  
 ----------
 Module: github.com/klauspost/compress
-Version: v1.20.1
+Version: v1.20.2
 License: BSD-3-Clause
-License URL: https://github.com/klauspost/compress/blob/v1.20.1/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.20.2/LICENSE
  
 ----------
 Module: github.com/klauspost/compress/internal/snapref
-Version: v1.20.1
+Version: v1.20.2
 License: BSD-3-Clause
-License URL: https://github.com/klauspost/compress/blob/v1.20.1/internal/snapref/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.20.2/internal/snapref/LICENSE
  
 ----------
 Module: github.com/klauspost/compress/s2
-Version: v1.20.1
+Version: v1.20.2
 License: BSD-3-Clause
-License URL: https://github.com/klauspost/compress/blob/v1.20.1/s2/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.20.2/s2/LICENSE
  
 ----------
 Module: github.com/klauspost/compress/zstd/internal/xxhash
-Version: v1.20.1
+Version: v1.20.2
 License: MIT
-License URL: https://github.com/klauspost/compress/blob/v1.20.1/zstd/internal/xxhash/LICENSE.txt
+License URL: https://github.com/klauspost/compress/blob/v1.20.2/zstd/internal/xxhash/LICENSE.txt
  
 ----------
 Module: github.com/kr/fs
