@@ -5,7 +5,7 @@
 # given OMS version. The triggers live in the calling workflows:
 # - tag-release.yml: OMS built from the released commit, latest Codesphere release.
 # - bootstrap-gcp-nightly.yml: latest OMS and Codesphere releases, airgapped on RHEL.
-# - bootstrap-gcp-manual.yml: manual runs and pull requests changing these workflows.
+# - bootstrap-gcp-testing.yml: manual runs, and pull requests changing these workflows or labeled ci-pc-deploy.
 # Mirrors codesphere-monorepo/.github/workflows/test-pc-installer-gcp.yml.
 name: Bootstrap GCP
 

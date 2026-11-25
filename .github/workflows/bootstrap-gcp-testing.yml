@@ -3,7 +3,7 @@
 
 # Runs the GCP bootstrap on demand, and on pull requests that either change the bootstrap
 # workflows (so they are tested before they can block a release) or carry the ci-pc-deploy label.
-name: Bootstrap GCP Manual
+name: Bootstrap GCP Testing
 
 on:
   # No paths filter: it would also apply to the labeled event, so the changed files are
@@ -56,7 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           FILES=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename')
-          if grep -qxE '\.github/workflows/bootstrap-gcp(-manual|-nightly)?\.yml' <<< "$FILES"; then
+          if grep -qxE '\.github/workflows/bootstrap-gcp(-testing|-nightly)?\.yml' <<< "$FILES"; then
             echo "workflows=true" >> "$GITHUB_OUTPUT"
           else
             echo "workflows=false" >> "$GITHUB_OUTPUT"
@@ -86,7 +86,7 @@ jobs:
       project_prefix: testing
       oms_version: ${{ inputs.oms_version || '' }}
       install_version: ${{ inputs.install_version || '' }}
-      airgapped: ${{ inputs.airgapped || true }}
-      rhel: ${{ inputs.rhel || true }}
-      prevent_destroy: ${{ inputs.prevent_destroy || true }}
+      airgapped: ${{ inputs.airgapped || false }}
+      rhel: ${{ inputs.rhel || false }}
+      prevent_destroy: ${{ inputs.prevent_destroy || false }}
       ttl: ${{ inputs.ttl || '2h' }}
