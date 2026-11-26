@@ -206,7 +206,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 
 // DefaultCodesphereRegistry is the Codesphere registry installations log in to unless development
 // overrides it.
-const DefaultCodesphereRegistry = "registry.codesphere.com"
+const DefaultCodesphereRegistry = installer.CodesphereRegistry
 
 // CodesphereRegistryName is the name of the Codesphere registry in additionalRegistries, which
 // also prefixes its vault entries.
@@ -214,7 +214,7 @@ const CodesphereRegistryName = "codesphere"
 
 // CodesphereRegistryUsername is the user every installation logs in to the Codesphere registry
 // with; the OMS portal API key is its password.
-const CodesphereRegistryUsername = "oms-gcp-bootstrap@codesphere.com"
+const CodesphereRegistryUsername = installer.CodesphereRegistryUsername
 
 // applyCodesphereRegistry adds the Codesphere registry to additionalRegistries and its
 // credentials to the vault. Every installation logs in to the Codesphere registry, so both the

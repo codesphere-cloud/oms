@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/logs"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -32,9 +33,18 @@ type ArtifactCopier interface {
 	Copy(ctx context.Context, source, destination string) error
 }
 
+// CodesphereRegistry is the Codesphere registry installer packages may pull their artifacts from.
+const CodesphereRegistry = "registry.codesphere.com"
+
+// CodesphereRegistryUsername is the user OMS logs in to the Codesphere registry with; the OMS
+// portal API key is its password.
+const CodesphereRegistryUsername = "oms-gcp-bootstrap@codesphere.com"
+
 // CraneArtifactCopier uses go-containerregistry's crane package for transfers.
 type CraneArtifactCopier struct {
 	Insecure bool
+	// Keychain resolves the registry credentials. Nil uses the Docker config.
+	Keychain authn.Keychain
 }
 
 // Copy transfers one remote image or OCI artifact with crane.
@@ -44,11 +54,43 @@ func (c *CraneArtifactCopier) Copy(ctx context.Context, source, destination stri
 		options = append(options, crane.Insecure)
 	}
 
+	if c.Keychain != nil {
+		options = append(options, crane.WithAuthFromKeychain(c.Keychain))
+	}
+
 	if err := crane.Copy(source, destination, options...); err != nil {
 		return fmt.Errorf("crane copy failed: %w", err)
 	}
 
 	return nil
+}
+
+// CodesphereRegistryKeychain logs in to the Codesphere registry with the OMS portal API key and
+// resolves every other registry from the Docker config.
+func CodesphereRegistryKeychain(apiKey string) authn.Keychain {
+	return authn.NewMultiKeychain(
+		registryKeychain{
+			registry: CodesphereRegistry,
+			auth:     authn.FromConfig(authn.AuthConfig{Username: CodesphereRegistryUsername, Password: apiKey}),
+		},
+		authn.DefaultKeychain,
+	)
+}
+
+// registryKeychain holds the credentials of a single registry. It resolves every other registry
+// anonymously, which makes a multi keychain fall through to its next keychain.
+type registryKeychain struct {
+	registry string
+	auth     authn.Authenticator
+}
+
+// Resolve returns the credentials when the resource belongs to the keychain's registry.
+func (k registryKeychain) Resolve(resource authn.Resource) (authn.Authenticator, error) {
+	if resource.RegistryStr() != k.registry {
+		return authn.Anonymous, nil
+	}
+
+	return k.auth, nil
 }
 
 // ReadPackageArtifacts prefers the package's bom-index.json, falling back to
