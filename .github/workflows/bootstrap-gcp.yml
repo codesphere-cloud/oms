@@ -264,7 +264,6 @@ jobs:
             --cluster-admin-email=int-fixture-cluster-admin@codesphere.com \
             --remote-oms-binary="$GITHUB_WORKSPACE/oms" \
             --k0s-version="$K0S_VERSION" \
-            --root-disk-size=200 \
             --create-test-user \
             --write-config \
             2>&1 | tee "$RUNNER_TEMP/bootstrap-gcp.log"

@@ -206,7 +206,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 
 // DefaultCodesphereRegistry is the Codesphere registry installations log in to unless development
 // overrides it.
-const DefaultCodesphereRegistry = installer.CodesphereRegistry
+const DefaultCodesphereRegistry = "registry.codesphere.com"
 
 // CodesphereRegistryName is the name of the Codesphere registry in additionalRegistries, which
 // also prefixes its vault entries.
@@ -214,7 +214,7 @@ const CodesphereRegistryName = "codesphere"
 
 // CodesphereRegistryUsername is the user every installation logs in to the Codesphere registry
 // with; the OMS portal API key is its password.
-const CodesphereRegistryUsername = installer.CodesphereRegistryUsername
+const CodesphereRegistryUsername = "oms-gcp-bootstrap@codesphere.com"
 
 // applyCodesphereRegistry adds the Codesphere registry to additionalRegistries and its
 // credentials to the vault. Every installation logs in to the Codesphere registry, so both the
@@ -680,9 +680,8 @@ func (b *GCPBootstrapper) applyCertificateConfig(dc *datacenter.DataCenter) erro
 	}
 
 	acmeConfig := &files.ACMEConfig{
-		Enabled: true,
-		Email:   "oms-testing@" + b.Env.BaseDomain,
-		Server:  "https://acme-v02.api.letsencrypt.org/directory",
+		Email:  "oms-testing@" + b.Env.BaseDomain,
+		Server: "https://acme-v02.api.letsencrypt.org/directory",
 	}
 	if b.Env.ACMEStaging {
 		acmeConfig.Server = "https://acme-staging-v02.api.letsencrypt.org/directory"

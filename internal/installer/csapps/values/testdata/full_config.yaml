@@ -88,7 +88,6 @@ codesphere:
   certIssuer:
     type: acme
     acme:
-      enabled: true
       server: https://acme.example.com/directory
       email: ops@example.com
       eabKeyId: cluster-eab-key

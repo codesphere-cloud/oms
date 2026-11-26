@@ -449,7 +449,6 @@ type CAConfig struct {
 }
 
 type ACMEConfig struct {
-	Enabled              bool       `yaml:"enabled"`
 	Name                 string     `yaml:"name,omitempty"`
 	Email                string     `yaml:"email,omitempty"`
 	Server               string     `yaml:"server,omitempty"`

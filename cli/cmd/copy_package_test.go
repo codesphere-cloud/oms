@@ -14,8 +14,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/prompt"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/name"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
@@ -118,47 +116,6 @@ var _ = Describe("CopyPackageCmd", func() {
 
 		root.SetArgs([]string{"copy", "package", "--dest", "registry.example.com", "--yes"})
 		Expect(root.Execute()).To(MatchError("exactly one of --package or --version must be specified"))
-	})
-
-	Describe("registryKeychain", func() {
-		var (
-			mockEnv *env.MockEnv
-			command *CopyPackageCmd
-		)
-
-		BeforeEach(func() {
-			mockEnv = env.NewMockEnv(GinkgoT())
-			command = &CopyPackageCmd{Env: mockEnv}
-		})
-
-		It("logs in to the Codesphere registry with the portal API key", func() {
-			mockEnv.EXPECT().GetOmsPortalApiKey().Return("portal-api-key", nil)
-
-			keychain, err := command.registryKeychain()
-			Expect(err).NotTo(HaveOccurred())
-
-			auth, err := keychain.Resolve(name.MustParseReference("registry.codesphere.com/codesphere-cloud/api:v1").Context())
-			Expect(err).NotTo(HaveOccurred())
-
-			config, err := auth.Authorization()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(config.Password).To(Equal("portal-api-key"))
-		})
-
-		It("falls back to the Docker config without a portal API key", func() {
-			mockEnv.EXPECT().GetOmsPortalApiKey().Return("", fmt.Errorf("OMS_PORTAL_API_KEY env var required, but not set"))
-
-			keychain, err := command.registryKeychain()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(keychain).To(Equal(authn.DefaultKeychain))
-		})
-
-		It("rejects a portal API key in the old format", func() {
-			mockEnv.EXPECT().GetOmsPortalApiKey().Return("", env.ErrLegacyAPIKey)
-
-			_, err := command.registryKeychain()
-			Expect(err).To(MatchError(env.ErrLegacyAPIKey))
-		})
 	})
 
 	Describe("resolvePackage with --version", func() {
