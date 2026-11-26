@@ -25,7 +25,8 @@ than its caller.
 
 The workflow checks nothing out and uses no local actions, because both would resolve in the
 caller's repository. An OMS build from source therefore comes from the caller as an artifact,
-and notifications are up to the caller.
+and notifications are up to the caller. In this repository, [`bootstrap-gcp-oms.yml`](bootstrap-gcp-oms.yml)
+does both and fills in the OMS defaults; the oms workflows call that instead of this one.
 
 ## Examples
 
@@ -56,7 +57,8 @@ jobs:
       - run: echo "Testing ${{ needs.install.outputs.deployment-url }}"
 ```
 
-An OMS build from source, against the latest Codesphere release, as `tag-release.yml` does.
+An OMS build from source, against the latest Codesphere release, as `bootstrap-gcp-oms.yml` does for
+`tag-release.yml`.
 The binary is passed as an artifact of the same run:
 
 ```yaml

@@ -17,60 +17,17 @@ jobs:
     uses: ./.github/workflows/integration-test.yml
     secrets: inherit
 
-  build-oms:
-    name: Build OMS
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Set up Go
-        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
-        with:
-          go-version-file: 'go.mod'
-
-      # The bootstrap runner is linux/amd64, like this one.
-      - name: Build CLI
-        run: |
-          make build-cli
-          ./oms version
-
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
-        with:
-          name: oms
-          path: oms
-          if-no-files-found: error
-          retention-days: 1
-
   # Bootstraps the latest official Codesphere release on GCP with this commit's OMS build,
   # so a broken bootstrap blocks the release instead of surfacing in the monorepo.
   bootstrap-gcp:
-    needs: build-oms
-    uses: ./.github/workflows/bootstrap-gcp.yml
+    uses: ./.github/workflows/bootstrap-gcp-oms.yml
     secrets: inherit
     permissions:
       contents: read
       id-token: write
     with:
-      oms-artifact: oms
       name: main
-      datacenter-name: oms-main
-      root-disk-size: '200'
-      github-team-org: codesphere-cloud
-      github-team-slug: dev
-
-  notify-bootstrap-gcp:
-    name: Notify on bootstrap failure
-    needs: bootstrap-gcp
-    if: failure()
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Slack Notification on Failure
-        uses: ./.github/actions/slack-notify
-        with:
-          job-name: Bootstrap GCP (${{ needs.bootstrap-gcp.outputs.install-version }}, OMS from source${{ needs.bootstrap-gcp.outputs.failure-stage && format(', failed at {0}', needs.bootstrap-gcp.outputs.failure-stage) || '' }})
-          webhook: ${{ secrets.PACKAGE_JOB_SLACK_WEBHOOK }}
+      notify: true
 
   tag:
     runs-on: ubuntu-latest
