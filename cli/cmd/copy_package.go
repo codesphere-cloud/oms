@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/prompt"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/logs"
 	"github.com/spf13/cobra"
 )
@@ -60,11 +62,37 @@ func (c *CopyPackageCmd) RunE(cmd *cobra.Command, _ []string) error {
 		logs.Debug.SetOutput(os.Stderr)
 	}
 
+	keychain, err := c.registryKeychain()
+	if err != nil {
+		return err
+	}
+
 	c.Prompter = prompt.NewPrompter(cmd.Context(), true)
 
 	return c.CopyPackage(cmd.Context(), packageManager, &installer.CraneArtifactCopier{
 		Insecure: c.Opts.Insecure,
+		Keychain: keychain,
 	})
+}
+
+// registryKeychain logs in to the Codesphere registry with the OMS portal API key when one is set,
+// as packages may pull their artifacts from it. Without a key, a local package that only
+// references other registries can still be copied, so every registry is resolved from the Docker
+// config instead.
+func (c *CopyPackageCmd) registryKeychain() (authn.Keychain, error) {
+	apiKey, err := c.Env.GetOmsPortalApiKey()
+	if errors.Is(err, env.ErrLegacyAPIKey) {
+		return nil, fmt.Errorf("failed to log in to %s: %w", installer.CodesphereRegistry, err)
+	}
+
+	// The only other error is a missing key.
+	if err != nil {
+		log.Printf("OMS_PORTAL_API_KEY is not set, artifacts from %s cannot be copied", installer.CodesphereRegistry)
+
+		return authn.DefaultKeychain, nil
+	}
+
+	return installer.CodesphereRegistryKeychain(apiKey), nil
 }
 
 // AddCopyPackageCmd adds the package subcommand to the copy command.
