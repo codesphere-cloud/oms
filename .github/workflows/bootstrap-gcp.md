@@ -95,7 +95,6 @@ An airgapped installation on RHEL 9, as `bootstrap-gcp-nightly.yml` does:
     with:
       airgapped: true
       os: rhel-9
-      root-disk-size: '200'
 ```
 
 ### Reporting a failure

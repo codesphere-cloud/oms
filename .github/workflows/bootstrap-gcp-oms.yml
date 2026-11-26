@@ -95,7 +95,6 @@ jobs:
       prevent-destroy: ${{ inputs.prevent-destroy }}
       ttl: ${{ inputs.ttl }}
       datacenter-name: oms-main
-      root-disk-size: '200'
       github-team-org: codesphere-cloud
       github-team-slug: dev
 

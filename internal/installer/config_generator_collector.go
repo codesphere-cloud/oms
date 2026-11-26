@@ -275,10 +275,8 @@ func (g *InstallConfig) collectACMEConfig(prompter prompt.Prompter) {
 		certIssuer.Acme = &files.ACMEConfig{}
 	}
 
-	certIssuer.Acme.Enabled = prompter.Bool("Enable ACME certificate issuer (e.g., Let's Encrypt)", certIssuer.Acme.Enabled)
-
-	// Early exit if ACME is disabled
-	if !certIssuer.Acme.Enabled {
+	acmeEnabled := prompter.Bool("Enable ACME certificate issuer (e.g., Let's Encrypt)", certIssuer.Type == files.CertIssuerTypeACME)
+	if !acmeEnabled {
 		certIssuer.Acme = nil
 		certIssuer.Type = files.CertIssuerTypeSelfSigned
 

@@ -86,13 +86,14 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    # pull_request runs have no inputs, so they get the defaults after the ||. Booleans that
-    # default to true on pull requests can't use ||, since false || true is true.
+    # pull_request runs have no inputs, so they get the defaults after the ||.
+    # The oms- prefix keeps runs on branches such as main or nightly out of the release and
+    # nightly bootstraps' concurrency groups and GCP projects.
     with:
-      name: ${{ github.head_ref || github.ref_name }}
+      name: oms-${{ github.head_ref || github.ref_name }}
       oms-version: ${{ inputs.oms_version || 'source' }}
       install-version: ${{ inputs.install_version || '' }}
-      airgapped: ${{ github.event_name == 'pull_request' || inputs.airgapped }}
+      airgapped: ${{ inputs.airgapped || false }}
       os: ${{ inputs.rhel && 'rhel-9' || 'ubuntu' }}
-      prevent-destroy: ${{ github.event_name == 'pull_request' || inputs.prevent_destroy }}
+      prevent-destroy: ${{ inputs.prevent_destroy || false }}
       ttl: ${{ inputs.ttl || '2h' }}

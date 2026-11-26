@@ -1035,7 +1035,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("replaces recovered ACME settings while preserving the ingress CA and unrelated overrides", func() {
 					csEnv.InstallConfig.Codesphere.CertIssuer = &files.CertIssuerConfig{
 						Type: files.CertIssuerTypeACME,
-						Acme: &files.ACMEConfig{Enabled: true},
+						Acme: &files.ACMEConfig{},
 					}
 					csEnv.InstallConfig.Cluster.Certificates.CA.CertPem = "existing-ca"
 					csEnv.InstallConfig.Cluster.Certificates.Override = files.ChartOverride{

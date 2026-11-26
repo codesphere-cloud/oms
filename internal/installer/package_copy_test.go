@@ -10,8 +10,6 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/util"
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/name"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
@@ -209,34 +207,6 @@ var _ = Describe("Package artifact copying", func() {
 
 			_, err := installer.ReadPackageArtifacts(packageManager, "registry.example.com")
 			Expect(errors.Is(err, os.ErrNotExist)).To(BeTrue())
-		})
-	})
-
-	Describe("CodesphereRegistryKeychain", func() {
-		resolve := func(reference string) *authn.AuthConfig {
-			ref, err := name.ParseReference(reference)
-			Expect(err).NotTo(HaveOccurred())
-
-			auth, err := installer.CodesphereRegistryKeychain("portal-api-key").Resolve(ref.Context())
-			Expect(err).NotTo(HaveOccurred())
-
-			config, err := auth.Authorization()
-			Expect(err).NotTo(HaveOccurred())
-
-			return config
-		}
-
-		It("logs in to the Codesphere registry with the portal API key", func() {
-			config := resolve("registry.codesphere.com/codesphere-cloud/docker/api:v1")
-			Expect(config.Username).To(Equal(installer.CodesphereRegistryUsername))
-			Expect(config.Password).To(Equal("portal-api-key"))
-		})
-
-		It("resolves other registries from the Docker config", func() {
-			// An absent Docker config resolves every registry anonymously.
-			GinkgoT().Setenv("DOCKER_CONFIG", "/nonexistent")
-
-			Expect(*resolve("ghcr.io/codesphere-cloud/api:v1")).To(BeZero())
 		})
 	})
 

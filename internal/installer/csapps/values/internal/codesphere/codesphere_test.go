@@ -45,7 +45,6 @@ var _ = Describe("Values", func() {
 				VPN:      &files.ImageRef{BomRef: "vpn"},
 			},
 			CertIssuer: &files.CertIssuerConfig{Type: files.CertIssuerTypeACME, Acme: &files.ACMEConfig{
-				Enabled:               true,
 				Server:                "https://acme.example.com/directory",
 				Email:                 "ops@example.com",
 				EABKeyID:              "cluster-key",
