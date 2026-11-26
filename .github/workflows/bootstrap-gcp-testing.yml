@@ -91,7 +91,7 @@ jobs:
       project_prefix: ${{ github.head_ref || github.ref_name }}
       oms_version: ${{ inputs.oms_version }}
       install_version: ${{ inputs.install_version }}
-      airgapped: ${{ inputs.airgapped || false }}
+      airgapped: ${{ inputs.airgapped || true }}
       rhel: ${{ inputs.rhel || false }}
-      prevent_destroy: ${{ inputs.prevent_destroy || false }}
+      prevent_destroy: ${{ inputs.prevent_destroy || true }}
       ttl: ${{ inputs.ttl || '2h' }}
