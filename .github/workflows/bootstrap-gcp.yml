@@ -93,6 +93,7 @@ jobs:
           ./oms version
 
       - name: Download OMS release
+        id: oms
         if: inputs.oms_version != ''
         env:
           GH_TOKEN: ${{ github.token }}
@@ -104,6 +105,7 @@ jobs:
             TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
           fi
           echo "Using OMS $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'oms_*_linux_amd64' --output oms
           chmod +x oms
           ./oms version
@@ -311,5 +313,5 @@ jobs:
         if: ${{ failure() && github.ref == 'refs/heads/main' }}
         uses: ./.github/actions/slack-notify
         with:
-          job-name: Bootstrap GCP (${{ steps.version.outputs.install_version }}, OMS ${{ inputs.oms_version || 'from source' }}, ${{ env.HOST_OS }}${{ inputs.airgapped && ', airgapped' || '' }})
+          job-name: Bootstrap GCP (${{ steps.version.outputs.install_version }}, OMS ${{ steps.oms.outputs.tag || inputs.oms_version || 'from source' }}, ${{ env.HOST_OS }}${{ inputs.airgapped && ', airgapped' || '' }})
           webhook: ${{ secrets.PACKAGE_JOB_SLACK_WEBHOOK }}
