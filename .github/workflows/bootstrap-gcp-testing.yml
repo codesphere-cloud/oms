@@ -83,7 +83,7 @@ jobs:
       id-token: write
     # pull_request runs have no inputs: empty strings need no fallback, booleans and ttl do.
     with:
-      project_prefix: testing
+      project_prefix: ${{ github.head_ref || github.ref_name }}
       oms_version: ${{ inputs.oms_version }}
       install_version: ${{ inputs.install_version }}
       airgapped: ${{ inputs.airgapped || false }}

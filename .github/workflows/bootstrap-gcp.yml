@@ -13,7 +13,7 @@ on:
   workflow_call:
     inputs:
       project_prefix:
-        description: Prefix of the GCP project and domain name. Must be unique per calling workflow, as run numbers are counted per caller.
+        description: Prefix of the GCP project and domain name. Must be unique per calling workflow, as it names the project, the domain and the concurrency group.
         type: string
         required: true
       oms_version:
@@ -41,11 +41,6 @@ on:
         type: string
         default: 2h
 
-# Never cancel a running bootstrap: that would skip the cleanup and leave the project behind.
-concurrency:
-  group: oms-bootstrap-gcp
-  cancel-in-progress: false
-
 jobs:
   bootstrap-gcp:
     name: Bootstrap Codesphere on GCP
@@ -54,9 +49,13 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    # One group per caller: GitHub keeps a single pending run per group and cancels older
+    # pending ones, so a shared group let a PR run silently replace a pending release bootstrap.
+    # Never cancel a running bootstrap: that would skip the cleanup and leave the project behind.
+    concurrency:
+      group: oms-bootstrap-gcp-${{ inputs.project_prefix }}
+      cancel-in-progress: false
     env:
-      PROJECT_NAME: oms-${{ inputs.project_prefix }}-${{ github.run_number }}
-      BASE_DOMAIN: oms-${{ inputs.project_prefix }}-${{ github.run_number }}.oms-testing.codesphere-demo.com
       HOST_OS: ${{ inputs.rhel && 'rhel-9' || 'ubuntu' }}
       DC_ID: "42"
       DC_NAME: oms-main
@@ -65,6 +64,20 @@ jobs:
       OPENBAO_URI: https://openbao.dev-codesphere.com
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set Test Run Vars
+        env:
+          PROJECT_PREFIX: ${{ inputs.project_prefix }}
+        run: |
+          set -euo pipefail
+          
+          # Sanitize and limit to 20 chars to keep enough space for the automatically added uuid postfix.
+          PROJECT_NAME=$(echo "$PROJECT_PREFIX" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\{2,\}/-/g' | cut -c 1-20 | sed 's/-$//')
+          BASE_DOMAIN="$PROJECT_NAME.oms-testing.codesphere-demo.com"
+
+          echo "Project name: $PROJECT_NAME, base domain: $BASE_DOMAIN"
+          echo "PROJECT_NAME=$PROJECT_NAME" >> "$GITHUB_ENV"
+          echo "BASE_DOMAIN=$BASE_DOMAIN" >> "$GITHUB_ENV"
 
       - name: Set up Go
         if: inputs.oms_version == ''
