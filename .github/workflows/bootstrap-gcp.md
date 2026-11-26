@@ -141,7 +141,7 @@ redacted, so it can go to Slack as it is:
 | `root-disk-size` | empty | root disk size of the VMs in GB. Empty keeps the OMS default. |
 | `wait-for-healthy` | `true` | wait up to 15 minutes for `https://cs.<domain>/ide-service/healthz` to answer 200 |
 | `github-team-org`, `github-team-slug` | empty | GitHub team that may log in through the GitHub app. Left out when empty. |
-| `k0s-version` | `v1.35.8+k0s.0` | k0s version to install |
+| `k0s-version` | `v1.36.6+k0s.0` | k0s version to install |
 | `runs-on` | `"ubuntu-latest"` | the job's runner as JSON, e.g. `'["self-hosted","fat","active"]'` |
 
 The test environment is fixed: projects live under `*.oms-testing.codesphere-demo.com` in the

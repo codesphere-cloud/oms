@@ -85,7 +85,7 @@ on:
       k0s-version:
         description: k0s version to install.
         type: string
-        default: v1.35.8+k0s.0
+        default: v1.36.6+k0s.0
       runs-on:
         description: Runner of the job as JSON, e.g. '"ubuntu-latest"' or '["self-hosted","fat","active"]'.
         type: string
