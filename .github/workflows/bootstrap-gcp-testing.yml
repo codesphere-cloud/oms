@@ -40,7 +40,7 @@ on:
 jobs:
   changes:
     name: Check for bootstrap workflow changes
-    if: github.event_name == 'pull_request' && github.event.action != 'labeled'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -64,14 +64,19 @@ jobs:
 
   bootstrap-gcp:
     needs: changes
-    # always() because changes is skipped for workflow_dispatch and labeled events.
-    # Adding another label must not re-run the bootstrap; adding ci-pc-deploy runs it once,
-    # and every later push to a labeled PR runs it again.
+    # !cancelled() because changes is skipped for workflow_dispatch; unlike always(), it does
+    # not start the bootstrap after the run was cancelled.
+    # Each PR action starts at most one bootstrap. A PR created with ci-pc-deploy fires both
+    # opened and labeled, so opened ignores the label and labeled skips PRs changing the
+    # workflows, which already bootstrap on opened and every push. Adding another label
+    # never runs it.
     if: >-
-      always() && (
+      !cancelled() && (
         github.event_name == 'workflow_dispatch' ||
-        (github.event.action == 'labeled' && github.event.label.name == 'ci-pc-deploy') ||
-        (github.event.action != 'labeled' && (
+        (github.event.action == 'opened' && needs.changes.outputs.workflows == 'true') ||
+        (github.event.action == 'labeled' && github.event.label.name == 'ci-pc-deploy' &&
+          needs.changes.outputs.workflows == 'false') ||
+        ((github.event.action == 'synchronize' || github.event.action == 'reopened') && (
           contains(github.event.pull_request.labels.*.name, 'ci-pc-deploy') ||
           needs.changes.outputs.workflows == 'true'
         ))
