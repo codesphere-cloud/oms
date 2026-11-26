@@ -83,10 +83,11 @@ jobs:
       id-token: write
     # pull_request runs have no inputs: empty strings need no fallback, booleans and ttl do.
     with:
-      project_prefix: testing
+      # head_ref is the PR branch; ref_name the branch selected for workflow_dispatch.
+      project_prefix: ${{ github.head_ref || github.ref_name }}
       oms_version: ${{ inputs.oms_version }}
       install_version: ${{ inputs.install_version }}
-      airgapped: ${{ inputs.airgapped || false }}
+      airgapped: ${{ inputs.airgapped || true }}
       rhel: ${{ inputs.rhel || false }}
-      prevent_destroy: ${{ inputs.prevent_destroy || false }}
+      prevent_destroy: ${{ inputs.prevent_destroy || true }}
       ttl: ${{ inputs.ttl || '2h' }}
