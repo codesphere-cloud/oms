@@ -62,7 +62,10 @@ jobs:
             echo "workflows=false" >> "$GITHUB_OUTPUT"
           fi
 
-  bootstrap-gcp:
+  # Builds OMS from source unless a release was asked for. Carries the condition for the
+  # bootstrap, so the bootstrap only has to check that this job succeeded.
+  build-oms:
+    name: Build OMS
     needs: changes
     # !cancelled() because changes is skipped for workflow_dispatch; unlike always(), it does
     # not start the bootstrap after the run was cancelled.
@@ -71,7 +74,7 @@ jobs:
     # workflows, which already bootstrap on opened and every push. Adding another label
     # never runs it.
     if: >-
-      !cancelled() && (
+      !cancelled() && !inputs.oms_version && (
         github.event_name == 'workflow_dispatch' ||
         (github.event.action == 'opened' && needs.changes.outputs.workflows == 'true') ||
         (github.event.action == 'labeled' && github.event.label.name == 'ci-pc-deploy' &&
@@ -81,17 +84,56 @@ jobs:
           needs.changes.outputs.workflows == 'true'
         ))
       )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: 'go.mod'
+
+      # The bootstrap runner is linux/amd64, like this one.
+      - name: Build CLI
+        run: |
+          make build-cli
+          ./oms version
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: oms
+          path: oms
+          if-no-files-found: error
+          retention-days: 1
+
+  bootstrap-gcp:
+    needs: build-oms
+    # A manual run with an OMS release skips the build.
+    if: >-
+      !cancelled() && (
+        needs.build-oms.result == 'success' ||
+        (github.event_name == 'workflow_dispatch' && inputs.oms_version != '')
+      )
     uses: ./.github/workflows/bootstrap-gcp.yml
     secrets: inherit
     permissions:
       contents: read
       id-token: write
-    # pull_request runs have no inputs: empty strings need no fallback, booleans and ttl do.
+    # pull_request runs have no inputs, so they get the defaults after the ||. Booleans that
+    # default to true on pull requests can't use ||, since false || true is true.
     with:
-      project_prefix: ${{ github.head_ref || github.ref_name }}
-      oms_version: ${{ inputs.oms_version }}
-      install_version: ${{ inputs.install_version }}
-      airgapped: ${{ inputs.airgapped || true }}
-      rhel: ${{ inputs.rhel || false }}
-      prevent_destroy: ${{ inputs.prevent_destroy || true }}
+      name: ${{ github.head_ref || github.ref_name }}
+      datacenter-name: oms-main
+      oms-artifact: ${{ !inputs.oms_version && 'oms' || '' }}
+      # The shared workflow takes an empty version as the latest release.
+      oms-version: ${{ inputs.oms_version != 'latest' && inputs.oms_version || '' }}
+      install-version: ${{ inputs.install_version || '' }}
+      airgapped: ${{ github.event_name == 'pull_request' || inputs.airgapped }}
+      os: ${{ inputs.rhel && 'rhel-9' || 'ubuntu' }}
+      prevent-destroy: ${{ github.event_name == 'pull_request' || inputs.prevent_destroy }}
       ttl: ${{ inputs.ttl || '2h' }}
+      root-disk-size: '200'
+      github-team-org: codesphere-cloud
+      github-team-slug: dev

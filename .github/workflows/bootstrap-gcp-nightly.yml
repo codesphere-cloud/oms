@@ -16,8 +16,26 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    # An empty oms-version takes the latest OMS release.
     with:
-      project_prefix: nightly
-      oms_version: latest
+      name: nightly
+      datacenter-name: oms-main
       airgapped: true
-      rhel: true
+      os: rhel-9
+      root-disk-size: '200'
+      github-team-org: codesphere-cloud
+      github-team-slug: dev
+
+  notify:
+    name: Notify on bootstrap failure
+    needs: bootstrap-gcp
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Slack Notification on Failure
+        uses: ./.github/actions/slack-notify
+        with:
+          job-name: Bootstrap GCP Nightly (${{ needs.bootstrap-gcp.outputs.install-version }}, OMS ${{ needs.bootstrap-gcp.outputs.oms-version }}, rhel-9, airgapped${{ needs.bootstrap-gcp.outputs.failure-stage && format(', failed at {0}', needs.bootstrap-gcp.outputs.failure-stage) || '' }})
+          webhook: ${{ secrets.PACKAGE_JOB_SLACK_WEBHOOK }}
