@@ -67,6 +67,23 @@ var _ = Describe("GCE", func() {
 			Expect(byName["k0s-3-dc2"]).To(Equal(2))
 		})
 
+		It("raises the jumpbox root disk of an air-gapped installation only", func() {
+			minSizes := map[string]int64{}
+			for _, def := range gcp.VMDefsForEnv(&gcp.CodesphereEnvironment{Airgapped: true}) {
+				minSizes[def.Name] = def.MinRootDiskSize
+			}
+
+			Expect(minSizes["jumpbox"]).To(Equal(int64(200)))
+			Expect(minSizes["postgres"]).To(BeZero())
+			Expect(minSizes["k0s-1"]).To(BeZero())
+		})
+
+		It("keeps the configured root disk size when the installation is not air-gapped", func() {
+			for _, def := range gcp.VMDefsForEnv(&gcp.CodesphereEnvironment{}) {
+				Expect(def.MinRootDiskSize).To(BeZero(), def.Name)
+			}
+		})
+
 		// Infra files written before multi-DC support carry no data center list.
 		It("falls back to a single unsuffixed data center when the environment has none", func() {
 			defs := gcp.VMDefsForEnv(&gcp.CodesphereEnvironment{})
@@ -663,6 +680,42 @@ var _ = Describe("GCE", func() {
 					err := bs.EnsureComputeInstances()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(allRootDiskSizesCorrect).To(BeTrue())
+				})
+			})
+
+			Context("When the installation is air-gapped", func() {
+				var rootDiskSizes map[string]int64
+
+				BeforeEach(func() {
+					csEnv.Airgapped = true
+					rootDiskSizes = map[string]int64{}
+					mu := sync.Mutex{}
+
+					fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
+					mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, makeRunningInstance("10.0.0.x", "1.2.3.x"), 8)
+					gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(
+						func(_, _ string, instance *computepb.Instance) error {
+							mu.Lock()
+							defer mu.Unlock()
+
+							rootDiskSizes[instance.GetName()] = instance.GetDisks()[0].GetInitializeParams().GetDiskSizeGb()
+
+							return nil
+						},
+					).Times(8)
+				})
+
+				It("gives the jumpbox a root disk large enough for the local registry", func() {
+					Expect(bs.EnsureComputeInstances()).To(Succeed())
+					Expect(rootDiskSizes).To(HaveKeyWithValue("jumpbox", int64(200)))
+					Expect(rootDiskSizes).To(HaveKeyWithValue("k0s-1", int64(50)))
+				})
+
+				It("keeps a configured root disk size above the minimum", func() {
+					csEnv.RootDiskSize = 300
+
+					Expect(bs.EnsureComputeInstances()).To(Succeed())
+					Expect(rootDiskSizes).To(HaveKeyWithValue("jumpbox", int64(300)))
 				})
 			})
 

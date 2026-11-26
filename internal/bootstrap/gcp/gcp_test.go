@@ -1092,9 +1092,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 					return strings.Contains(cmd, "podman ps")
 				})).Return(fmt.Errorf("not running"))
 
-				// Install commands (8) + jumpbox registry access (5)
+				// Install commands (8) + jumpbox registry access (6)
 				// + scp/update-ca/docker restart (3) for 4 cluster nodes and Postgres.
-				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(8 + 5 + 3*5)
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(8 + 6 + 3*5)
 
 				bs.Env.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1", nodeClient), fakeNode("k0s-2", nodeClient)}
 				bs.Env.CephNodes = []*node.Node{fakeNode("ceph-1", nodeClient), fakeNode("ceph-2", nodeClient)}
@@ -1125,10 +1125,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
 					return strings.Contains(cmd, "podman ps")
 				})).Return(nil)
-				// Jumpbox registry access is ensured on every run (5 commands).
+				// Jumpbox registry access is ensured on every run (6 commands).
 				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
 					return !strings.HasPrefix(cmd, "scp ") && !strings.Contains(cmd, "podman ps")
-				})).Return(nil).Times(5)
+				})).Return(nil).Times(6)
 
 				scpTargets := []string{}
 
@@ -1190,10 +1190,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
 					return strings.Contains(cmd, "podman ps")
 				})).Return(nil)
-				// Jumpbox registry access is ensured on every run (5 commands).
+				// Jumpbox registry access is ensured on every run (6 commands).
 				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
 					return !strings.HasPrefix(cmd, "scp ") && !strings.Contains(cmd, "podman ps")
-				})).Return(nil).Times(5)
+				})).Return(nil).Times(6)
 				nodeClient.EXPECT().HasFile(trusted, "/usr/local/share/ca-certificates/registry.crt").Return(true)
 				nodeClient.EXPECT().HasFile(bs.Env.PostgreSQLNode, "/usr/local/share/ca-certificates/registry.crt").Return(true)
 				nodeClient.EXPECT().HasFile(added, "/usr/local/share/ca-certificates/registry.crt").Return(false)
@@ -1229,9 +1229,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
 					return strings.Contains(cmd, "podman ps")
 				})).Return(nil)
-				// Install commands (8) + jumpbox registry access (5) + scp/update-ca/docker restart (3)
-				// for the node and Postgres.
-				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(8 + 5 + 3*2)
+				// Install commands (8) + jumpbox registry access (6, including the Codesphere registry
+				// login) + scp/update-ca/docker restart (3) for the node and Postgres.
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(8 + 6 + 3*2)
 
 				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
 				Expect(bs.Env.RegistryUsername).To(Equal("custom-registry"))
@@ -1262,7 +1262,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err.Error()).NotTo(ContainSubstring("secret-pat"))
 			})
 
-			It("trusts the registry CA and logs in to both registries on the jumpbox", func() {
+			It("trusts the registry CA and logs in to all registries on the jumpbox", func() {
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 				bs.Env.RegistryUser = "codesphere"
@@ -1282,6 +1282,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
 					return strings.Contains(cmd, "podman login --authfile /root/.docker/config.json") &&
 						strings.HasSuffix(cmd, "ghcr.io")
+				})).Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman login --authfile /root/.docker/config.json") &&
+						strings.Contains(cmd, "--username 'oms-gcp-bootstrap@codesphere.com'") &&
+						strings.HasSuffix(cmd, "registry.codesphere.com")
 				})).Return(nil).Once()
 
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil)
@@ -1384,7 +1389,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
 					return strings.Contains(cmd, "podman ps")
 				})).Return(nil)
-				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.Anything).Return(nil).Times(5)
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.Anything).Return(nil).Times(6)
 				nodeClient.EXPECT().HasFile(mock.Anything, "/etc/pki/ca-trust/source/anchors/registry.crt").Return(true)
 
 				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
@@ -1435,7 +1440,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 					return strings.Contains(cmd, "podman ps")
 				})).Return(fmt.Errorf("not running"))
 
-				// All 8 install commands and the 5 jumpbox registry access commands succeed
+				// All 8 install commands and the 5 jumpbox registry access commands succeed; this
+				// environment sets no Codesphere registry password, so that login is skipped.
 				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.Anything).Return(nil).Times(8 + 5)
 
 				// First scp command fails
@@ -1458,7 +1464,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 					return strings.Contains(cmd, "podman ps")
 				})).Return(fmt.Errorf("not running"))
 
-				// All 8 install commands and the 5 jumpbox registry access commands succeed
+				// All 8 install commands and the 5 jumpbox registry access commands succeed; this
+				// environment sets no Codesphere registry password, so that login is skipped.
 				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.Anything).Return(nil).Times(8 + 5)
 				// scp succeeds
 				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
@@ -1483,7 +1490,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 					return strings.Contains(cmd, "podman ps")
 				})).Return(fmt.Errorf("not running"))
 
-				// All 8 install commands and the 5 jumpbox registry access commands succeed
+				// All 8 install commands and the 5 jumpbox registry access commands succeed; this
+				// environment sets no Codesphere registry password, so that login is skipped.
 				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.Anything).Return(nil).Times(8 + 5)
 
 				// scp succeeds
