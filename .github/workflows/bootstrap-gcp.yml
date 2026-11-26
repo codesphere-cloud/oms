@@ -60,7 +60,7 @@ jobs:
       DC_ID: "42"
       DC_NAME: oms-main
       DNS_PROJECT_ID: oms-testing-dns
-      K0S_VERSION: v1.35.8+k0s.0
+      K0S_VERSION: v1.36.6+k0s.0
       OPENBAO_URI: https://openbao.dev-codesphere.com
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
