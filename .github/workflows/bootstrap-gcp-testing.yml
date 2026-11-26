@@ -87,8 +87,10 @@ jobs:
       contents: read
       id-token: write
     # pull_request runs have no inputs: empty strings need no fallback, booleans and ttl do.
+    # The oms- prefix keeps runs on branches such as main or nightly out of the release and
+    # nightly bootstraps' concurrency groups and GCP projects.
     with:
-      project_prefix: ${{ github.head_ref || github.ref_name }}
+      project_prefix: oms-${{ github.head_ref || github.ref_name }}
       oms_version: ${{ inputs.oms_version }}
       install_version: ${{ inputs.install_version }}
       airgapped: ${{ inputs.airgapped || false }}
