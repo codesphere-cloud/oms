@@ -54,10 +54,8 @@ func acmeCertIssuerValues(acme *files.ACMEConfig) (CertIssuer, error) {
 		return CertIssuer{}, errors.New("certIssuer.acme is required when certIssuer.type is acme")
 	}
 
-	if !acme.Enabled {
-		return CertIssuer{}, errors.New("certIssuer.acme.enabled must be true when certIssuer.type is acme")
-	}
-
+	// The type alone enables ACME, as in the Codesphere installer's config schema; acme.enabled is
+	// only written by the OMS config generator, so hand-written configs lack it.
 	keyID, macKeyName := customDomainsEAB(acme)
 
 	return CertIssuer{ACME: ACME{Enabled: true, ACMEAccount: &ACMEAccount{

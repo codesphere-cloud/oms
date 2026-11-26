@@ -13,7 +13,6 @@ import (
 
 var _ = Describe("Cert issuer", func() {
 	acmeConf := func(acme files.ACMEConfig) files.CodesphereConfig {
-		acme.Enabled = true
 		acme.Server = "https://acme.example.com/directory"
 		acme.Email = "ops@example.com"
 
@@ -73,15 +72,15 @@ var _ = Describe("Cert issuer", func() {
 		Expect(err).To(MatchError(ContainSubstring("certIssuer.acme is required")))
 	})
 
-	It("ACME type with ACME disabled -> error", func() {
-		conf := files.CodesphereConfig{CertIssuer: &files.CertIssuerConfig{
-			Type: files.CertIssuerTypeACME,
-			Acme: &files.ACMEConfig{Enabled: false, Server: "https://acme.example.com/directory"},
-		}}
+	It("ACME type with acme.enabled false -> ACME enabled with the account", func() {
+		values, err := codesphere.Values(acmeConf(files.ACMEConfig{Enabled: false}),
+			defaultTestInputs())
+		Expect(err).NotTo(HaveOccurred())
 
-		_, err := codesphere.Values(conf, defaultTestInputs())
-
-		Expect(err).To(MatchError(ContainSubstring("certIssuer.acme.enabled must be true")))
+		Expect(values.CertIssuer).To(Equal(codesphere.CertIssuer{ACME: codesphere.ACME{Enabled: true, ACMEAccount: &codesphere.ACMEAccount{
+			Server: "https://acme.example.com/directory",
+			Email:  "ops@example.com",
+		}}}))
 	})
 
 	It("unknown cert issuer type -> error", func() {
