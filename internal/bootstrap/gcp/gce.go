@@ -24,9 +24,6 @@ type VMDef struct {
 	MachineType     string
 	Tags            []string
 	AdditionalDisks []int64
-	// MinRootDiskSize raises the root disk to at least this size in GB, overriding a smaller
-	// --root-disk-size. Zero keeps the configured size.
-	MinRootDiskSize int64
 	ExternalIP      bool
 	// DataCenterID is the data center the VM belongs to, or 0 for the project-shared VMs
 	// (jumpbox and postgres) that every data center uses.
@@ -43,21 +40,11 @@ const (
 	jumpboxTag             = "jumpbox"
 )
 
-// airgappedJumpboxRootDiskSize is the minimum root disk size in GB of the jumpbox of an
-// air-gapped installation. It hosts the local registry and the downloaded Codesphere package,
-// which together fill the default 50 GB disk.
-const airgappedJumpboxRootDiskSize = 200
-
 // sharedVMDefs returns the VMs that exist once per project, regardless of how many data centers
 // are bootstrapped. The postgres node hosts the database both data centers share.
-func sharedVMDefs(airgapped bool) []VMDef {
-	jumpbox := VMDef{Name: "jumpbox", MachineType: "e2-medium", Tags: []string{jumpboxTag, "ssh"}, AdditionalDisks: []int64{}, ExternalIP: true}
-	if airgapped {
-		jumpbox.MinRootDiskSize = airgappedJumpboxRootDiskSize
-	}
-
+func sharedVMDefs() []VMDef {
 	return []VMDef{
-		jumpbox,
+		{Name: "jumpbox", MachineType: "e2-medium", Tags: []string{jumpboxTag, "ssh"}, AdditionalDisks: []int64{}, ExternalIP: true},
 		{Name: "postgres", MachineType: "e2-standard-2", Tags: []string{"postgres"}, AdditionalDisks: []int64{}, ExternalIP: true},
 	}
 }
@@ -97,7 +84,7 @@ func VMDefsForEnv(env *CodesphereEnvironment) []VMDef {
 		return []VMDef{SingleVMDef(env.MachineType)}
 	}
 
-	defs := sharedVMDefs(env.Airgapped)
+	defs := sharedVMDefs()
 
 	dcs := env.DataCenters
 	if len(dcs) == 0 {
@@ -185,8 +172,6 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	}
 
 	vms := VMDefsForEnv(b.Env)
-	b.logRaisedRootDisks(vms)
-
 	wg := sync.WaitGroup{}
 	errCh := make(chan error, len(vms))
 	resultCh := make(chan vmResult, len(vms))
@@ -299,17 +284,6 @@ func (b *GCPBootstrapper) getSSHKeys() (string, error) {
 	return sshKeys, nil
 }
 
-// logRaisedRootDisks reports the VMs whose root disk is raised above --root-disk-size to their
-// minimum size. It runs before the VMs are created concurrently, whose log channel only has room
-// for the Spot fallback message of each VM.
-func (b *GCPBootstrapper) logRaisedRootDisks(vms []VMDef) {
-	for _, vm := range vms {
-		if vm.MinRootDiskSize > b.Env.RootDiskSize {
-			b.stlog.Logf("Increasing the root disk of %s from %d GB to the minimum of %d GB", vm.Name, b.Env.RootDiskSize, vm.MinRootDiskSize)
-		}
-	}
-}
-
 // ensureVM handles the full lifecycle of a single VM: check existence, restart if stopped,
 // or create a new instance with spot fallback. Returns the VM result with assigned IPs.
 func (b *GCPBootstrapper) ensureVM(vm VMDef, rootDiskSize int64, sshKeys string, logCh chan<- string) (vmResult, error) {
@@ -331,7 +305,7 @@ func (b *GCPBootstrapper) ensureVM(vm VMDef, rootDiskSize int64, sshKeys string,
 			return vmResult{}, fmt.Errorf("instance %s is SUSPENDED; manual resume is required", vm.Name)
 		}
 	} else {
-		instance, err := b.buildInstanceSpec(vm, max(rootDiskSize, vm.MinRootDiskSize), sshKeys)
+		instance, err := b.buildInstanceSpec(vm, rootDiskSize, sshKeys)
 		if err != nil {
 			return vmResult{}, err
 		}
