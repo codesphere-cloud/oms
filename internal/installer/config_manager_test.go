@@ -331,7 +331,6 @@ var _ = Describe("ConfigManager", func() {
 				configManager.Config.Codesphere.CertIssuer = &files.CertIssuerConfig{
 					Type: files.CertIssuerTypeACME,
 					Acme: &files.ACMEConfig{
-						Enabled:  true,
 						EABKeyID: "eab-key-id",
 					},
 				}

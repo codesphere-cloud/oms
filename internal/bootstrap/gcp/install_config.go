@@ -680,9 +680,8 @@ func (b *GCPBootstrapper) applyCertificateConfig(dc *datacenter.DataCenter) erro
 	}
 
 	acmeConfig := &files.ACMEConfig{
-		Enabled: true,
-		Email:   "oms-testing@" + b.Env.BaseDomain,
-		Server:  "https://acme-v02.api.letsencrypt.org/directory",
+		Email:  "oms-testing@" + b.Env.BaseDomain,
+		Server: "https://acme-v02.api.letsencrypt.org/directory",
 	}
 	if b.Env.ACMEStaging {
 		acmeConfig.Server = "https://acme-staging-v02.api.letsencrypt.org/directory"
