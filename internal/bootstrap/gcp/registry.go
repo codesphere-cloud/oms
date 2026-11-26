@@ -343,8 +343,8 @@ type jumpboxStep struct {
 // registry setup involves. Go tools such as OMS and the crane library it copies images with read
 // the system trust store and the Docker config instead of the podman locations the registry
 // installation writes to, so the registry CA and the credentials are installed where they can
-// find them. The upstream login is what allows 'oms copy package' to mirror the Codesphere
-// images into the local registry.
+// find them. The upstream logins to the Codesphere registry and ghcr.io are what allow
+// 'oms copy package' to mirror the package images into the local registry.
 func (b *GCPBootstrapper) ensureJumpboxRegistryAccess(registryNode *node.Node, hostOSSettings hostOSSettings, certPath, server, username, password string) error {
 	// Each step is logged by its description rather than its command, since the login commands
 	// carry the registry passwords.
@@ -362,6 +362,17 @@ func (b *GCPBootstrapper) ensureJumpboxRegistryAccess(registryNode *node.Node, h
 			"logging in to the local registry at " + server + " as " + username,
 			registryLoginCommand(server, username, password),
 		},
+	}
+
+	// Installer packages pull part of their artifacts from the Codesphere registry, which accepts
+	// the OMS portal API key as password.
+	if b.Env.CodesphereRegistry != "" && b.Env.CodesphereRegistryPassword != "" {
+		steps = append(steps, jumpboxStep{
+			"logging in to " + b.Env.CodesphereRegistry + " as " + CodesphereRegistryUsername,
+			registryLoginCommand(b.Env.CodesphereRegistry, CodesphereRegistryUsername, b.Env.CodesphereRegistryPassword),
+		})
+	} else {
+		b.stlog.Logf("Skipping Codesphere registry login on the jumpbox, set --codesphere-registry and OMS_PORTAL_API_KEY to mirror its images into the local registry")
 	}
 
 	if b.Env.RegistryUser != "" && b.Env.GitHubPAT != "" {

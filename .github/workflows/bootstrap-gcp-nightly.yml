@@ -8,6 +8,7 @@ name: Bootstrap GCP Nightly
 on:
   schedule:
     - cron: "0 2 * * *"
+  push:
 
 jobs:
   bootstrap-gcp:
