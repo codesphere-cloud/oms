@@ -54,10 +54,6 @@ func acmeCertIssuerValues(acme *files.ACMEConfig) (CertIssuer, error) {
 		return CertIssuer{}, errors.New("certIssuer.acme is required when certIssuer.type is acme")
 	}
 
-	if !acme.Enabled {
-		return CertIssuer{}, errors.New("certIssuer.acme.enabled must be true when certIssuer.type is acme")
-	}
-
 	keyID, macKeyName := customDomainsEAB(acme)
 
 	return CertIssuer{ACME: ACME{Enabled: true, ACMEAccount: &ACMEAccount{

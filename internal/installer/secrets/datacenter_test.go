@@ -26,7 +26,7 @@ func primaryConfig() *files.RootConfig {
 		Codesphere: files.CodesphereConfig{
 			CertIssuer: &files.CertIssuerConfig{
 				Type: "acme",
-				Acme: &files.ACMEConfig{Enabled: true, EABKeyID: "primary-eab-key"},
+				Acme: &files.ACMEConfig{EABKeyID: "primary-eab-key"},
 			},
 		},
 	}
@@ -167,7 +167,6 @@ var _ = Describe("DeriveDataCenterConfig", func() {
 		Expect(derived.Postgres.CACertPem).To(Equal("primary-postgres-ca"))
 		Expect(derived.Codesphere.Domain).To(Equal("cs.example.com"))
 		Expect(derived.Codesphere.CertIssuer.Type).To(Equal(files.CertIssuerTypeACME))
-		Expect(derived.Codesphere.CertIssuer.Acme.Enabled).To(BeTrue())
 	})
 
 	It("does not modify or alias the primary config", func() {

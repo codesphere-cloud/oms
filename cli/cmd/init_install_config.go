@@ -658,7 +658,6 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		}
 
 		certIssuer.Type = files.CertIssuerTypeACME
-		certIssuer.Acme.Enabled = true
 
 		if c.Opts.ACMEIssuerName != "" {
 			certIssuer.Acme.Name = c.Opts.ACMEIssuerName

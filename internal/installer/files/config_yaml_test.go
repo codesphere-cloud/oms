@@ -348,6 +348,29 @@ codesphere:
 		})
 	})
 
+	Describe("ACME config compatibility", func() {
+		It("config with a leftover acme.enabled -> loads and marshals without it", func() {
+			var cfg files.RootConfig
+			Expect(cfg.Unmarshal([]byte(`codesphere:
+  certIssuer:
+    type: acme
+    acme:
+      enabled: true
+      server: https://acme.example.com/directory
+`))).To(Succeed())
+
+			data, err := cfg.Marshal()
+			Expect(err).NotTo(HaveOccurred())
+
+			var raw map[string]interface{}
+			Expect(yaml.Unmarshal(data, &raw)).To(Succeed())
+			Expect(raw["codesphere"].(map[string]interface{})["certIssuer"]).To(Equal(map[string]interface{}{
+				"type": "acme",
+				"acme": map[string]interface{}{"server": "https://acme.example.com/directory"},
+			}))
+		})
+	})
+
 	Describe("ACME config structure", func() {
 		// Verifies the marshaled YAML matches the structure documented at:
 		// https://docs.codesphere.com/private-cloud/cluster-ingress-ca-options
@@ -355,7 +378,6 @@ codesphere:
 			rootConfig.Codesphere.CertIssuer = &files.CertIssuerConfig{
 				Type: files.CertIssuerTypeACME,
 				Acme: &files.ACMEConfig{
-					Enabled:  true,
 					Server:   "https://acme-v02.api.letsencrypt.org/directory",
 					Email:    "admin@example.com",
 					EABKeyID: "my-eab-key-id",
@@ -388,7 +410,6 @@ codesphere:
 			expectedCertIssuer := map[string]interface{}{
 				"type": "acme",
 				"acme": map[string]interface{}{
-					"enabled":  true,
 					"server":   "https://acme-v02.api.letsencrypt.org/directory",
 					"email":    "admin@example.com",
 					"eabKeyId": "my-eab-key-id",

@@ -371,13 +371,6 @@ func (c *UpdateInstallConfigCmd) applyACMEUpdates(config *files.RootConfig, vaul
 		acmeChanged = true
 	}
 
-	if !certIssuer.Acme.Enabled {
-		log.Printf("Enabling ACME certificate issuer\n")
-
-		certIssuer.Acme.Enabled = true
-		acmeChanged = true
-	}
-
 	if c.Opts.ACMEIssuerName != "" && certIssuer.Acme.Name != c.Opts.ACMEIssuerName {
 		log.Printf("Updating ACME issuer name: %s -> %s\n", certIssuer.Acme.Name, c.Opts.ACMEIssuerName)
 		certIssuer.Acme.Name = c.Opts.ACMEIssuerName

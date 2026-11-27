@@ -18,9 +18,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// BOM components holding the charts Install deploys.
 const (
 	csAppsComponent     = "cs-applications"
-	csUmbrellaComponent = "codesphere"
+	codesphereComponent = "codesphere"
+)
+
+const (
 	codesphereNamespace = "codesphere"
 	defaultReleaseName  = "codesphere"
 )
@@ -41,7 +45,7 @@ func Install(
 	}
 
 	release := releaseName(cfg)
-	parentAppName := release + "-" + csAppsComponent
+	parentAppName := parentAppNameFor(cfg)
 
 	parentApp, err := installer.NewAppOfAppsFromBom(kubeClient, csBom, installer.AppOfAppsConfig{
 		Component:      csAppsComponent,
@@ -79,9 +83,9 @@ func Install(
 // values reach a sub application only through csApps; for permanent config for a new app, extend
 // the config appropriately.
 func parentAppValues(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName string) (map[string]any, error) {
-	chart, ok := csBom.GetChart(csUmbrellaComponent)
+	chart, ok := csBom.GetChart(codesphereComponent)
 	if !ok {
-		return nil, fmt.Errorf("%s chart not found in BOM", csUmbrellaComponent)
+		return nil, fmt.Errorf("%s chart not found in BOM", codesphereComponent)
 	}
 
 	codesphereValues, err := values.Build(cfg, csBom)
@@ -104,7 +108,7 @@ func parentAppValues(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName s
 		"namespace": codesphereNamespace,
 		"global":    global,
 		"applications": map[string]any{
-			csUmbrellaComponent: map[string]any{
+			codesphereComponent: map[string]any{
 				"enabled":      true,
 				"version":      chart.Tag(),
 				"valuesObject": codesphereValues,
@@ -128,6 +132,10 @@ func parentAppValues(cfg *files.RootConfig, csBom *bom.Config, vaultSecretName s
 			"externalSecretsSyncTrigger": time.Now().UTC().Format(time.RFC3339Nano),
 		},
 	}), nil
+}
+
+func parentAppNameFor(cfg *files.RootConfig) string {
+	return releaseName(cfg) + "-" + csAppsComponent
 }
 
 // releaseName names the Codesphere Helm release and the release's Applications. Dev clusters set

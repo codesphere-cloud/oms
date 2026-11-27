@@ -299,9 +299,9 @@ License URL: https://github.com/cloudnative-pg/machinery/blob/v0.5.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
-Version: v1.68.0
+Version: v1.70.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.68.0/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.70.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -839,9 +839,9 @@ License URL: https://github.com/jbenet/go-context/blob/d14ea06fba99/LICENSE
  
 ----------
 Module: github.com/jedib0t/go-pretty/v6
-Version: v6.9.2
+Version: v6.9.3
 License: MIT
-License URL: https://github.com/jedib0t/go-pretty/blob/v6.9.2/LICENSE
+License URL: https://github.com/jedib0t/go-pretty/blob/v6.9.3/LICENSE
  
 ----------
 Module: github.com/jmoiron/sqlx
@@ -881,39 +881,39 @@ License URL: https://github.com/kevinburke/ssh_config/blob/v1.6.0/LICENSE
  
 ----------
 Module: github.com/klauspost/compress
-Version: v1.20.1
+Version: v1.20.2
 License: MIT
-License URL: https://github.com/klauspost/compress/blob/v1.20.1/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.20.2/LICENSE
  
 ----------
 Module: github.com/klauspost/compress
-Version: v1.20.1
+Version: v1.20.2
 License: Apache-2.0
-License URL: https://github.com/klauspost/compress/blob/v1.20.1/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.20.2/LICENSE
  
 ----------
 Module: github.com/klauspost/compress
-Version: v1.20.1
+Version: v1.20.2
 License: BSD-3-Clause
-License URL: https://github.com/klauspost/compress/blob/v1.20.1/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.20.2/LICENSE
  
 ----------
 Module: github.com/klauspost/compress/internal/snapref
-Version: v1.20.1
+Version: v1.20.2
 License: BSD-3-Clause
-License URL: https://github.com/klauspost/compress/blob/v1.20.1/internal/snapref/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.20.2/internal/snapref/LICENSE
  
 ----------
 Module: github.com/klauspost/compress/s2
-Version: v1.20.1
+Version: v1.20.2
 License: BSD-3-Clause
-License URL: https://github.com/klauspost/compress/blob/v1.20.1/s2/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.20.2/s2/LICENSE
  
 ----------
 Module: github.com/klauspost/compress/zstd/internal/xxhash
-Version: v1.20.1
+Version: v1.20.2
 License: MIT
-License URL: https://github.com/klauspost/compress/blob/v1.20.1/zstd/internal/xxhash/LICENSE.txt
+License URL: https://github.com/klauspost/compress/blob/v1.20.2/zstd/internal/xxhash/LICENSE.txt
  
 ----------
 Module: github.com/kr/fs
@@ -1523,15 +1523,15 @@ License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
  
 ----------
 Module: google.golang.org/api
-Version: v0.315.0
+Version: v0.316.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.315.0/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.316.0/LICENSE
  
 ----------
 Module: google.golang.org/api/internal/third_party/uritemplates
-Version: v0.315.0
+Version: v0.316.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.315.0/internal/third_party/uritemplates/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.316.0/internal/third_party/uritemplates/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis
@@ -1721,9 +1721,9 @@ License URL: https://github.com/kubernetes/kubernetes/blob/v1.36.4/LICENSE
  
 ----------
 Module: k8s.io/streaming/pkg
-Version: v0.37.2
+Version: v0.37.3
 License: Apache-2.0
-License URL: https://github.com/kubernetes/streaming/blob/v0.37.2/LICENSE
+License URL: https://github.com/kubernetes/streaming/blob/v0.37.3/LICENSE
  
 ----------
 Module: k8s.io/utils

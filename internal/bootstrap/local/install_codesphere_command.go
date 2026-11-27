@@ -102,5 +102,6 @@ func (b *LocalBootstrapper) localInstallCodesphereOptions(bundleDir, configPath,
 		LocalConfigDir:       configDir,
 		AutoApprove:          true,
 		ArgoCDForceConflicts: true,
+		CodesphereViaArgoCD:  b.Env.CodesphereViaArgoCD,
 	}
 }

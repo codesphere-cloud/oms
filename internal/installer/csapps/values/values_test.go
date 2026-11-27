@@ -83,7 +83,6 @@ var _ = Describe("Build", func() {
 			},
 		}}
 		cfg.Codesphere.CertIssuer = &files.CertIssuerConfig{Type: files.CertIssuerTypeACME, Acme: &files.ACMEConfig{
-			Enabled:  true,
 			Server:   "https://acme.example.com/directory",
 			Email:    "certs@example.com",
 			EABKeyID: "key-id",
@@ -229,7 +228,6 @@ var _ = Describe("Build", func() {
 	It("ACME with a separate custom domains EAB key -> custom domains key used", func() {
 		cfg := testConfig()
 		cfg.Codesphere.CertIssuer = &files.CertIssuerConfig{Type: files.CertIssuerTypeACME, Acme: &files.ACMEConfig{
-			Enabled:               true,
 			Server:                "https://acme.example.com/directory",
 			Email:                 "certs@example.com",
 			EABKeyID:              "cluster-key",
