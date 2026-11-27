@@ -81,19 +81,19 @@ jobs:
           needs.changes.outputs.workflows == 'true'
         ))
       )
-    uses: ./.github/workflows/bootstrap-gcp.yml
+    uses: ./.github/workflows/bootstrap-gcp-oms.yml
     secrets: inherit
     permissions:
       contents: read
       id-token: write
-    # pull_request runs have no inputs: empty strings need no fallback, booleans and ttl do.
+    # pull_request runs have no inputs, so they get the defaults after the ||.
     # The oms- prefix keeps runs on branches such as main or nightly out of the release and
     # nightly bootstraps' concurrency groups and GCP projects.
     with:
-      project_prefix: oms-${{ github.head_ref || github.ref_name }}
-      oms_version: ${{ inputs.oms_version }}
-      install_version: ${{ inputs.install_version }}
+      name: oms-${{ github.head_ref || github.ref_name }}
+      oms-version: ${{ inputs.oms_version || 'source' }}
+      install-version: ${{ inputs.install_version || '' }}
       airgapped: ${{ inputs.airgapped || false }}
-      rhel: ${{ inputs.rhel || false }}
-      prevent_destroy: ${{ inputs.prevent_destroy || false }}
+      os: ${{ inputs.rhel && 'rhel-9' || 'ubuntu' }}
+      prevent-destroy: ${{ inputs.prevent_destroy || false }}
       ttl: ${{ inputs.ttl || '2h' }}

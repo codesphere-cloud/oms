@@ -11,13 +11,14 @@ on:
 
 jobs:
   bootstrap-gcp:
-    uses: ./.github/workflows/bootstrap-gcp.yml
+    uses: ./.github/workflows/bootstrap-gcp-oms.yml
     secrets: inherit
     permissions:
       contents: read
       id-token: write
     with:
-      project_prefix: nightly
-      oms_version: latest
+      name: nightly
+      oms-version: latest
       airgapped: true
-      rhel: true
+      os: rhel-9
+      notify: true

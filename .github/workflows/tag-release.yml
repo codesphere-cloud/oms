@@ -20,15 +20,14 @@ jobs:
   # Bootstraps the latest official Codesphere release on GCP with this commit's OMS build,
   # so a broken bootstrap blocks the release instead of surfacing in the monorepo.
   bootstrap-gcp:
-    uses: ./.github/workflows/bootstrap-gcp.yml
+    uses: ./.github/workflows/bootstrap-gcp-oms.yml
     secrets: inherit
     permissions:
       contents: read
       id-token: write
     with:
-      project_prefix: main
-      # Empty builds OMS from this commit; Codesphere defaults to the latest official release.
-      oms_version: ""
+      name: main
+      notify: true
 
   tag:
     runs-on: ubuntu-latest

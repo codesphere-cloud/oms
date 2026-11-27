@@ -1,0 +1,109 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Reusable workflow: runs bootstrap-gcp.yml with the OMS defaults, builds OMS from source when
+# asked and optionally reports a failure to Slack, so bootstrap-gcp.yml stays generic.
+# Callers pass `secrets: inherit` and grant `id-token: write`.
+name: Bootstrap GCP OMS
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        description: Name of the GCP project. Must be unique per caller, as it names the project, the domain and the concurrency group.
+        type: string
+        required: true
+      oms-version:
+        description: OMS to run. "source" builds it from the checked-out commit, "latest" takes the latest release, or a release tag (e.g. v5.43.0).
+        type: string
+        default: source
+      install-version:
+        description: Codesphere version to install (e.g. codesphere-v1.2.3). Empty installs the latest official release.
+        type: string
+        default: ''
+      airgapped:
+        description: Bootstrap an airgapped installation (--airgapped).
+        type: boolean
+        default: false
+      os:
+        description: Operating system of all VMs (--os), e.g. ubuntu or rhel-9.
+        type: string
+        default: ubuntu
+      prevent-destroy:
+        description: Keep the GCP project after the run for debugging.
+        type: boolean
+        default: false
+      ttl:
+        description: Project TTL; expired projects are deleted by the monorepo's cleanup cron.
+        type: string
+        default: 2h
+      notify:
+        description: Post a failure to #team-oms-sdk on Slack.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-oms:
+    name: Build OMS
+    if: inputs.oms-version == 'source'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
+        with:
+          go-version-file: 'go.mod'
+
+      # The bootstrap runner is linux/amd64, like this one.
+      - name: Build CLI
+        run: |
+          make build-cli
+          ./oms version
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: oms
+          path: oms
+          if-no-files-found: error
+          retention-days: 1
+
+  bootstrap-gcp:
+    needs: build-oms
+    # The build is skipped for an OMS release.
+    if: "!cancelled() && needs.build-oms.result != 'failure'"
+    uses: ./.github/workflows/bootstrap-gcp.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      name: ${{ inputs.name }}
+      oms-artifact: ${{ inputs.oms-version == 'source' && 'oms' || '' }}
+      # bootstrap-gcp.yml takes an empty version as the latest release.
+      oms-version: ${{ inputs.oms-version != 'source' && inputs.oms-version != 'latest' && inputs.oms-version || '' }}
+      install-version: ${{ inputs.install-version }}
+      airgapped: ${{ inputs.airgapped }}
+      os: ${{ inputs.os }}
+      prevent-destroy: ${{ inputs.prevent-destroy }}
+      ttl: ${{ inputs.ttl }}
+      datacenter-name: oms-main
+      github-team-org: codesphere-cloud
+      github-team-slug: dev
+
+  notify:
+    name: Notify on bootstrap failure
+    needs: [build-oms, bootstrap-gcp]
+    if: failure() && inputs.notify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Slack Notification on Failure
+        uses: ./.github/actions/slack-notify
+        with:
+          job-name: Bootstrap GCP (${{ needs.bootstrap-gcp.outputs.install-version || 'no Codesphere version' }}, OMS ${{ inputs.oms-version == 'source' && 'from source' || needs.bootstrap-gcp.outputs.oms-version || inputs.oms-version }}, ${{ inputs.os }}${{ inputs.airgapped && ', airgapped' || '' }}${{ needs.bootstrap-gcp.outputs.failure-stage && format(', failed at {0}', needs.bootstrap-gcp.outputs.failure-stage) || '' }})
+          webhook: ${{ secrets.PACKAGE_JOB_SLACK_WEBHOOK }}
