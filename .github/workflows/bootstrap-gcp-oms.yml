@@ -1,13 +1,9 @@
 # Copyright (c) Codesphere Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-# Reusable workflow: runs bootstrap-gcp.yml the way this repository uses it. It builds OMS
-# from source when asked, fills in the OMS test defaults and optionally reports a failure to
-# Slack. bootstrap-gcp.yml stays generic for the other repositories. Callers:
-# - tag-release.yml: OMS built from the released commit, latest Codesphere release.
-# - bootstrap-gcp-nightly.yml: latest OMS and Codesphere releases, airgapped on RHEL.
-# - bootstrap-gcp-testing.yml: manual runs, and pull requests changing these workflows or labeled ci-pc-deploy.
-# Callers pass `secrets: inherit` and grant `id-token: write`, which this passes on.
+# Reusable workflow: runs bootstrap-gcp.yml with the OMS defaults, builds OMS from source when
+# asked and optionally reports a failure to Slack, so bootstrap-gcp.yml stays generic.
+# Callers pass `secrets: inherit` and grant `id-token: write`.
 name: Bootstrap GCP OMS
 
 on:

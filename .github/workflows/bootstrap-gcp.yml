@@ -1,12 +1,8 @@
 # Copyright (c) Codesphere Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-# Reusable workflow: bootstraps Codesphere with OMS on a fresh GCP project of the PC testing
-# folder, waits until it serves, and deletes the project again. Called by this repository and
-# by the other repositories that test a Codesphere or OMS build on real infrastructure; see
-# bootstrap-gcp.md next to this file. In this repository, bootstrap-gcp-oms.yml calls it with
-# the OMS defaults.
-# It checks out nothing and uses no local actions, since those would resolve in the caller's repository.
+# Reusable workflow: bootstraps Codesphere with OMS on a fresh GCP project, waits until it
+# serves, and deletes the project again. Used by this and other repositories; see bootstrap-gcp.md.
 name: Bootstrap GCP
 
 on:
@@ -64,10 +60,6 @@ on:
         description: Operating system of all VMs (--os), e.g. ubuntu or rhel-9.
         type: string
         default: ubuntu
-      root-disk-size:
-        description: Root disk size of the VMs in GB (--root-disk-size). Empty keeps the OMS default.
-        type: string
-        default: ''
       wait-for-healthy:
         description: Wait up to 15 minutes for Codesphere to answer after the install.
         type: boolean
@@ -192,9 +184,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    # The contended resource is the GCP project, which is derived from the name, so this uses
-    # the same fallback as the project name. Never cancel a running bootstrap: that would skip
-    # the cleanup and leave the project behind.
+    # Keyed like the project name. Never cancel a running bootstrap: it would skip the cleanup.
     concurrency:
       group: pc-testing-gcp-${{ inputs.name || inputs.install-version || format('{0}-{1}', github.event.repository.name, github.run_number) }}
       cancel-in-progress: false
@@ -357,8 +347,6 @@ jobs:
           PROJECT_NAME: ${{ steps.project.outputs.project-name }}
           INSTALL_VERSION: ${{ steps.version.outputs.install-version }}
         run: |
-          # Callers that install on top of an existing installation must not get a fresh install
-          # instead: that would pass while testing something else entirely.
           echo "::error::Project $PROJECT_NAME does not exist, so $INSTALL_VERSION cannot be installed on top of an existing installation. Re-run all jobs of the calling workflow so the base install runs again."
           exit 1
 
@@ -400,7 +388,6 @@ jobs:
           CODESPHERE_ONLY: ${{ inputs.codesphere-only }}
           AIRGAPPED: ${{ inputs.airgapped }}
           HOST_OS: ${{ inputs.os }}
-          ROOT_DISK_SIZE: ${{ inputs.root-disk-size }}
           GITHUB_TEAM_ORG: ${{ inputs.github-team-org }}
           GITHUB_TEAM_SLUG: ${{ inputs.github-team-slug }}
           K0S_VERSION: ${{ inputs.k0s-version }}
@@ -485,9 +472,6 @@ jobs:
             args+=(--airgapped)
           else
             args+=(--google-acme-issuer=true)
-          fi
-          if [ -n "$ROOT_DISK_SIZE" ]; then
-            args+=(--root-disk-size="$ROOT_DISK_SIZE")
           fi
           if [ -n "$INSTALL_HASH" ]; then
             args+=(--install-hash="$INSTALL_HASH")
