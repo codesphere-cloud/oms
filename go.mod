@@ -48,7 +48,7 @@ require (
 	github.com/lithammer/shortuuid v3.0.0+incompatible
 	github.com/onsi/ginkgo/v2 v2.34.0
 	github.com/onsi/gomega v1.44.0
-	github.com/pkg/sftp v1.13.12
+	github.com/pkg/sftp v1.13.13
 	github.com/rook/rook/pkg/apis v0.0.0-20261117155431-d2b7705e6526
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
