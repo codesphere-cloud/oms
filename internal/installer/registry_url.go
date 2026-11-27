@@ -13,6 +13,10 @@ import (
 	"github.com/distribution/reference"
 )
 
+// RegistryPullSecretName is the Secret that holds the credentials of the registry the images are
+// pulled from.
+const RegistryPullSecretName = "docker-regcred"
+
 var registryHostPattern = regexp.MustCompile("^" + reference.DomainRegexp.String() + "$")
 
 // DefaultChartsRegistry writes the mirror default into a generated install

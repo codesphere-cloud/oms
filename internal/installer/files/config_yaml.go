@@ -501,14 +501,24 @@ type RookExternalClusterConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
 
+// PgOperatorConfig configures the CloudNativePG operator, which the postgres-operator application
+// deploys together with its CRDs. An absent block is enabled; a block without `enabled` is disabled.
+// Skipping an installer step does not turn the application off.
 type PgOperatorConfig struct {
 	Enabled bool `yaml:"enabled"`
 	// ManagedExternally marks a disabled operator as installed by something other than the
-	// PC installer, such as bootstrap-local, so its CRDs exist even though Enabled is false.
+	// PC installer, such as bootstrap-local, so its CRDs exist even though Enabled is false. The
+	// barman-cloud-plugin application runs on these CRDs and is not turned off by it.
 	ManagedExternally bool          `yaml:"managedExternally,omitempty"`
 	Override          ChartOverride `yaml:"override,omitempty"`
 }
 
+// BarmanCloudPluginConfig configures the barman cloud plugin, which the barman-cloud-plugin
+// application deploys. An absent block is enabled; a block without `enabled` is disabled.
+// The plugin runs on the CloudNativePG CRDs, so the application is deployed only while they exist:
+// cluster.pgOperator is enabled or absent, or marked ManagedExternally. A disabled cluster.pgOperator
+// that is not managed externally therefore turns the plugin off whatever Enabled says. Skipping an
+// installer step does not turn the application off.
 type BarmanCloudPluginConfig struct {
 	Enabled  bool          `yaml:"enabled"`
 	Override ChartOverride `yaml:"override,omitempty"`
