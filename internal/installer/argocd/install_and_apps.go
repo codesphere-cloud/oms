@@ -332,7 +332,6 @@ func (i *AppInstaller) getPcAppsValues(bomConfig *bom.Config) (files.ChartValues
 
 	openFGAppValues := pcapps.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault)
 	rookCephAppValues := pcapps.RookCephPcAppsValues(&i.cfg.Config)
-	installerChartValues := pcapps.InstallerChartsPcAppsValues(&i.cfg.Config, i.cfg.SkipSteps)
 	sshWorkspaceProxyValues := pcapps.SSHWorkspaceProxyPcAppsValues(&i.cfg.Config)
 	errorPageServerValues := pcapps.ErrorPageServerPcAppsValues(&i.cfg.Config)
 
@@ -340,7 +339,9 @@ func (i *AppInstaller) getPcAppsValues(bomConfig *bom.Config) (files.ChartValues
 	values = util.DeepMergeMaps(values, sshWorkspaceProxyValues)
 	values = util.DeepMergeMaps(values, clusterConfigValues)
 	values = util.DeepMergeMaps(values, falcoValues)
-	values = util.DeepMergeMaps(values, installerChartValues)
+	values = util.DeepMergeMaps(values, pcapps.MsBackendS3PcAppsValues(&i.cfg.Config, i.cfg.SkipSteps))
+	values = util.DeepMergeMaps(values, pcapps.RgwPcAppsValues(&i.cfg.Config, i.cfg.SkipSteps))
+	values = util.DeepMergeMaps(values, pcapps.RgwLoadBalancerPcAppsValues(&i.cfg.Config, i.cfg.SkipSteps))
 	values = util.DeepMergeMaps(values, pcapps.ImagePrePullPcAppsValues(&i.cfg.Config, bomConfig))
 	values = util.DeepMergeMaps(values, errorPageServerValues)
 	values = util.DeepMergeMaps(values, i.cfg.Config.PcApps)

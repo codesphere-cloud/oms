@@ -4,13 +4,28 @@
 package pcapps
 
 import (
+	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-// clusterSecretStore is the ClusterSecretStore that reads the cs-vault secret.
-const clusterSecretStore = "kubernetes-in-cluster"
+const (
+	// MsBackendS3 is the key of the ms-backend-s3 chart under `applications` in the pc-applications values.
+	MsBackendS3 = "ms-backend-s3"
+
+	// clusterSecretStore is the ClusterSecretStore that reads the cs-vault secret.
+	clusterSecretStore = "kubernetes-in-cluster"
+)
+
+// MsBackendS3PcAppsValues derives the pc-applications values for the S3 managed service backend:
+// `enabled: false` when the config does not ask for it or the run skips the ms-backends step,
+// otherwise its admin credentials with the override of managedServiceBackends.s3 on top.
+func MsBackendS3PcAppsValues(config *files.RootConfig, skipSteps []string) files.ChartValues {
+	installed := stepRuns(config, skipSteps, installer.MsBackendsStep) && msBackendS3Installed(config)
+
+	return applicationValues(MsBackendS3, installed, msBackendS3Values(config))
+}
 
 func msBackendS3Config(config *files.RootConfig) *files.S3ManagedServiceConfig {
 	if config.ManagedServiceBackends == nil {
