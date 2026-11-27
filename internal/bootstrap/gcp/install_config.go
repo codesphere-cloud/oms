@@ -900,7 +900,7 @@ func (b *GCPBootstrapper) applyManagedServiceDefaults(dc *datacenter.DataCenter)
 		}
 
 		if util.InstallVersionAtLeast(b.Env.InstallVersion, clickhouseMinInstallVersion) {
-			ms = append(ms, files.ManagedServiceConfig{Name: "clickhouse", SchemaVersion: "v0"})
+			ms = append(ms, files.ManagedServiceConfig{Name: "clickhouse", SchemaVersion: "v1beta1"})
 		}
 
 		dc.InstallConfig.Codesphere.ManagedServices = ms
