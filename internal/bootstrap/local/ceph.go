@@ -40,9 +40,28 @@ const (
 	rgwObjectStoreName          = "s3-ms-provider"
 	rgwAdminUserName            = "rgw-admin-ops-user"
 	rgwAdminUserCaps            = "buckets=*;users=*;ratelimit=*;usage=read;metadata=read;zone=read"
-	rgwRealmName                = "s3-ms-provider-realm"
-	rgwZoneGroupName            = "s3-ms-provider-zonegroup-default"
-	rgwZoneName                 = "s3-ms-provider-zone-default"
+	// rgwBackupUserName is the RGW user the SRE backup job uses to copy every
+	// bucket off the cluster (tooling-pod-chart s3-backup). It is deliberately
+	// NOT the admin-ops user above: that one can create keys for any user and
+	// is the managed-S3 backend's own credential.
+	//
+	// What the job needs, and what grants it:
+	//   - list every bucket: the Admin Ops API (GET /admin/bucket), which
+	//     checks the user's caps -> buckets=read. S3 ListBuckets would only
+	//     show the user's own buckets, admin flag or not.
+	//   - read objects in buckets it doesn't own: only the admin flag does
+	//     that. On its own the flag also allows WRITE and DELETE everywhere
+	//     and skips bucket ACLs and policies.
+	//   - so the op mask is cut down to "read": RGW rejects any S3 operation
+	//     outside the user's op mask before it checks permissions, admin flag
+	//     included. Admin flag + op mask read = reads every bucket, cannot
+	//     change or delete anything.
+	rgwBackupUserName   = "sre-s3-backup"
+	rgwBackupUserCaps   = "buckets=read"
+	rgwBackupUserOpMask = "read"
+	rgwRealmName        = "s3-ms-provider-realm"
+	rgwZoneGroupName    = "s3-ms-provider-zonegroup-default"
+	rgwZoneName         = "s3-ms-provider-zone-default"
 )
 
 // CephUserCredentials holds the entity name and key for a Ceph auth user.
@@ -62,6 +81,7 @@ type CephCredentials struct {
 	CephfsAdmin           CephUserCredentials
 	CephfsAdminCodesphere CephUserCredentials
 	RGWAdmin              RGWUserCredentials
+	RGWBackup             RGWUserCredentials
 	CSIRBDNode            CephUserCredentials
 	CSIRBDProvisioner     CephUserCredentials
 	CSICephFSNode         CephUserCredentials
@@ -214,6 +234,13 @@ func (b *LocalBootstrapper) EnsureCephUsers() (*CephCredentials, error) {
 		return nil, err
 	}
 
+	b.stlog.Logf("Ensuring RGW backup user %q", rgwBackupUserName)
+
+	rgwBackup, err := b.EnsureRGWBackupUser()
+	if err != nil {
+		return nil, err
+	}
+
 	b.stlog.Logf("Reading Ceph client secrets")
 
 	cephfsAdmin, err := b.readCephClientSecret("cephfs-admin-blue")
@@ -255,6 +282,7 @@ func (b *LocalBootstrapper) EnsureCephUsers() (*CephCredentials, error) {
 		CephfsAdmin:           *cephfsAdmin,
 		CephfsAdminCodesphere: *cephfsAdminCodesphere,
 		RGWAdmin:              *rgwAdmin,
+		RGWBackup:             *rgwBackup,
 		CSIRBDNode:            *csiRBDNode,
 		CSIRBDProvisioner:     *csiRBDProvisioner,
 		CSICephFSNode:         *csiCephFSNode,
@@ -461,6 +489,92 @@ func (b *LocalBootstrapper) deployRGWObjectStore() error {
 	return b.waitForCephObjectStoreReady(rgwObjectStoreName)
 }
 
+// rgwUserSpec describes an RGW user the bootstrapper ensures exists.
+type rgwUserSpec struct {
+	uid  string
+	caps string
+	// admin sets the user's admin flag: full access to every bucket and
+	// object regardless of owner or tenant - read, write and delete - and
+	// bucket ACLs and policies are skipped. Caps alone only grant Admin Ops
+	// API calls. Pair it with opMask to take the write and delete back.
+	admin bool
+	// opMask limits which S3 operations the user may run at all ("read",
+	// "write", "delete", comma-separated). Empty leaves RGW's default (all).
+	opMask string
+	// reconcile re-applies caps, the admin flag and the op mask when the
+	// user already exists, so an existing installation converges on the
+	// next run. Off for the admin-ops user, whose existing behavior is kept
+	// unchanged.
+	reconcile bool
+}
+
+var (
+	rgwAdminUserSpec  = rgwUserSpec{uid: rgwAdminUserName, caps: rgwAdminUserCaps}
+	rgwBackupUserSpec = rgwUserSpec{
+		uid:       rgwBackupUserName,
+		caps:      rgwBackupUserCaps,
+		admin:     true,
+		opMask:    rgwBackupUserOpMask,
+		reconcile: true,
+	}
+)
+
+func rgwZoneArgs() []string {
+	return []string{
+		"--rgw-realm", rgwRealmName,
+		"--rgw-zonegroup", rgwZoneGroupName,
+		"--rgw-zone", rgwZoneName,
+	}
+}
+
+// rgwUserCreateArgs returns the radosgw-admin arguments that create the user.
+func rgwUserCreateArgs(spec rgwUserSpec) []string {
+	args := []string{
+		"user", "create",
+		"--uid", spec.uid,
+		"--display-name", spec.uid,
+		"--caps", spec.caps,
+	}
+	args = append(args, rgwUserFlagArgs(spec)...)
+	args = append(args, rgwZoneArgs()...)
+
+	return append(args, "--format", "json")
+}
+
+// rgwUserFlagArgs returns the admin flag and op mask arguments of spec.
+func rgwUserFlagArgs(spec rgwUserSpec) []string {
+	var args []string
+	if spec.admin {
+		args = append(args, "--admin")
+	}
+	if spec.opMask != "" {
+		args = append(args, "--op-mask", spec.opMask)
+	}
+
+	return args
+}
+
+// rgwUserReconcileArgs returns the radosgw-admin calls that bring an existing
+// user back to spec. The op mask and admin flag go first and in ONE call, so
+// a user being converted is never admin without its op mask. All of them
+// are idempotent: `user modify` sets the same values again, and `caps add`
+// with caps the user already has is a no-op.
+func rgwUserReconcileArgs(spec rgwUserSpec) [][]string {
+	var calls [][]string
+	if flags := rgwUserFlagArgs(spec); len(flags) > 0 {
+		modify := append([]string{"user", "modify", "--uid", spec.uid}, flags...)
+		calls = append(calls, append(modify, rgwZoneArgs()...))
+	}
+
+	return append(calls, append([]string{"caps", "add", "--uid", spec.uid, "--caps", spec.caps}, rgwZoneArgs()...))
+}
+
+func rgwUserInfoArgs(uid string) []string {
+	args := append([]string{"user", "info", "--uid", uid}, rgwZoneArgs()...)
+
+	return append(args, "--format", "json")
+}
+
 // EnsureRGWAdminUser creates the RGW admin-ops user used by the S3 backend.
 //
 // We intentionally do not use the CephObjectStoreUser CRD here. While that CRD
@@ -471,66 +585,100 @@ func (b *LocalBootstrapper) deployRGWObjectStore() error {
 // explicit monitor and admin-auth settings to avoid relying on pod-local Ceph
 // config files or keyrings.
 func (b *LocalBootstrapper) EnsureRGWAdminUser() (*RGWUserCredentials, error) {
-	b.stlog.Logf("Creating or reconciling RGW admin user %q via radosgw-admin", rgwAdminUserName)
+	return b.ensureRGWUser(rgwAdminUserSpec)
+}
 
-	createArgs := []string{
-		"user", "create",
-		"--uid", rgwAdminUserName,
-		"--display-name", rgwAdminUserName,
-		"--caps", rgwAdminUserCaps,
-		"--rgw-realm", rgwRealmName,
-		"--rgw-zonegroup", rgwZoneGroupName,
-		"--rgw-zone", rgwZoneName,
-		"--format", "json",
+// EnsureRGWBackupUser creates the RGW user for the SRE S3 backup job - see
+// rgwBackupUserName. Created the same way as the admin-ops user, plus the
+// admin flag and a read-only op mask, and reconciled on every run.
+func (b *LocalBootstrapper) EnsureRGWBackupUser() (*RGWUserCredentials, error) {
+	return b.ensureRGWUser(rgwBackupUserSpec)
+}
+
+func (b *LocalBootstrapper) ensureRGWUser(spec rgwUserSpec) (*RGWUserCredentials, error) {
+	b.stlog.Logf("Creating or reconciling RGW user %q via radosgw-admin", spec.uid)
+
+	creds, exists, err := b.createRGWUser(spec)
+	if err != nil || creds != nil {
+		return creds, err
 	}
 
-	createArgs, err := b.appendCephMonitorArgs(createArgs)
-	if err != nil {
-		return nil, err
+	if exists && spec.reconcile {
+		if err := b.reconcileRGWUser(spec); err != nil {
+			return nil, err
+		}
 	}
 
-	stdout, stderr, err := b.execRadosGWAdmin(createArgs)
+	return b.readRGWUserCredentials(spec.uid)
+}
+
+// createRGWUser runs `user create`. It returns the new user's credentials;
+// or exists=true when the user is already there; or neither when the user
+// was created but its output could not be parsed (the caller then reads
+// the credentials with `user info`).
+func (b *LocalBootstrapper) createRGWUser(spec rgwUserSpec) (creds *RGWUserCredentials, exists bool, err error) {
+	stdout, err := b.runRadosGWAdmin(rgwUserCreateArgs(spec))
 	if err != nil {
-		errorText := strings.ToLower(stderr + "\n" + err.Error())
-		if !strings.Contains(errorText, "exist") {
-			return nil, fmt.Errorf("failed to create RGW admin user %q: %w: %s", rgwAdminUserName, err, strings.TrimSpace(stderr))
+		if !strings.Contains(strings.ToLower(err.Error()), "exist") {
+			return nil, false, fmt.Errorf("failed to create RGW user %q: %w", spec.uid, err)
 		}
 
-		b.stlog.Logf("RGW admin user %q already exists, reading credentials", rgwAdminUserName)
-	} else {
-		creds, parseErr := rgwUserCredentialsFromAdminJSON(stdout)
-		if parseErr == nil {
-			return creds, nil
+		b.stlog.Logf("RGW user %q already exists, reading credentials", spec.uid)
+
+		return nil, true, nil
+	}
+
+	creds, err = rgwUserCredentialsFromAdminJSON(stdout)
+	if err != nil {
+		b.stlog.Logf("Failed to parse RGW user create output for %q, falling back to user info: %v", spec.uid, err)
+
+		return nil, false, nil
+	}
+
+	return creds, false, nil
+}
+
+// reconcileRGWUser brings an existing user back to spec, see
+// rgwUserReconcileArgs.
+func (b *LocalBootstrapper) reconcileRGWUser(spec rgwUserSpec) error {
+	for _, call := range rgwUserReconcileArgs(spec) {
+		if _, err := b.runRadosGWAdmin(call); err != nil {
+			return fmt.Errorf("failed to reconcile RGW user %q: %w", spec.uid, err)
 		}
-
-		b.stlog.Logf("Failed to parse RGW admin create output for %q, falling back to user info: %v", rgwAdminUserName, parseErr)
 	}
 
-	infoArgs := []string{
-		"user", "info",
-		"--uid", rgwAdminUserName,
-		"--rgw-realm", rgwRealmName,
-		"--rgw-zonegroup", rgwZoneGroupName,
-		"--rgw-zone", rgwZoneName,
-		"--format", "json",
-	}
+	return nil
+}
 
-	infoArgs, err = b.appendCephMonitorArgs(infoArgs)
+func (b *LocalBootstrapper) readRGWUserCredentials(uid string) (*RGWUserCredentials, error) {
+	stdout, err := b.runRadosGWAdmin(rgwUserInfoArgs(uid))
 	if err != nil {
-		return nil, err
-	}
-
-	stdout, stderr, err = b.execRadosGWAdmin(infoArgs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read RGW admin user %q: %w: %s", rgwAdminUserName, err, strings.TrimSpace(stderr))
+		return nil, fmt.Errorf("failed to read RGW user %q: %w", uid, err)
 	}
 
 	creds, err := rgwUserCredentialsFromAdminJSON(stdout)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse RGW admin user %q info output: %w", rgwAdminUserName, err)
+		return nil, fmt.Errorf("failed to parse RGW user %q info output: %w", uid, err)
 	}
 
 	return creds, nil
+}
+
+// runRadosGWAdmin runs one radosgw-admin call with the monitor arguments
+// added. On failure the error carries the subcommand and radosgw-admin's
+// stderr.
+func (b *LocalBootstrapper) runRadosGWAdmin(args []string) (string, error) {
+	callArgs, err := b.appendCephMonitorArgs(args)
+	if err != nil {
+		return "", err
+	}
+
+	stdout, stderr, err := b.execRadosGWAdmin(callArgs)
+	if err != nil {
+		return "", fmt.Errorf("radosgw-admin %s: %w: %s", strings.Join(args[:min(2, len(args))], " "), err, strings.TrimSpace(stderr))
+	}
+
+	return stdout, nil
 }
 
 func (b *LocalBootstrapper) appendCephMonitorArgs(args []string) ([]string, error) {
