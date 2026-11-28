@@ -1,23 +1,37 @@
 # Copyright (c) Codesphere Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-# Bootstraps the latest official Codesphere release on fresh GCP infrastructure
-# with an OMS binary built from source. tag-release.yml runs this before every
-# release, so OMS regressions surface here instead of in the monorepo's OMS bump.
+# Reusable workflow: bootstraps a Codesphere release on fresh GCP infrastructure with a
+# given OMS version. The triggers live in the calling workflows:
+# - tag-release.yml: OMS built from the released commit, latest Codesphere release.
+# - bootstrap-gcp-nightly.yml: latest OMS and Codesphere releases, airgapped on RHEL.
+# - bootstrap-gcp-testing.yml: manual runs, and pull requests changing these workflows or labeled ci-pc-deploy.
 # Mirrors codesphere-monorepo/.github/workflows/test-pc-installer-gcp.yml.
 name: Bootstrap GCP
 
 on:
-  # Test changes to this workflow before they can block a release.
-  pull_request:
-    paths:
-      - .github/workflows/bootstrap-gcp.yml
   workflow_call:
     inputs:
+      project_prefix:
+        description: Prefix of the GCP project and domain name. Must be unique per calling workflow, as it names the project, the domain and the concurrency group.
+        type: string
+        required: true
+      oms_version:
+        description: OMS version to run. Empty builds it from the checked-out source, "latest" uses the latest OMS release, or a release tag (e.g. v5.43.0).
+        type: string
+        default: ""
       install_version:
         description: Codesphere version to install (e.g. codesphere-v1.2.3). Defaults to the latest official release.
         type: string
         default: ""
+      airgapped:
+        description: Bootstrap an airgapped installation (--airgapped).
+        type: boolean
+        default: false
+      rhel:
+        description: Boot all VMs with RHEL 9 instead of Ubuntu (--os=rhel-9).
+        type: boolean
+        default: false
       prevent_destroy:
         description: Keep the GCP project after the run for debugging.
         type: boolean
@@ -26,25 +40,6 @@ on:
         description: Project TTL; expired projects are deleted by the monorepo's cleanup cron.
         type: string
         default: 2h
-  workflow_dispatch:
-    inputs:
-      install_version:
-        description: Codesphere version to install (e.g. codesphere-v1.2.3). Defaults to the latest official release.
-        type: string
-        default: ""
-      prevent_destroy:
-        description: Keep the GCP project after the run for debugging.
-        type: boolean
-        default: false
-      ttl:
-        description: Project TTL; expired projects are deleted by the monorepo's cleanup cron.
-        type: string
-        default: 2h
-
-# Never cancel a running bootstrap: that would skip the cleanup and leave the project behind.
-concurrency:
-  group: oms-bootstrap-gcp
-  cancel-in-progress: false
 
 jobs:
   bootstrap-gcp:
@@ -54,26 +49,65 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    # One group per caller: GitHub keeps a single pending run per group and cancels older
+    # pending ones, so a shared group let a PR run silently replace a pending release bootstrap.
+    # Never cancel a running bootstrap: that would skip the cleanup and leave the project behind.
+    concurrency:
+      group: oms-bootstrap-gcp-${{ inputs.project_prefix }}
+      cancel-in-progress: false
     env:
-      PROJECT_NAME: oms-main-${{ github.run_number }}
-      BASE_DOMAIN: oms-main-${{ github.run_number }}.oms-testing.codesphere-demo.com
+      HOST_OS: ${{ inputs.rhel && 'rhel-9' || 'ubuntu' }}
       DC_ID: "42"
       DC_NAME: oms-main
       DNS_PROJECT_ID: oms-testing-dns
-      K0S_VERSION: v1.35.8+k0s.0
+      K0S_VERSION: v1.36.6+k0s.0
       OPENBAO_URI: https://openbao.dev-codesphere.com
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      - name: Set Test Run Vars
+        env:
+          PROJECT_PREFIX: ${{ inputs.project_prefix }}
+        run: |
+          set -euo pipefail
+          
+          # Sanitize and limit to 20 chars to keep enough space for the automatically added uuid postfix.
+          PROJECT_NAME=$(echo "$PROJECT_PREFIX" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\{2,\}/-/g' | cut -c 1-20 | sed 's/-$//')
+          BASE_DOMAIN="$PROJECT_NAME.oms-testing.codesphere-demo.com"
+
+          echo "Project name: $PROJECT_NAME, base domain: $BASE_DOMAIN"
+          echo "PROJECT_NAME=$PROJECT_NAME" >> "$GITHUB_ENV"
+          echo "BASE_DOMAIN=$BASE_DOMAIN" >> "$GITHUB_ENV"
+
       - name: Set up Go
+        if: inputs.oms_version == ''
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: 'go.mod'
 
       # The runner is linux/amd64, so this binary is also copied to the jumpbox.
       - name: Build CLI
+        if: inputs.oms_version == ''
         run: |
           make build-cli
+          ./oms version
+
+      - name: Download OMS release
+        id: oms
+        if: inputs.oms_version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OMS_VERSION: ${{ inputs.oms_version }}
+        run: |
+          set -euo pipefail
+          TAG="$OMS_VERSION"
+          if [ "$TAG" = latest ]; then
+            TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          fi
+          echo "Using OMS $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'oms_*_linux_amd64' --output oms
+          chmod +x oms
           ./oms version
 
       - name: Setup SOPS and age
@@ -147,8 +181,8 @@ jobs:
         shell: bash
         env:
           INSTALL_VERSION: ${{ steps.version.outputs.install_version }}
-          # pull_request runs have no inputs, so fall back to the default here.
-          PROJECT_TTL: ${{ inputs.ttl || '2h' }}
+          AIRGAPPED: ${{ inputs.airgapped }}
+          PROJECT_TTL: ${{ inputs.ttl }}
           OMS_PORTAL_API_KEY: ${{ secrets.PC_INSTALLER_TEST_OMS_PORTAL_API_KEY }}
           OMS_CS_TEST_USER_PASSWORD: ${{ secrets.OMS_CS_TEST_USER_PASSWORD }}
           OMS_CS_TEST_USER_PASSWORD_HASHED: ${{ secrets.OMS_CS_TEST_USER_PASSWORD_HASHED }}
@@ -177,6 +211,13 @@ jobs:
           set -euo pipefail
           eval "$(ssh-agent -s)"
           ssh-add "$HOME/.ssh/gha-pc-testing"
+          MODE_FLAGS=(--os="$HOST_OS")
+          # Airgapped installations use a self-signed ingress CA instead of ACME.
+          if [ "$AIRGAPPED" = true ]; then
+            MODE_FLAGS+=(--airgapped)
+          else
+            MODE_FLAGS+=(--google-acme-issuer=true)
+          fi
           ./oms beta bootstrap-gcp \
             --install-version="$INSTALL_VERSION" \
             --project-name="$PROJECT_NAME" \
@@ -184,7 +225,7 @@ jobs:
             --folder-id="$FOLDER_ID" \
             --billing-account="$BILLING_ACCOUNT" \
             --base-domain="$BASE_DOMAIN" \
-            --google-acme-issuer=true \
+            "${MODE_FLAGS[@]}" \
             --dns-project-id="$DNS_PROJECT_ID" \
             --ssh-public-key-path="$HOME/.ssh/gha-pc-testing.pub" \
             --ssh-private-key-path="$HOME/.ssh/gha-pc-testing" \
@@ -202,6 +243,8 @@ jobs:
             --azure-devops-app-client-secret="$AZURE_DEVOPS_APP_CLIENT_SECRET" \
             --registry-user="$REGISTRY_USER" \
             --github-pat="$REGISTRY_PAT" \
+            --github-team-org=codesphere-cloud \
+            --github-team-slug=dev \
             --openbao-uri="$OPENBAO_URI" \
             --openbao-password="$OPENBAO_PASSWORD" \
             --central-otel-username="$CENTRAL_OTEL_USERNAME" \
@@ -231,13 +274,19 @@ jobs:
           # The installer returns once the charts are applied, before the new pods are rolled out.
           TIMEOUT_SECONDS: 900
           POLL_SECONDS: 10
+          AIRGAPPED: ${{ inputs.airgapped }}
         run: |
+          # Airgapped installations serve a certificate from the self-signed ingress CA.
+          CURL_FLAGS=()
+          if [ "$AIRGAPPED" = true ]; then
+            CURL_FLAGS+=(--insecure)
+          fi
           # Logged per attempt, so a timeout tells DNS, TCP, TLS and HTTP failures apart.
           host="${HEALTH_URL#https://}"
           echo "DNS: $(getent hosts "${host%%/*}" || echo 'does not resolve')"
           deadline=$((SECONDS + TIMEOUT_SECONDS))
           while true; do
-            status=$(curl -s -o /dev/null -w '%{http_code}' --max-time "$POLL_SECONDS" "$HEALTH_URL") && curl_exit=0 || curl_exit=$?
+            status=$(curl "${CURL_FLAGS[@]}" -s -o /dev/null -w '%{http_code}' --max-time "$POLL_SECONDS" "$HEALTH_URL") && curl_exit=0 || curl_exit=$?
             echo "$(date -u +%H:%M:%S) curl exit $curl_exit, HTTP $status"
             if [ "$curl_exit" = 0 ] && [ "$status" = 200 ]; then
               break
@@ -264,5 +313,5 @@ jobs:
         if: ${{ failure() && github.ref == 'refs/heads/main' }}
         uses: ./.github/actions/slack-notify
         with:
-          job-name: Bootstrap GCP (${{ steps.version.outputs.install_version }})
+          job-name: Bootstrap GCP (${{ steps.version.outputs.install_version }}, OMS ${{ steps.oms.outputs.tag || inputs.oms_version || 'from source' }}, ${{ env.HOST_OS }}${{ inputs.airgapped && ', airgapped' || '' }})
           webhook: ${{ secrets.PACKAGE_JOB_SLACK_WEBHOOK }}

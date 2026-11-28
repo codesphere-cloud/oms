@@ -1,0 +1,99 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Runs the GCP bootstrap on demand, and on pull requests that either change the bootstrap
+# workflows (so they are tested before they can block a release) or carry the ci-pc-deploy label.
+name: Bootstrap GCP Testing
+
+on:
+  # No paths filter: it would also apply to the labeled event, so the changed files are
+  # checked in the changes job instead.
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+    inputs:
+      oms_version:
+        description: OMS version to run. Empty builds it from the selected branch, "latest" uses the latest OMS release, or a release tag (e.g. v5.43.0).
+        type: string
+        default: ""
+      install_version:
+        description: Codesphere version to install (e.g. codesphere-v1.2.3). Defaults to the latest official release.
+        type: string
+        default: ""
+      airgapped:
+        description: Bootstrap an airgapped installation (--airgapped).
+        type: boolean
+        default: false
+      rhel:
+        description: Boot all VMs with RHEL 9 instead of Ubuntu (--os=rhel-9).
+        type: boolean
+        default: false
+      prevent_destroy:
+        description: Keep the GCP project after the run for debugging.
+        type: boolean
+        default: false
+      ttl:
+        description: Project TTL; expired projects are deleted by the monorepo's cleanup cron.
+        type: string
+        default: 2h
+
+jobs:
+  changes:
+    name: Check for bootstrap workflow changes
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      workflows: ${{ steps.filter.outputs.workflows }}
+    steps:
+      - name: Check changed files
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          FILES=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename')
+          if grep -qxE '\.github/workflows/bootstrap-gcp[a-z-]*\.yml' <<< "$FILES"; then
+            echo "workflows=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "workflows=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  bootstrap-gcp:
+    needs: changes
+    # !cancelled() because changes is skipped for workflow_dispatch; unlike always(), it does
+    # not start the bootstrap after the run was cancelled.
+    # Each PR action starts at most one bootstrap. A PR created with ci-pc-deploy fires both
+    # opened and labeled, so opened ignores the label and labeled skips PRs changing the
+    # workflows, which already bootstrap on opened and every push. Adding another label
+    # never runs it.
+    if: >-
+      !cancelled() && (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event.action == 'opened' && needs.changes.outputs.workflows == 'true') ||
+        (github.event.action == 'labeled' && github.event.label.name == 'ci-pc-deploy' &&
+          needs.changes.outputs.workflows == 'false') ||
+        ((github.event.action == 'synchronize' || github.event.action == 'reopened') && (
+          contains(github.event.pull_request.labels.*.name, 'ci-pc-deploy') ||
+          needs.changes.outputs.workflows == 'true'
+        ))
+      )
+    uses: ./.github/workflows/bootstrap-gcp.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+    # pull_request runs have no inputs: empty strings need no fallback, booleans and ttl do.
+    # The oms- prefix keeps runs on branches such as main or nightly out of the release and
+    # nightly bootstraps' concurrency groups and GCP projects.
+    with:
+      project_prefix: oms-${{ github.head_ref || github.ref_name }}
+      oms_version: ${{ inputs.oms_version }}
+      install_version: ${{ inputs.install_version }}
+      airgapped: ${{ inputs.airgapped || false }}
+      rhel: ${{ inputs.rhel || false }}
+      prevent_destroy: ${{ inputs.prevent_destroy || false }}
+      ttl: ${{ inputs.ttl || '2h' }}

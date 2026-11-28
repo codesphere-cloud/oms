@@ -25,6 +25,10 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    with:
+      project_prefix: main
+      # Empty builds OMS from this commit; Codesphere defaults to the latest official release.
+      oms_version: ""
 
   tag:
     runs-on: ubuntu-latest

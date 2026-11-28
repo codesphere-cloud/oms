@@ -1,0 +1,23 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Nightly check of the latest OMS release against the latest official Codesphere release,
+# airgapped on RHEL.
+name: Bootstrap GCP Nightly
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+
+jobs:
+  bootstrap-gcp:
+    uses: ./.github/workflows/bootstrap-gcp.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      project_prefix: nightly
+      oms_version: latest
+      airgapped: true
+      rhel: true
